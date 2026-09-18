@@ -20,7 +20,23 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+## Testing
+
+All automated behavior tests use Playwright Test. From the repository root:
+
+```bash
+npm ci
+npx playwright install chromium
+npm test
+```
+
+Playwright builds and starts the app automatically on `127.0.0.1:3100`.
+Use `npm test -- --list` for discovery, `npm run test:ui` for interactive runs,
+and `npm run test:report` to inspect results. Run `npm run lint` and
+`npm run typecheck` separately. See [the testing guide](docs/TESTING.md) for
+configuration, coverage, prerequisites, and conventions.
+
+## Next.js Resources
 
 To learn more about Next.js, take a look at the following resources:
 

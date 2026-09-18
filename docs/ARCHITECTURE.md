@@ -64,6 +64,12 @@ Documented boundary between the web application and API
 
 Exact library choices should be made only when the first task requires them and recorded in DECISIONS.md.
 
+Project testing
+
+Playwright Test is the shared runner for all automated behavior tests (ADR-005). The root playwright.config.ts discovers tests under tests/. The initial Chromium smoke test lives in tests/e2e/ and runs against the existing root Next.js application using a fresh production build. HTTP API tests and directly testable TypeScript logic will use the same runner when those features exist. Playwright does not directly run C# unit tests; any future need for those requires an explicit tooling decision. Linting, type checking, and compilation remain separate checks. See TESTING.md for setup and commands.
+
+This repository testing policy is separate from the product's limited, project-defined runtime verification scenarios. It does not expand SpecThread into an arbitrary test-execution service.
+
 Suggested repository layout
 
 /

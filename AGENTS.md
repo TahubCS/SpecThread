@@ -102,7 +102,7 @@ TypeScript and C# must use strict compiler settings.
 
 Add or update tests for changed behavior.
 
-Prefer unit tests for domain logic, integration tests at service boundaries, and a small number of Playwright tests for critical user flows.
+Use Playwright Test as the shared runner for all automated behavior tests. Cover browser flows with browser fixtures, HTTP boundaries with request fixtures, and directly testable TypeScript logic without a browser fixture. Keep tests focused on explicit scenarios. Do not introduce another test framework without a recorded team decision. Playwright does not directly execute C# unit tests; test API behavior through HTTP when the API exists. Linting, type checking, and builds remain separate required checks. See docs/TESTING.md.
 
 Handle loading, empty, error, unauthorized, and retry states where relevant.
 

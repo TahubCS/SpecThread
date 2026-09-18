@@ -56,6 +56,8 @@ Commit focused, reviewable changes.
 
 Run relevant checks locally.
 
+Use Playwright Test for all automated behavior tests, following TESTING.md. Run npm test from the repository root; it builds and starts the web application automatically. Run npm run lint and npm run typecheck separately. Discover tests without starting the app with npm test -- --list. Add tests for changed behavior using the existing runner rather than introducing another framework.
+
 Update documentation and the handoff if shared state changed.
 
 Open a pull request and request review.
