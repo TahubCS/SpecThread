@@ -46,9 +46,9 @@ A task is too large if it cannot be reviewed independently or if multiple member
 
 Branch workflow
 
-Update the local integration branch.
+Before starting each new task, ask the user for permission to create a new task branch. Wait for their answer before beginning implementation, unless they have already explicitly chosen a branch for that task.
 
-Create a short-lived branch for one task.
+If the user approves, update the agreed integration branch and create and switch to a short-lived task branch before doing the work. If the user says to stay on the current branch, work there without creating or switching branches. Carry that choice through follow-up work on the same task without asking again. The Playwright foundation work is on main at the user's request.
 
 Implement only the task's acceptance criteria.
 
@@ -56,7 +56,7 @@ Commit focused, reviewable changes.
 
 Run relevant checks locally.
 
-Use Playwright Test for all automated behavior tests, following TESTING.md. Run npm test from the repository root; it builds and starts the web application automatically. Run npm run lint and npm run typecheck separately. Discover tests without starting the app with npm test -- --list. Add tests for changed behavior using the existing runner rather than introducing another framework.
+Use Playwright Test for all automated behavior tests, following TESTING.md. Run npm test from the repository root; Playwright builds and starts both applications automatically. Run npm run lint, npm run typecheck, and dotnet format app/api --verify-no-changes separately. Discover tests without starting the apps with npm test -- --list. Initialize EF Core before database execution and follow DATABASE.md for future migrations. Add tests for changed behavior using the existing runner rather than introducing another framework.
 
 Update documentation and the handoff if shared state changed.
 

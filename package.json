@@ -2,30 +2,26 @@
   "name": "specthread",
   "version": "0.1.0",
   "private": true,
+  "workspaces": ["app/web"],
+  "engines": { "node": ">=24 <25", "npm": ">=11 <12" },
+  "packageManager": "npm@11.7.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "npm run dev --workspace @specthread/web",
+    "build": "npm run build --workspace @specthread/web",
+    "start": "npm run start --workspace @specthread/web",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit",
+    "typecheck": "npm run typecheck --workspace @specthread/web && tsc --noEmit",
+    "dev:api": "dotnet run --project app/api --no-launch-profile -- --urls http://127.0.0.1:5100 --environment Development",
+    "build:api": "dotnet build app/api --configuration Release",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:report": "playwright show-report"
   },
-  "dependencies": {
-    "next": "16.3.5",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
-  },
   "devDependencies": {
     "@playwright/test": "1.63.0",
-    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
-    "tailwindcss": "^4",
     "typescript": "^5"
   }
 }

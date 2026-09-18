@@ -1,79 +1,73 @@
-# Testing SpecThread
+﻿# Testing SpecThread
 
-Playwright Test is the shared runner for all automated behavior tests. Linting,
-TypeScript checking, and production builds remain separate quality checks.
+Playwright Test is the shared behavior-test runner. Linting, TypeScript checks,
+C# formatting, and builds remain separate checks.
 
-## Setup
+## Setup and commands
 
-Run these commands from the repository root with Node.js and npm installed:
+From the repository root with Node.js 24, npm 11, and the SDK in global.json:
 
 ```sh
 npm ci
+dotnet restore app/api --locked-mode
+dotnet tool restore
 npx playwright install chromium
-```
-
-The current setup was prepared with Node.js 24.13.0 and npm 11.7.0. On Linux CI,
-use `npx playwright install --with-deps chromium` to install browser system
-dependencies as well. Repeat browser installation after updating Playwright.
-
-## Commands
-
-```sh
-npm test                 # Build the app, start it, and run all tests
-npm test -- --list       # Discover tests without building or starting the app
-npm test -- --headed     # Run with a visible browser
-npm run test:ui          # Open Playwright's interactive test UI
-npm run test:report      # Open the most recently generated HTML report
 npm run lint
 npm run typecheck
-npm run build           # Standalone production build; also run by npm test
+dotnet format app/api --verify-no-changes --no-restore
+npm test
 ```
 
-`typecheck` generates Next.js route types before running TypeScript. Playwright
-transpiles tests but does not replace this check. No standalone formatter is
-currently configured.
+On Linux CI install browsers with `npx playwright install --with-deps chromium`.
+The GitHub Actions workflow runs these same checks. It does not need Supabase
+credentials. Reinstall Chromium after updating Playwright.
 
-## Configuration and current coverage
+```sh
+npm test -- --list         # Discover tests without starting apps
+npm test -- --project=api  # API/EF tests (both managed servers still start)
+npm test -- --headed      # Visible browser
+npm run test:ui            # Interactive test UI
+npm run test:report        # Latest HTML report
+npm run build             # Standalone web production build
+npm run build:api          # Standalone Release API build
+```
 
-- `playwright.config.ts` discovers tests under `tests/` and uses Chromium.
-- `tests/e2e/home.spec.ts` checks the existing starter homepage's HTTP response,
-  title, heading, and documentation link. Update this smoke test when that page
-  changes. There are no product flows or API tests yet.
-- Playwright builds the current source and starts a production server at
-  `http://127.0.0.1:3100`. Keep port 3100 free. It deliberately fails when another
-  server occupies the address, rather than testing an unknown process.
-- Allow up to three minutes for build and startup. Avoid running a separate
-  Next.js build or development server in this checkout during tests because
-  they share `.next/`. The existing Google Fonts imports require network access
-  during the build.
-- CI mode rejects `test.only`, uses one worker, and retries failures twice. Local
-  runs do not retry. This configuration does not create a GitHub Actions workflow.
-- HTML reports go to `playwright-report/`; failure screenshots and traces go to
-  `test-results/`. These generated directories are ignored by Git. Treat traces
-  as potentially sensitive when future scenarios involve authenticated data.
+`npm test` builds the web app and the Release API before tests. It starts the
+web app at 127.0.0.1:3100 and the API in Development at 127.0.0.1:5100. Keep both
+ports free; existing servers are not reused. Do not run competing Next.js builds
+or development processes in this checkout: they share app/web/.next. Google Fonts
+currently require network access during the web build.
 
-## Adding tests
+## Current coverage
 
-Use `@playwright/test` for every automated behavior test. Put browser scenarios
-in `tests/e2e/*.spec.ts`. Use accessible locators and retrying assertions rather
-than arbitrary sleeps. Test only explicit, implemented behavior and isolate
-test data when persistence is added.
+- Chromium: the existing starter homepage's response, title, heading, and link.
+- API: health response without database credentials, development OpenAPI, and
+  a 404 for an unimplemented route.
+- EF: PostgreSQL provider initialization using dummy credentials at an unreachable
+  local address, and explicit rejection when connection configuration is missing.
+  These invoke the local dotnet-ef tool and never connect to Supabase.
 
-Future HTTP API tests should use Playwright's `request` fixture under
-`tests/api/`. Add the API server and its agreed URL to the configuration when
-the API exists; no backend or API contract is created by this setup. Directly
-testable TypeScript logic can use browser-free tests under `tests/unit/` with
-the same runner. The current single project starts the web server for every
-test run; separate projects can be introduced when these other suites exist.
+No product flows, live database queries, or migrations are tested yet. The health
+endpoint is liveness, not database readiness. EF initialization is not proof
+that live database credentials work.
 
-Playwright cannot directly run C# unit tests. Exercise API behavior through HTTP;
-record a team decision if direct C# unit coverage later requires another runner.
-Do not silently introduce Jest, Vitest, xUnit, or another test framework.
+## Conventions
 
-This development-testing policy is separate from SpecThread's product feature
-for collecting selected verification results. Passing tests are evidence, not
-automatic acceptance of a requirement.
+Use browser fixtures in tests/e2e and request fixtures in tests/api. Use accessible
+locators and retrying assertions, not arbitrary sleeps. Browser-free TypeScript
+logic tests can get a separate Playwright project when such logic exists.
+Playwright cannot directly run C# unit tests; a different runner requires an
+explicit team decision. Add meaningful success and failure cases as features land.
 
-References: [Playwright configuration](https://playwright.dev/docs/test-configuration),
-[web server setup](https://playwright.dev/docs/test-webserver), and
-[browser installation](https://playwright.dev/docs/browsers).
+CI mode rejects test.only, uses one worker, and retries twice. Local runs do not
+retry. Reports in playwright-report and artifacts in test-results are ignored by
+Git and ESLint. Traces/screenshots are retained for failures and can contain
+sensitive data when authenticated scenarios are later introduced.
+
+Type checking generates Next.js route types and checks the web app plus the root
+Playwright configuration/tests. Playwright transpilation alone is not type checking.
+C# uses nullable checking and warnings as errors. There is no standalone JS/TS
+formatter configured; C# formatting uses dotnet format.
+
+This development testing policy does not expand the product's limited verification
+feature. Passing tests are evidence, not automatic requirement acceptance.

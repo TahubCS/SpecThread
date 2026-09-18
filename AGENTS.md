@@ -78,11 +78,11 @@ Generated files must be produced by a documented command and should not be edite
 
 Architecture constraints
 
-Web client: Next.js App Router with TypeScript.
+Web client: Next.js App Router with TypeScript in app/web.
 
-API: ASP.NET Core Web API in C#.
+API: ASP.NET Core 10 Web API in C# in app/api.
 
-Database: PostgreSQL.
+Database: PostgreSQL hosted on Supabase. Use EF Core 10 with Npgsql for API data access and migrations; Drizzle is not used. Initialize and verify the EF Core context before any database execution. Never apply migrations or create a database automatically on API startup. See docs/DATABASE.md.
 
 Repository integration: GitHub APIs and webhooks.
 
@@ -118,7 +118,7 @@ Run the narrowest relevant checks during development and the full required check
 
 Git and team coordination
 
-Start from the agreed integration branch and create one short-lived branch per task.
+Before starting each new task, ask the user for permission to create a new task branch and wait for their answer before beginning implementation. If the user approves, create and switch to the task branch from the agreed integration branch before doing the work. If the user says to stay on the current branch, work there without creating or switching branches. An explicit branch choice already given for that task satisfies this requirement; do not ask again during follow-up work on the same task. Keep approved task branches short-lived.
 
 Recommended branch names: feature/<issue>-<short-name>, fix/<issue>-<short-name>, or docs/<issue>-<short-name>.
 

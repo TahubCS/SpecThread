@@ -22,13 +22,13 @@ User interface and browser-facing interactions
 
 API
 
-ASP.NET Core Web API, C#
+ASP.NET Core 10 Web API, C#, EF Core 10 with Npgsql
 
 Domain rules, authorization, persistence coordination, integrations
 
 Database
 
-PostgreSQL
+PostgreSQL hosted on Supabase
 
 Requirements, links, evidence metadata, decisions, audit data
 
@@ -46,9 +46,9 @@ A limited set of explicitly configured end-to-end checks
 
 Local environment
 
-Docker Compose
+Docker Compose only when a task requires local dependencies
 
-Reproducible PostgreSQL and optional supporting services
+No local database is required for the initial health and smoke checks
 
 Continuous integration
 
@@ -66,30 +66,30 @@ Exact library choices should be made only when the first task requires them and 
 
 Project testing
 
-Playwright Test is the shared runner for all automated behavior tests (ADR-005). The root playwright.config.ts discovers tests under tests/. The initial Chromium smoke test lives in tests/e2e/ and runs against the existing root Next.js application using a fresh production build. HTTP API tests and directly testable TypeScript logic will use the same runner when those features exist. Playwright does not directly run C# unit tests; any future need for those requires an explicit tooling decision. Linting, type checking, and compilation remain separate checks. See TESTING.md for setup and commands.
+Playwright Test is the shared runner for automated behavior tests (ADR-005). The root playwright.config.ts discovers browser tests under tests/e2e/ and API tests under tests/api/. It runs the web application from app/web and the separate API from app/api. Linting, type checking, and compilation remain separate checks. See TESTING.md.
 
 This repository testing policy is separate from the product's limited, project-defined runtime verification scenarios. It does not expand SpecThread into an arbitrary test-execution service.
 
-Suggested repository layout
+Agreed repository layout (ADR-006)
 
 /
-├── apps/
+├── app/
 │   ├── web/                  # Next.js application
 │   └── api/                  # ASP.NET Core Web API
 ├── tests/
-│   └── e2e/                  # Playwright project
+│   ├── e2e/                  # Playwright browser tests
+│   └── api/                  # Playwright API and EF setup tests
 ├── docs/
 │   ├── PROJECT.md
 │   ├── ARCHITECTURE.md
 │   ├── WORKFLOW.md
 │   ├── HANDOFF.md
 │   └── DECISIONS.md
-├── infra/                    # Small, necessary local/deployment configuration
 ├── .github/workflows/
 ├── AGENTS.md
 └── README.md
 
-If the initialized Next.js application currently lives at the repository root, do not move it automatically. First determine whether the team wants a monorepo migration. A folder diagram is not permission to perform a disruptive move.
+The user approved moving the existing web application to app/web and keeping the .NET API separate in app/api. The root is a small npm workspace with one lockfile and shared test/lint tooling; no monorepo build framework is needed.
 
 Logical modules
 
@@ -155,12 +155,14 @@ API direction
 
 The ASP.NET API owns domain rules and database access. Next.js should call the documented API rather than duplicate domain logic in route handlers or server actions. Generate or maintain a typed client from OpenAPI only after the contract stabilizes enough to justify it.
 
+The initial API exposes GET /health returning { "status": "ok" }. This is a liveness check, not database readiness. Development exposes /openapi/v1.json; production does not. EF Core is registered through dependency injection, and database use fails explicitly if ConnectionStrings:Database is missing. No product tables, migrations, automatic database creation, or connection checks run on startup. EF Core owns future application schema migrations; Supabase-managed schemas must not be modified. See DATABASE.md.
+
 Deployment direction
 
 Web: suitable for Vercel or another Next.js-capable host.
 
 API: container-capable .NET hosting.
 
-Database: managed PostgreSQL for shared environments.
+Database: PostgreSQL on Supabase.
 
-The specific API and database hosts remain undecided. Local development should not depend on a paid service.
+The API host remains undecided. Health and smoke checks run without a database account. Live persistence work requires separately configured Supabase database credentials; MCP authentication does not provide an application connection string.

@@ -16,14 +16,30 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testMatch: "e2e/**/*.spec.ts",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "api",
+      testMatch: "api/**/*.spec.ts",
+      use: { baseURL: "http://127.0.0.1:5100" },
+    },
   ],
-  webServer: {
-    command:
-      "npm run build && npm run start -- --hostname 127.0.0.1 --port 3100",
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      command:
+        "npm run build && npm run start --workspace @specthread/web -- --hostname 127.0.0.1 --port 3100",
+      url: baseURL,
+      reuseExistingServer: false,
+      timeout: 180_000,
+    },
+    {
+      command:
+        "npm run build:api && dotnet run --project app/api --configuration Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5100 --environment Development",
+      url: "http://127.0.0.1:5100/health",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: { ConnectionStrings__Database: "" },
+    },
+  ],
 });
