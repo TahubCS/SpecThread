@@ -1,6 +1,33 @@
 ﻿# Shared handoff
 
-## Current state
+## Current task: minimal web skeleton (2026-09-19)
+
+- Branch: main, explicitly authorized. Existing connection-check handoff edits preserved.
+- Added a homepage, login, signup, and empty public dashboard preview with shared
+  navigation, responsive styling, page titles, and a keyboard skip link.
+- GitHub sign-in and create/connect actions are visibly unavailable and disabled.
+  No credential collection, fake sessions, API changes, data writes, or dependencies.
+- Updated files: app/web/src/app/{page.tsx,layout.tsx,globals.css}; added
+  login/page.tsx, signup/page.tsx, dashboard/page.tsx, and
+  app/web/src/components/auth-placeholder.tsx. Updated tests/e2e/home.spec.ts,
+  README.md, TESTING.md, ARCHITECTURE.md, DECISIONS.md, and this handoff.
+- Recorded the user's approved Better Auth/GitHub OAuth, GitHub Apps, and project
+  membership direction in ADR-008. Implementation is explicitly deferred.
+- Validation: npm run lint and npm run typecheck passed. npm test passed all nine
+  tests in 19.7 seconds, including web production and API builds. Initial build
+  failed on a CSS UTF-8 BOM; removing the BOM resolved it. git diff --check passed.
+  Reviewed desktop home and mobile login/dashboard screenshots under test-results/;
+  no overflow or obscured controls. React review: server components, semantic links
+  and headings, visible focus, no unnecessary hooks or client state.
+- Unverified: real authentication, authorization, persistence, and GitHub actions
+  remain intentionally unimplemented; no deployment was attempted.
+- Limits: dashboard is public only because it has no real data; authentication and
+  project authorization must be enforced before real product data is exposed.
+- Exact next step: wait for the user's instruction to create tables, then implement
+  Better Auth and GitHub integrations in the requested order. Deployment is deferred.
+  No commits or pushes made for this UI task.
+
+## Foundation history
 
 - Task: establish the approved Next.js/.NET/Supabase foundation.
 - Branch: `main`, explicitly requested by the user. No branch created, commits
@@ -84,7 +111,7 @@
 
 ## Limits and exact next step
 
-Live database credentials/connectivity, migrations, production API hosting, the
+Migrations, production API hosting, the
 interactive `/mcp` panel, and the GitHub-hosted CI run have not been verified.
 Existing Codex sessions may need reload to expose the newly added MCP tools.
 The web build needs Google Fonts network access. npm reports the existing ESLint
@@ -96,3 +123,33 @@ agree on a requirement API contract and authorization model before schema work.
 Suggested independent ownership: requirement API/persistence, requirement UI
 against the agreed contract, GitHub integration investigation, and Playwright
 acceptance scenarios. Ask the user about branching before starting any new task.
+
+## Live connection check follow-up
+
+- Branch: main, continuing the approved database setup. Application code unchanged.
+- A temporary external C# probe initialized the existing EF context and attempted
+  a read-only connection using app/api/.env.local, loaded explicitly for the probe.
+  No credentials were printed. The normal API does not automatically load this file.
+- The probe failed before authentication with SocketError NoData. DNS inspection
+  found no IPv4 A record and one IPv6 AAAA record for the configured direct host.
+  A TCP check to that IPv6 address on port 5432 returned NetworkUnreachable.
+- No SELECT statement reached the database; no data or schema changes occurred.
+- The user subsequently changed app/api/.env.local to the Session pooler. A retry
+  reached that endpoint but failed TLS verification before authentication. A
+  certificate diagnostic reported RemoteCertificateChainErrors / UntrustedRoot.
+  The diagnostic rejected the untrusted certificate; verification was not bypassed.
+- An earlier retry: Root Certificate was configured, but File.Exists returned false
+  and Npgsql failed with DirectoryNotFoundException. No authentication or SQL
+  execution occurred. Correct the certificate path to an existing local file.
+- Previous retry: the certificate file exists, EF initialized, and the connection
+  passed TLS verification with VerifyFull. PostgreSQL rejected authentication
+  with SQLSTATE 28P01 (invalid_password). SELECT 1 did not execute.
+- Latest retry succeeded: EF Core authenticated to Supabase through the session
+  pooler with SSL Mode=VerifyFull and the configured CA certificate. SELECT 1
+  returned 1. No data or schema changes were made and no credentials were printed.
+- Next step: configure the same connection string in API user-secrets or its
+  environment. The normal API does not load .env.local; only the temporary probe
+  loaded it explicitly. Live credentials and connectivity are verified for the
+  probe, not yet configured for normal API startup.
+- Verification: DNS A/AAAA checks and IPv6 TCP diagnostic completed; git diff
+  --check passed. Only this handoff was updated in the repository.

@@ -40,7 +40,9 @@ currently require network access during the web build.
 
 ## Current coverage
 
-- Chromium: the existing starter homepage's response, title, heading, and link.
+- Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
+  disabled authentication and data actions, and all four routes at mobile width.
+  Desktop/mobile screenshots are saved inside the ignored test-results directory.
 - API: health response without database credentials, development OpenAPI, and
   a 404 for an unimplemented route.
 - EF: PostgreSQL provider initialization using dummy credentials at an unreachable

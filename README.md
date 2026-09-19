@@ -40,6 +40,10 @@ npm run dev:api   # API: http://127.0.0.1:5100
 Development OpenAPI is at `http://127.0.0.1:5100/openapi/v1.json`.
 No product endpoints, authentication, or product tables are implemented yet.
 
+The web skeleton has `/`, `/login`, `/signup`, and `/dashboard`. Login and signup
+show disabled GitHub actions; the dashboard is an explicitly public, empty preview.
+Navigation works, but no account is created and no product data is stored.
+
 ## Checks
 
 ```sh

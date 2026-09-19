@@ -72,6 +72,16 @@ Decision: Use EF Core 10 with Npgsql for data access and schema migrations. Init
 
 Consequences: No application schema is invented in the foundation. The future persistence task must define authorization, schema exposure/RLS, and migration rollback before creating tables. Supabase-owned auth/storage schemas remain outside EF ownership. The initial health endpoint does not imply database readiness. The project-scoped Supabase MCP connection is developer tooling, not application database authentication. Optional duplicate Supabase skills are unnecessary because the Supabase skill is already installed.
 
+ADR-008: Stage the UI before authentication and persistence
+
+Status: Accepted
+
+Context: The user approved Better Auth with GitHub OAuth, GitHub Apps for repository access, and owner/member project access, then explicitly limited the immediate task to a minimal UI skeleton on main.
+
+Decision: Add home, login, signup, and a public dashboard preview first. No simulated sessions, credential collection, product tables, or deployment in this stage. Later implement Better Auth in Next.js with authentication-only database access and C# token validation; keep product data access in the API. Enforce project membership, allow members to create/edit requirements, and restrict project ownership changes to authorized owners. Review/approval permissions still require agreement before review endpoints exist.
+
+Consequences: The planned authentication-only database access is an explicit exception to the earlier API-only database boundary. EF remains the migration owner, with Better Auth schema compatibility to be verified before implementation. Tables await the user's next instruction, followed by auth and GitHub work. Vercel is the chosen web host; deployment and the final API hosting plan remain deferred. Public dashboard access is only for this empty preview and must be replaced with enforced access before exposing product data.
+
 New decision template
 
 ADR-NNN: Title

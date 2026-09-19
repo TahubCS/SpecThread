@@ -155,11 +155,13 @@ API direction
 
 The ASP.NET API owns domain rules and database access. Next.js should call the documented API rather than duplicate domain logic in route handlers or server actions. Generate or maintain a typed client from OpenAPI only after the contract stabilizes enough to justify it.
 
+Approved next stage (ADR-008): Better Auth will run in Next.js with GitHub OAuth and authentication-only database access; the API will validate identity and enforce project membership for product data. GitHub Apps will provide repository access separately from sign-in. None of this is implemented in the current UI skeleton. The routes /, /login, /signup, and /dashboard are static previews; the dashboard is public and contains no real data. Authentication actions are disabled until integration exists.
+
 The initial API exposes GET /health returning { "status": "ok" }. This is a liveness check, not database readiness. Development exposes /openapi/v1.json; production does not. EF Core is registered through dependency injection, and database use fails explicitly if ConnectionStrings:Database is missing. No product tables, migrations, automatic database creation, or connection checks run on startup. EF Core owns future application schema migrations; Supabase-managed schemas must not be modified. See DATABASE.md.
 
 Deployment direction
 
-Web: suitable for Vercel or another Next.js-capable host.
+Web: Vercel, with deployment deferred by the user.
 
 API: container-capable .NET hosting.
 
