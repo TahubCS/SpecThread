@@ -1,6 +1,34 @@
 # Shared handoff
 
-## Current task: initial schema migration and Better Auth setup (2026-09-19)
+## Current task: deployment configuration for Vercel and Render (2026-09-19)
+
+- Branch: main, continuing on approved integration branch.
+- Completed work:
+  - Added .dockerignore ignoring host build artifacts (bin/, obj/), .git, .next, node_modules, and local env files for fast, clean container builds.
+  - Created root multi-stage Dockerfile targeting official Microsoft .NET 10 SDK and ASP.NET runtime images, restoring in locked mode and running unprivileged as $APP_UID on port 8080.
+  - Tested building and executing the Docker container locally; confirmed GET /health returns 200 OK ({"status":"ok"}).
+  - Created render.yaml defining the Render Blueprint web service specification for specthread-api.
+  - Added app/web/vercel.json configuring Vercel Next.js framework deployment.
+  - Authored comprehensive docs/DEPLOYMENT.md guide covering Vercel and Render step-by-step setup, environment variables, GitHub OAuth callback URLs, and verification.
+  - Recorded ADR-010 in docs/DECISIONS.md and updated docs/ARCHITECTURE.md.
+- Changed files:
+  - .dockerignore, Dockerfile, render.yaml, app/web/vercel.json, docs/DEPLOYMENT.md
+  - docs/DECISIONS.md, docs/ARCHITECTURE.md, docs/HANDOFF.md
+- Validation:
+  - docker build: passed in 7.1s, 701B context transfer.
+  - Container liveness check: GET http://localhost:8086/health returned 200 OK ({"status":"ok"}).
+  - npm run lint: passed cleanly.
+  - npm run typecheck: passed cleanly.
+  - npm run build: Next.js production build succeeded.
+  - dotnet build app/api --configuration Release: passed with 0 warnings, 0 errors.
+  - npx playwright test: 17 passed in 33.8s.
+  - git diff --check: passed.
+- Known issues or risks:
+  - Deployments on Vercel and Render require secrets to be populated in their respective platform dashboards as documented in docs/DEPLOYMENT.md.
+- Exact next step:
+  - Push main to GitHub, link the repository in Vercel (Root Directory: app/web) and Render (using render.yaml or Web Service), configure environment variables, and verify live endpoints.
+
+## Previous task: initial schema migration and Better Auth setup (2026-09-19)
 
 - Branch: main, continuing the approved sequence.
 - Completed work:

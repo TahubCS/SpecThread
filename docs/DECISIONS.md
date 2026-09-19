@@ -92,6 +92,16 @@ Decision: Use EF Core 10 to manage the initial schema migration (20260919042809_
 
 Consequences: The database schema is strictly locked down from browser and anon/authenticated Supabase roles by default. Better Auth in Next.js and EF Core in ASP.NET Core access PostgreSQL via authenticated connection pooling. Database rollback is defined and automated in Playwright tests.
 
+ADR-010: Web Deployment on Vercel and API Container Deployment on Render
+
+Status: Accepted
+
+Context: The SpecThread product architecture requires hosting platforms for both deployable units: the Next.js web application (in app/web) and the ASP.NET Core 10 Web API (in app/api).
+
+Decision: Deploy the Next.js web application to Vercel with Root Directory set to app/web and workspace build support. Deploy the ASP.NET Core 10 Web API to Render as a Docker web service using a multi-stage Dockerfile based on official Microsoft .NET 10 SDK and ASP.NET runtime images. Supply a render.yaml blueprint configuring service parameters, the /health endpoint for liveness checks, and unprivileged execution (USER $APP_UID) on port 8080. Secrets and database connection strings are passed exclusively through platform environment variables and never committed.
+
+Consequences: Clear separation of operational concerns. The Next.js frontend benefits from Vercel's global edge network and serverless rendering, while the C# API runs in a reproducible Linux container on Render with zero cloud vendor lock-in.
+
 New decision template
 
 ADR-NNN: Title

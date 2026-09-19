@@ -159,12 +159,12 @@ Approved next stage (ADR-008): Better Auth will run in Next.js with GitHub OAuth
 
 The initial API exposes GET /health returning { "status": "ok" }. This is a liveness check, not database readiness. Development exposes /openapi/v1.json; production does not. EF Core is registered through dependency injection, and database use fails explicitly if ConnectionStrings:Database is missing. No product tables, migrations, automatic database creation, or connection checks run on startup. EF Core owns future application schema migrations; Supabase-managed schemas must not be modified. See DATABASE.md.
 
-Deployment direction
+Deployment direction (ADR-010)
 
-Web: Vercel, with deployment deferred by the user.
+Web: Vercel (Next.js App Router in app/web).
 
-API: container-capable .NET hosting.
+API: Render (ASP.NET Core 10 Web API via Docker container).
 
 Database: PostgreSQL on Supabase.
 
-The API host remains undecided. Health and smoke checks run without a database account. Live persistence work requires separately configured Supabase database credentials; MCP authentication does not provide an application connection string.
+See docs/DEPLOYMENT.md for step-by-step platform configuration, environment variables, health checks, and secrets management. Health and smoke checks run without a database account. Live persistence work requires separately configured Supabase database credentials; MCP authentication does not provide an application connection string.
