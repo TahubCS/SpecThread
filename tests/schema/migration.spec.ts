@@ -11,6 +11,7 @@ const container = `specthread-schema-${randomUUID()}`;
 const project = "11111111-1111-4111-8111-111111111111";
 const requirement = "22222222-2222-4222-8222-222222222222";
 let started = false;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function sql(statement: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -32,7 +33,20 @@ test.beforeAll(async () => {
       break;
     } catch (error) {
       if (attempt === 59) throw error;
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await sleep(500);
+    }
+  }
+  let stableReadyChecks = 0;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if (await sql("SELECT 1;") !== "1") throw new Error("postgres readiness probe returned unexpected output");
+      stableReadyChecks++;
+      if (stableReadyChecks === 3) break;
+      await sleep(250);
+    } catch (error) {
+      stableReadyChecks = 0;
+      if (attempt === 59) throw error;
+      await sleep(500);
     }
   }
   // Emulate potentially permissive Supabase defaults, then prove the migration revokes them.
