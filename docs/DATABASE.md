@@ -13,8 +13,8 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` is registered in API dependency injection with no entities
-or migrations yet. Startup never calls `EnsureCreated`, `Migrate`, or a database
+`SpecThreadDbContext` maps five Better Auth tables and four product tables in
+`public`, with the InitialSchema migration. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -29,8 +29,9 @@ the dashboard. Use TLS certificate verification (`SSL Mode=VerifyFull`).
 Store the Npgsql connection string in .NET user-secrets under
 `ConnectionStrings:Database` for development, or in the API host's environment
 as `ConnectionStrings__Database`. The API `.env.example` documents the format;
-ASP.NET does not automatically load `.env` files. Never put database credentials
-in the web app or a `NEXT_PUBLIC_` variable. MCP OAuth does not supply an API
+ASP.NET does not automatically load `.env` files. Better Auth has separate,
+server-only web database configuration for authentication tables (ADR-008).
+Never put database credentials in a `NEXT_PUBLIC_` variable. MCP OAuth does not supply an API
 database password.
 
 With configuration set, `dotnet ef dbcontext info --project app/api` verifies
@@ -53,7 +54,14 @@ require RLS and intentional grants/policies as part of their migrations. Direct
 EF connections do not automatically carry a Supabase user's JWT; the API's
 authorization model must be designed explicitly.
 
-No database changes were made by this foundation, so no database rollback is needed.
+The previous handoff records InitialSchema as applied to Supabase. Its nine
+tables have RLS enabled and browser-role privileges revoked, with no allow
+policies. This does not implement project authorization for privileged server
+connections. C# JWT validation and membership checks remain outstanding.
+Forward SQL is in schema/initial.sql; rollback.sql drops all nine tables and
+their data. These scripts are not idempotent. Do not rerun the one-time
+`npm run schema:generate` against the existing migration. Future changes need
+new EF migrations. See DEPLOYMENT.md for web TLS/CA configuration.
 
 ## Supabase MCP for Codex
 

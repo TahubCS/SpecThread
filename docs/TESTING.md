@@ -22,6 +22,12 @@ On Linux CI install browsers with `npx playwright install --with-deps chromium`.
 The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
+The schema project also requires a running Docker engine and pulls postgres:17
+for an isolated, disposable container. It has no published ports or persistent
+volume. Auth tests override local environment settings with a random test secret,
+loopback base URL, unreachable local database, and disabled GitHub/dashboard
+credentials. They do not use Supabase or perform real OAuth.
+
 ```sh
 npm test -- --list         # Discover tests without starting apps
 npm test -- --project=api  # API/EF tests (both managed servers still start)
@@ -41,7 +47,7 @@ currently require network access during the web build.
 ## Current coverage
 
 - Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
-  disabled authentication and data actions, and all four routes at mobile width.
+  GitHub buttons, disabled product actions, and all four routes at mobile width.
   Desktop/mobile screenshots are saved inside the ignored test-results directory.
 - API: health response without database credentials, development OpenAPI, and
   a 404 for an unimplemented route.
@@ -49,7 +55,12 @@ currently require network access during the web build.
   local address, and explicit rejection when connection configuration is missing.
   These invoke the local dotnet-ef tool and never connect to Supabase.
 
-No product flows, live database queries, or migrations are tested yet. The health
+- Auth: explicit configuration failures, verified TLS options, restricted origins,
+  session endpoint, and HTTP rejection of unrelated Vercel/tunnel origins.
+- Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,
+  foreign keys, uniqueness, content constraints, and versioned SQL updates.
+
+Live OAuth, deployed TLS connectivity, and product flows are not tested. The health
 endpoint is liveness, not database readiness. EF initialization is not proof
 that live database credentials work.
 

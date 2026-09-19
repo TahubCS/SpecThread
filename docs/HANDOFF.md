@@ -1,6 +1,40 @@
 # Shared handoff
 
-## Current task: deployment configuration for Vercel and Render (2026-09-19)
+## Current task: auth configuration fixes (2026-09-19)
+
+- Branch: main, explicitly selected. Changes remain uncommitted; no deployment,
+  production environment edits, key rotation, or database migration performed.
+- Completed: removed hardcoded dashboard key and default secret fallback;
+  required explicit secret/base URL/database settings; restricted trusted origins
+  to the canonical app origin; enforced certificate verification for remote pg
+  connections with optional DATABASE_CA_CERT PEM; made dashboard plugin opt-in.
+- Playwright web server uses isolated credentials and an unreachable loopback
+  database, with GitHub and dashboard integrations disabled. Added config failure,
+  TLS-override, and HTTP origin rejection/acceptance tests.
+- Changed files: app/web/src/lib/{auth.ts,auth-config.ts}, app/web/.env.example,
+  playwright.config.ts, tests/api/auth-config.spec.ts, tests/e2e/home.spec.ts,
+  README.md, docs/{ARCHITECTURE,DATABASE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md.
+- Decisions: ADR-012; no new dependencies or changes to EF ownership. Public RLS
+  tables remain unchanged. Corrected stale docs and the claim that migration SQL
+  is idempotent. Historical handoff below describes earlier work, not current scope.
+- Checks: npm run lint and npm run typecheck passed. Latest npm test built the
+  production web and Release API successfully; all 15 non-schema tests passed.
+  Schema setup failed because Docker's dockerDesktopLinuxEngine pipe was absent,
+  leaving five further schema tests skipped. Launching Docker Desktop hidden and
+  checking docker info did not restore the engine. No schema code was changed.
+  Initial origin test was corrected to use a cookie-bearing sign-out request.
+  git diff --check passed. C# sources were unchanged.
+- Unverified: full schema suite in this session, real GitHub OAuth, and deployed
+  TLS connectivity. Existing handoff deployment/migration reports were not
+  independently revalidated. No production credentials were printed.
+- Exact next steps: restore Docker engine and rerun npm test; rotate the previously
+  committed Better Auth dashboard key; configure Vercel's required secret, exact
+  URL, database URL, and CA PEM before deployment. If the old default auth secret
+  was used, replace it too (existing sessions may need sign-in). Follow
+  DEPLOYMENT.md. Obtain explicit approval before committing. C# JWT validation
+  and project authorization remain separate unfinished tasks.
+
+## Previous task: deployment configuration for Vercel and Render (2026-09-19)
 
 - Branch: main, continuing on approved integration branch.
 - Live Deployments:

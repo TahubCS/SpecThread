@@ -112,6 +112,25 @@ Decision: Place the public Supabase Root 2021 CA certificate in `app/api/certs/p
 
 Consequences: In production on Render, the Npgsql connection string simply requires `SSL Mode=VerifyFull;` without specifying `Root Certificate=...` or any file path. Both Linux OpenSSL and .NET `X509Chain` natively validate the Supabase TLS certificate chain. Local development can either continue using the existing local certificate path or rely on developer root stores.
 
+ADR-012: Require explicit auth configuration and verified database TLS
+
+Status: Accepted
+
+Context: The user approved fixing hardcoded auth fallbacks, disabled certificate
+verification, and broad trusted-origin wildcards on main.
+
+Decision: Require an explicit random secret, PostgreSQL URL, and canonical app
+origin. Trust only that origin. Enable the dashboard plugin only with an explicit
+environment key. Verify TLS for remote PostgreSQL; optionally supply the CA PEM
+through DATABASE_CA_CERT. Keep loopback plaintext for local testing. Isolate
+Playwright auth settings from developer credentials. EF remains the migration owner.
+
+Consequences: Deployment settings must be updated before releasing these fixes.
+Previously committed dashboard credentials need rotation outside the repository.
+JWT validation, project authorization, and GitHub Apps are separate unfinished work.
+Correction to ADR-009: the generated forward/rollback scripts are not idempotent;
+RLS is enabled with no allow policies, rather than user-specific access policies.
+
 New decision template
 
 ADR-NNN: Title

@@ -39,6 +39,22 @@ test("Better Auth endpoint responds to session queries", async ({ request }) => 
   expect(response.status()).toBe(200);
 });
 
+test("Better Auth rejects other Vercel and tunnel origins", async ({ request }) => {
+  for (const origin of ["https://unrelated.vercel.app", "https://unrelated.ngrok.app"]) {
+    const response = await request.post("/api/auth/sign-out", {
+      headers: { origin, cookie: "csrf-test=present" },
+      data: {},
+    });
+    expect(response.status()).toBe(403);
+    expect((await response.json()).code).toBe("INVALID_ORIGIN");
+  }
+  const allowed = await request.post("/api/auth/sign-out", {
+    headers: { origin: "http://127.0.0.1:3100", cookie: "csrf-test=present" },
+    data: {},
+  });
+  expect(allowed.status()).toBe(200);
+});
+
 test("all skeleton pages fit a narrow screen", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const route of ["/", "/login", "/signup", "/dashboard"]) {

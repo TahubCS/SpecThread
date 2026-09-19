@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 
 declare const process: {
   env: Record<string, string | undefined>;
@@ -41,6 +42,16 @@ export default defineConfig({
       url: baseURL,
       reuseExistingServer: false,
       timeout: 180_000,
+      env: {
+        BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+        BETTER_AUTH_URL: baseURL,
+        DATABASE_URL: "postgres://placeholder:placeholder@127.0.0.1:1/offline",
+        BETTER_AUTH_DATABASE_URL: "",
+        DATABASE_CA_CERT: "",
+        BETTER_AUTH_API_KEY: "",
+        GITHUB_CLIENT_ID: "",
+        GITHUB_CLIENT_SECRET: "",
+      },
     },
     {
       command:

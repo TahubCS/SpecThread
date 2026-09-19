@@ -38,11 +38,14 @@ npm run dev:api   # API: http://127.0.0.1:5100
 
 `GET /health` returns `{ "status": "ok" }` without accessing the database.
 Development OpenAPI is at `http://127.0.0.1:5100/openapi/v1.json`.
-No product endpoints, authentication, or product tables are implemented yet.
+Better Auth with GitHub OAuth is wired into Next.js; EF models and the initial
+migration exist. C# JWT validation and product endpoints remain unimplemented.
 
 The web skeleton has `/`, `/login`, `/signup`, and `/dashboard`. Login and signup
-show disabled GitHub actions; the dashboard is an explicitly public, empty preview.
-Navigation works, but no account is created and no product data is stored.
+provide GitHub sign-in; the dashboard is an explicitly public, empty preview.
+Configure app/web/.env.local using its .env.example before running or building
+the web app. Required auth configuration and certificate trust are documented in
+[DEPLOYMENT.md](docs/DEPLOYMENT.md). No product data is displayed yet.
 
 ## Checks
 
@@ -55,7 +58,9 @@ npm run build:api
 npm test
 ```
 
-`npm test` builds and starts both applications. Stop a manually started API
+`npm test` builds and starts both applications using isolated auth test settings.
+Schema tests require a running Docker engine and use disposable PostgreSQL.
+Stop a manually started API
 first and keep ports 3100 and 5100 free. Builds currently download Google Fonts.
 Use `npm test -- --list` for discovery, `npm run test:ui` for interactive runs,
 and `npm run test:report` for results. See [TESTING.md](docs/TESTING.md).

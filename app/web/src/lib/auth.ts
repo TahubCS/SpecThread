@@ -2,33 +2,15 @@ import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
+import { readAuthConfig } from "./auth-config";
 
-const connectionString =
-  process.env.DATABASE_URL ||
-  process.env.BETTER_AUTH_DATABASE_URL ||
-  "postgres://postgres:postgres@127.0.0.1:5432/postgres";
-
-const isRemote =
-  connectionString.includes("supabase.com") ||
-  connectionString.includes("sslmode=require") ||
-  process.env.DATABASE_SSL === "true";
+const config = readAuthConfig(process.env);
 
 export const auth = betterAuth({
-  database: new Pool({
-    connectionString,
-    ssl: isRemote ? { rejectUnauthorized: false } : undefined,
-  }),
-  secret: process.env.BETTER_AUTH_SECRET || "development-secret-key-must-be-at-least-32-chars-long",
-  baseURL: process.env.BETTER_AUTH_URL,
-  trustedOrigins: [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "https://*.ngrok-free.app",
-    "https://*.ngrok-free.dev",
-    "https://*.ngrok.io",
-    "https://*.ngrok.app",
-    "https://*.vercel.app",
-  ],
+  database: new Pool(config.pool),
+  secret: config.secret,
+  baseURL: config.baseURL,
+  trustedOrigins: config.trustedOrigins,
   socialProviders: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID || "",
@@ -38,9 +20,7 @@ export const auth = betterAuth({
   },
   plugins: [
     jwt(),
-    dash({
-      apiKey: process.env.BETTER_AUTH_API_KEY || "ba_q3svn5naq5tbxqdl1xwct5u30pacsyd1",
-    }),
+    ...(config.dashboardApiKey ? [dash({ apiKey: config.dashboardApiKey })] : []),
   ],
   advanced: {
     database: {
