@@ -118,6 +118,8 @@ Run the narrowest relevant checks during development and the full required check
 
 Git and team coordination
 
+Never commit changes without explicit user approval. Always ask for permission before running git commit, and wait for the user's explicit consent. Keep working tree changes uncommitted until the user explicitly directs or approves committing them.
+
 Before starting each new task, ask the user for permission to create a new task branch and wait for their answer before beginning implementation. If the user approves, create and switch to the task branch from the agreed integration branch before doing the work. If the user says to stay on the current branch, work there without creating or switching branches. An explicit branch choice already given for that task satisfies this requirement; do not ask again during follow-up work on the same task. Keep approved task branches short-lived.
 
 Recommended branch names: feature/<issue>-<short-name>, fix/<issue>-<short-name>, or docs/<issue>-<short-name>.

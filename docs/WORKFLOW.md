@@ -52,7 +52,7 @@ If the user approves, update the agreed integration branch and create and switch
 
 Implement only the task's acceptance criteria.
 
-Commit focused, reviewable changes.
+Commit focused, reviewable changes only after receiving explicit user approval. Never commit changes without user consent.
 
 Run relevant checks locally.
 
