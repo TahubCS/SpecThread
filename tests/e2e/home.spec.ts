@@ -20,13 +20,12 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
 });
 
 for (const route of ["login", "signup"] as const) {
-  test(`${route} makes unavailable authentication explicit`, async ({ page }) => {
+  test(`${route} provides interactive GitHub sign-in button`, async ({ page }) => {
     await page.goto(`/${route}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       route === "login" ? "Welcome back" : "Create your account",
     );
-    await expect(page.getByRole("button", { name: /with GitHub/ })).toBeDisabled();
-    await expect(page.getByText("GitHub sign-in is not available yet. No account is created in this preview.")).toBeVisible();
+    await expect(page.getByRole("button", { name: /with GitHub/ })).toBeEnabled();
     await expect(page.locator("input")).toHaveCount(0);
     await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
@@ -34,6 +33,11 @@ for (const route of ["login", "signup"] as const) {
     await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   });
 }
+
+test("Better Auth endpoint responds to session queries", async ({ request }) => {
+  const response = await request.get("/api/auth/get-session");
+  expect(response.status()).toBe(200);
+});
 
 test("all skeleton pages fit a narrow screen", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
