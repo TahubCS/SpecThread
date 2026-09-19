@@ -27,6 +27,7 @@ export const auth = betterAuth({
     "https://*.ngrok-free.dev",
     "https://*.ngrok.io",
     "https://*.ngrok.app",
+    "https://*.vercel.app",
   ],
   socialProviders: {
     github: {

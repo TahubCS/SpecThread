@@ -3,33 +3,38 @@
 ## Current task: deployment configuration for Vercel and Render (2026-09-19)
 
 - Branch: main, continuing on approved integration branch.
+- Live Deployments:
+  - Web (Vercel): https://web-alpha-lovat-61.vercel.app/
+  - API (Render): https://specthread-api.onrender.com/
 - Completed work:
   - Added .dockerignore ignoring host build artifacts (bin/, obj/), .git, .next, node_modules, and local env files for fast, clean container builds.
   - Created root multi-stage Dockerfile targeting official Microsoft .NET 10 SDK and ASP.NET runtime images, restoring in locked mode and running unprivileged as $APP_UID on port 8080.
   - Solved Supabase Root CA validation for production containers: added app/api/certs/prod-ca-2021.crt and configured the Dockerfile runtime stage to install it via update-ca-certificates into the Debian trust store (/etc/ssl/certs/ca-certificates.crt).
   - Verified Docker container build and certificate trust via openssl verify; Npgsql connects with SSL Mode=VerifyFull without requiring local file path parameters in Render environment variables.
-  - Tested building and executing the Docker container locally; confirmed GET /health returns 200 OK ({"status":"ok"}).
   - Created render.yaml defining the Render Blueprint web service specification for specthread-api.
   - Added app/web/vercel.json and installed typescript in app/web devDependencies for clean isolated Vercel builds.
+  - Added https://*.vercel.app to Better Auth trustedOrigins in app/web/src/lib/auth.ts for seamless cross-origin and preview authentication.
   - Authored comprehensive docs/DEPLOYMENT.md guide covering Vercel and Render step-by-step setup, environment variables, GitHub OAuth callback URLs, TLS certificate configuration, and verification.
   - Recorded ADR-010 and ADR-011 in docs/DECISIONS.md and updated docs/ARCHITECTURE.md.
 - Changed files:
   - .dockerignore, Dockerfile, render.yaml, app/web/vercel.json, app/web/package.json, package-lock.json
-  - app/api/certs/prod-ca-2021.crt, docs/DEPLOYMENT.md, docs/DECISIONS.md, docs/ARCHITECTURE.md, docs/HANDOFF.md
+  - app/web/src/lib/auth.ts, app/api/certs/prod-ca-2021.crt, docs/DEPLOYMENT.md, docs/DECISIONS.md, docs/ARCHITECTURE.md, docs/HANDOFF.md
 - Validation:
+  - Live Render API: GET https://specthread-api.onrender.com/health returned 200 OK ({"status":"ok"}).
+  - Live Vercel Web: GET https://web-alpha-lovat-61.vercel.app/ returned 200 OK with SpecThread landing page.
+  - Live Better Auth: GET https://web-alpha-lovat-61.vercel.app/api/auth/get-session returned 200 OK (null for unauthenticated).
   - docker build: passed in 7.1s, 701B context transfer.
   - docker container cert verification: openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt /usr/local/share/ca-certificates/supabase-root-2021.crt returned OK.
-  - Container liveness check: GET http://localhost:8086/health returned 200 OK ({"status":"ok"}).
   - npm run lint: passed cleanly.
   - npm run typecheck: passed cleanly.
-  - npm run build: Next.js production build succeeded.
+  - npm run build: Next.js production build succeeded in 1.1s.
   - dotnet build app/api --configuration Release: passed with 0 warnings, 0 errors.
-  - npx playwright test: 17 passed in 33.8s.
+  - npx playwright test: 17 passed in 31.2s.
   - git diff --check: passed.
 - Known issues or risks:
-  - Deployments on Vercel and Render require secrets to be populated in their respective platform dashboards as documented in docs/DEPLOYMENT.md.
+  - GitHub OAuth Application must have Homepage URL and Authorization callback URL configured to the live Vercel domain.
 - Exact next step:
-  - Ask user for explicit permission before committing or pushing changes. After user approval, push to GitHub, connect Vercel (Root Directory: app/web) and Render (via render.yaml or Web Service), set environment variables, and verify live deployments.
+  - Update GitHub OAuth App Authorization callback URL to https://web-alpha-lovat-61.vercel.app/api/auth/callback/github, set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET on Vercel, and test live GitHub authentication.
 
 ## Previous task: initial schema migration and Better Auth setup (2026-09-19)
 
