@@ -24,6 +24,11 @@ export default defineConfig({
       testMatch: "api/**/*.spec.ts",
       use: { baseURL: "http://127.0.0.1:5100" },
     },
+    {
+      name: "schema",
+      testMatch: "schema/**/*.spec.ts",
+      timeout: 60_000,
+    },
   ],
   webServer: [
     {

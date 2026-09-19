@@ -34,3 +34,14 @@ test("EF rejects database use without configuration", async () => {
     stdout: expect.stringContaining("Configure ConnectionStrings:Database"),
   });
 });
+
+test("EF model matches the migration snapshot", async () => {
+  const { stdout } = await run("dotnet", ["ef", "migrations", "has-pending-model-changes", "--project", "app/api", "--configuration", "Release", "--no-build"], {
+    env: {
+      ...process.env,
+      DOTNET_ENVIRONMENT: "Production",
+      ConnectionStrings__Database: "Host=127.0.0.1;Port=1;Database=offline;Username=placeholder;Password=placeholder",
+    },
+  });
+  expect(stdout).toContain("No changes have been made");
+});
