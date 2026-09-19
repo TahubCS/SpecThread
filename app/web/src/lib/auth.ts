@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
+import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
 
 const connectionString =
@@ -18,7 +19,15 @@ export const auth = betterAuth({
     ssl: isRemote ? { rejectUnauthorized: false } : undefined,
   }),
   secret: process.env.BETTER_AUTH_SECRET || "development-secret-key-must-be-at-least-32-chars-long",
-  baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
+  baseURL: process.env.BETTER_AUTH_URL,
+  trustedOrigins: [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://*.ngrok-free.app",
+    "https://*.ngrok-free.dev",
+    "https://*.ngrok.io",
+    "https://*.ngrok.app",
+  ],
   socialProviders: {
     github: {
       clientId: process.env.GITHUB_CLIENT_ID || "",
@@ -28,6 +37,9 @@ export const auth = betterAuth({
   },
   plugins: [
     jwt(),
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY || "ba_q3svn5naq5tbxqdl1xwct5u30pacsyd1",
+    }),
   ],
   advanced: {
     database: {
