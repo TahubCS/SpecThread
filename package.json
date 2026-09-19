@@ -20,7 +20,8 @@
     "build:api": "dotnet build app/api --configuration Release",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "schema:generate": "node scripts/generate-initial-schema.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
