@@ -61,8 +61,14 @@ The ASP.NET Core Web API is packaged as an unprivileged, multi-stage Linux conta
    * **Health Check Path**: `/health` (returns `{"status":"ok"}`)
    * **Environment Variables**:
      * `ASPNETCORE_ENVIRONMENT`: `Production`
-     * `ConnectionStrings__Database`: Your Supabase Npgsql connection string (e.g. `Host=...;Port=5432;Database=postgres;Username=...;Password=...;SSL Mode=Require;`)
+     * `ConnectionStrings__Database`: Your Supabase Npgsql connection string (e.g. `Host=aws-0-us-west-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.hgcjtecsglksdbsmtcxt;Password=<PASSWORD>;SSL Mode=VerifyFull;`)
 5. Click **Deploy Web Service**.
+
+### TLS & Root CA Verification
+The Supabase PostgreSQL cluster uses the `Supabase Root 2021 CA`. To support strict `SSL Mode=VerifyFull` without requiring environment-specific file paths on Render:
+- The public root CA certificate is stored in `app/api/certs/prod-ca-2021.crt`.
+- The Docker runtime image automatically copies this certificate to `/usr/local/share/ca-certificates/supabase-root-2021.crt` and executes `update-ca-certificates`.
+- Linux OpenSSL and .NET `X509Chain` trust the certificate natively from `/etc/ssl/certs/ca-certificates.crt`. No `Root Certificate=` parameter is needed in your Render connection string.
 
 ---
 

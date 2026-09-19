@@ -15,6 +15,10 @@ RUN dotnet publish app/api/SpecThread.Api.csproj -c Release -o /app/publish --no
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
+# Install Supabase Root CA into system trust store for VerifyFull TLS support
+COPY app/api/certs/prod-ca-2021.crt /usr/local/share/ca-certificates/supabase-root-2021.crt
+RUN update-ca-certificates
+
 COPY --from=build /app/publish .
 
 ENV ASPNETCORE_ENVIRONMENT=Production

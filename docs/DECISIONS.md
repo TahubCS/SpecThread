@@ -102,6 +102,16 @@ Decision: Deploy the Next.js web application to Vercel with Root Directory set t
 
 Consequences: Clear separation of operational concerns. The Next.js frontend benefits from Vercel's global edge network and serverless rendering, while the C# API runs in a reproducible Linux container on Render with zero cloud vendor lock-in.
 
+ADR-011: Supabase Root CA Baking in Docker Container for Linux Trust Store Integration
+
+Status: Accepted
+
+Context: Connecting Npgsql with `SSL Mode=VerifyFull` to Supabase's connection pooler requires trusting the custom `Supabase Root 2021 CA`. In local Windows development, this previously required an absolute file path in `Root Certificate=...`. On Render, absolute container paths in environment variables are fragile and leak deployment details into connection strings.
+
+Decision: Place the public Supabase Root 2021 CA certificate in `app/api/certs/prod-ca-2021.crt`. During the Docker runtime stage, copy this certificate to `/usr/local/share/ca-certificates/supabase-root-2021.crt` and execute `/usr/sbin/update-ca-certificates`. This registers the certificate directly into Debian's system certificate bundle (`/etc/ssl/certs/ca-certificates.crt`).
+
+Consequences: In production on Render, the Npgsql connection string simply requires `SSL Mode=VerifyFull;` without specifying `Root Certificate=...` or any file path. Both Linux OpenSSL and .NET `X509Chain` natively validate the Supabase TLS certificate chain. Local development can either continue using the existing local certificate path or rely on developer root stores.
+
 New decision template
 
 ADR-NNN: Title

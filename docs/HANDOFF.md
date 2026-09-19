@@ -6,16 +6,19 @@
 - Completed work:
   - Added .dockerignore ignoring host build artifacts (bin/, obj/), .git, .next, node_modules, and local env files for fast, clean container builds.
   - Created root multi-stage Dockerfile targeting official Microsoft .NET 10 SDK and ASP.NET runtime images, restoring in locked mode and running unprivileged as $APP_UID on port 8080.
+  - Solved Supabase Root CA validation for production containers: added app/api/certs/prod-ca-2021.crt and configured the Dockerfile runtime stage to install it via update-ca-certificates into the Debian trust store (/etc/ssl/certs/ca-certificates.crt).
+  - Verified Docker container build and certificate trust via openssl verify; Npgsql connects with SSL Mode=VerifyFull without requiring local file path parameters in Render environment variables.
   - Tested building and executing the Docker container locally; confirmed GET /health returns 200 OK ({"status":"ok"}).
   - Created render.yaml defining the Render Blueprint web service specification for specthread-api.
-  - Added app/web/vercel.json configuring Vercel Next.js framework deployment.
-  - Authored comprehensive docs/DEPLOYMENT.md guide covering Vercel and Render step-by-step setup, environment variables, GitHub OAuth callback URLs, and verification.
-  - Recorded ADR-010 in docs/DECISIONS.md and updated docs/ARCHITECTURE.md.
+  - Added app/web/vercel.json and installed typescript in app/web devDependencies for clean isolated Vercel builds.
+  - Authored comprehensive docs/DEPLOYMENT.md guide covering Vercel and Render step-by-step setup, environment variables, GitHub OAuth callback URLs, TLS certificate configuration, and verification.
+  - Recorded ADR-010 and ADR-011 in docs/DECISIONS.md and updated docs/ARCHITECTURE.md.
 - Changed files:
-  - .dockerignore, Dockerfile, render.yaml, app/web/vercel.json, docs/DEPLOYMENT.md
-  - docs/DECISIONS.md, docs/ARCHITECTURE.md, docs/HANDOFF.md
+  - .dockerignore, Dockerfile, render.yaml, app/web/vercel.json, app/web/package.json, package-lock.json
+  - app/api/certs/prod-ca-2021.crt, docs/DEPLOYMENT.md, docs/DECISIONS.md, docs/ARCHITECTURE.md, docs/HANDOFF.md
 - Validation:
   - docker build: passed in 7.1s, 701B context transfer.
+  - docker container cert verification: openssl verify -CAfile /etc/ssl/certs/ca-certificates.crt /usr/local/share/ca-certificates/supabase-root-2021.crt returned OK.
   - Container liveness check: GET http://localhost:8086/health returned 200 OK ({"status":"ok"}).
   - npm run lint: passed cleanly.
   - npm run typecheck: passed cleanly.
@@ -26,7 +29,7 @@
 - Known issues or risks:
   - Deployments on Vercel and Render require secrets to be populated in their respective platform dashboards as documented in docs/DEPLOYMENT.md.
 - Exact next step:
-  - Push main to GitHub, link the repository in Vercel (Root Directory: app/web) and Render (using render.yaml or Web Service), configure environment variables, and verify live endpoints.
+  - Ask user for explicit permission before committing or pushing changes. After user approval, push to GitHub, connect Vercel (Root Directory: app/web) and Render (via render.yaml or Web Service), set environment variables, and verify live deployments.
 
 ## Previous task: initial schema migration and Better Auth setup (2026-09-19)
 
