@@ -82,6 +82,16 @@ Decision: Add home, login, signup, and a public dashboard preview first. No simu
 
 Consequences: The planned authentication-only database access is an explicit exception to the earlier API-only database boundary. EF remains the migration owner, with Better Auth schema compatibility to be verified before implementation. Tables await the user's next instruction, followed by auth and GitHub work. Vercel is the chosen web host; deployment and the final API hosting plan remain deferred. Public dashboard access is only for this empty preview and must be replaced with enforced access before exposing product data.
 
+ADR-009: Initial Application and Authentication Schema with EF Core and RLS
+
+Status: Accepted
+
+Context: Persistence foundation requires establishing the initial database schema supporting both Better Auth (core + JWT plugin) and SpecThread core domain models (projects, project members, requirements, and acceptance criteria). Tables hosted on Supabase must not be exposed unintentionally through public PostgREST / Supabase Data APIs.
+
+Decision: Use EF Core 10 to manage the initial schema migration (20260919042809_InitialSchema). Map Better Auth tables (user, session, account, verification, jwks) with camelCase column naming matching Better Auth 1.7.5 expectations. Map SpecThread domain tables (projects, project_members, requirements, acceptance_criteria) with snake_case naming, check constraints, foreign keys, and optimistic concurrency versioning on requirements. Embed Row Level Security (RLS) enablement and permission revocation (REVOKE ALL FROM PUBLIC, anon, authenticated) directly into the migration transaction so that tables are securely isolated by default. Generate and preserve idempotent forward (docs/schema/initial.sql) and backward (docs/schema/rollback.sql) scripts, and verify them against disposable test containers.
+
+Consequences: The database schema is strictly locked down from browser and anon/authenticated Supabase roles by default. Better Auth in Next.js and EF Core in ASP.NET Core access PostgreSQL via authenticated connection pooling. Database rollback is defined and automated in Playwright tests.
+
 New decision template
 
 ADR-NNN: Title

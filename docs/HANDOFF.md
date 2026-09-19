@@ -1,6 +1,42 @@
-﻿# Shared handoff
+# Shared handoff
 
-## Current task: minimal web skeleton (2026-09-19)
+## Current task: initial schema migration and Better Auth setup (2026-09-19)
+
+- Branch: main, continuing the approved sequence.
+- Completed work:
+  - Finalized C# EF Core models in app/api/Data/{AuthModels.cs, ProductModels.cs, SpecThreadDbContext.cs}.
+  - Generated and finalized EF Core migration 20260919042809_InitialSchema with embedded PostgreSQL Row-Level Security (RLS) and public/anon/authenticated role privilege revocation.
+  - Generated idempotent DDL artifacts docs/schema/initial.sql and docs/schema/rollback.sql.
+  - Executed dotnet ef database update applying the migration to the live Supabase PostgreSQL database via the session pooler; all 9 tables, indices, check constraints, foreign keys, and RLS policies are live.
+  - Verified EF model snapshot matching and tested schema integrity, Better Auth compatibility, constraints, and rollback in an ephemeral Docker container.
+  - Implemented Better Auth in app/web: installed better-auth: 1.7.5 and pg: 8.23.0 with @types/pg: 8.23.1, added app/web/src/lib/auth.ts (PostgreSQL adapter, JWT plugin, GitHub social provider, validateSchema: false), app/web/src/lib/auth-client.ts (jwtClient), and app/web/src/app/api/auth/[...all]/route.ts (toNextJsHandler).
+  - Documented environment variables in app/web/.env.example.
+  - Updated app/web/src/components/auth-placeholder.tsx to provide an interactive GitHub sign-in button with loading and error states.
+  - Updated tests/e2e/home.spec.ts with checks for interactive GitHub buttons and Better Auth /api/auth/get-session endpoint response.
+  - Recorded ADR-009 in docs/DECISIONS.md.
+- Changed files:
+  - app/api/Data/SpecThreadDbContext.cs, app/api/Data/AuthModels.cs, app/api/Data/ProductModels.cs
+  - app/api/Migrations/20260919042809_InitialSchema.cs, .Designer.cs, SpecThreadDbContextModelSnapshot.cs
+  - docs/schema/initial.sql, rollback.sql, better-auth-1.7.5.json
+  - scripts/generate-initial-schema.mjs, package.json, app/web/package.json
+  - app/web/src/lib/auth.ts, auth-client.ts, app/web/src/app/api/auth/[...all]/route.ts, app/web/src/components/auth-placeholder.tsx, app/web/.env.example
+  - playwright.config.ts, tests/schema/migration.spec.ts, tests/api/ef.spec.ts, tests/e2e/home.spec.ts
+  - docs/DECISIONS.md, docs/HANDOFF.md
+- Validation:
+  - npm run lint: passed cleanly with zero errors.
+  - npm run typecheck: passed cleanly across Next.js and root workspaces.
+  - npm run build: production Next.js build succeeded in 2.4s.
+  - dotnet build app/api --configuration Release: passed with 0 warnings, 0 errors.
+  - dotnet ef database update --project app/api: succeeded on Supabase; applied 20260919042809_InitialSchema.
+  - dotnet ef migrations list --project app/api: verified no pending migrations on Supabase.
+  - npx playwright test: 17 passed across Chromium, API, and Schema suites in 29.3s.
+- Known issues or risks:
+  - Live GitHub sign-in requires GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET configured in the runtime environment.
+  - Next.js web application requires DATABASE_URL and BETTER_AUTH_SECRET configured for live session persistence.
+- Exact next step:
+  - Create the GitHub OAuth application (or GitHub App), configure the credentials in app/web/.env.local, and test live sign-in flow and JWT verification against the ASP.NET Core API.
+
+## Previous task: minimal web skeleton (2026-09-19)
 
 - Branch: main, explicitly authorized. Existing connection-check handoff edits preserved.
 - Added a homepage, login, signup, and empty public dashboard preview with shared
