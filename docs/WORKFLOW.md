@@ -46,9 +46,12 @@ A task is too large if it cannot be reviewed independently or if multiple member
 
 Branch workflow
 
-Before starting each new task, ask the user for permission to create a new task branch. Wait for their answer before beginning implementation, unless they have already explicitly chosen a branch for that task.
-
-If the user approves, update the agreed integration branch and create and switch to a short-lived task branch before doing the work. If the user says to stay on the current branch, work there without creating or switching branches. Carry that choice through follow-up work on the same task without asking again. The Playwright foundation work is on main at the user's request.
+1. **Strict protection of `main`**: All new changes must be made on a separate feature or fix branch. Never make code or document edits directly on `main`.
+2. **If currently on `main`**: Any agent or contributor on `main` must remind the team/user that changes belong on a task branch, prompt for a task branch name, and create and switch to that branch before beginning implementation.
+3. **Task boundary vs. follow-up**:
+   - Stay on the task branch for iterative follow-up prompts, debugging, test runs, and review fixes for the *current* task without re-asking.
+   - When a specific task is complete (tested, verified, and fixed) and a *different* task begins, ask the user whether to stay on the current branch or create and switch to a new branch for the new task.
+4. **Mandatory Pull Requests**: All changes are merged into `main` exclusively through Pull Requests. Never merge directly into `main` via git merge/push. Direct pushes to `main` without an associated Pull Request are rejected.
 
 Implement only the task's acceptance criteria.
 

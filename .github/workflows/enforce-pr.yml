@@ -1,0 +1,46 @@
+name: Enforce Pull Request Merges
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  enforce-pr:
+    name: Verify PR Merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify commit originated from a merged Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Allow explicit bootstrap or emergency bypass flag
+          if echo "$COMMIT_MSG" | grep -qi "\[skip-pr-check\]"; then
+            echo "Direct push permitted via [skip-pr-check] flag."
+            exit 0
+          fi
+
+          # Standard GitHub PR merge commit format
+          if echo "$COMMIT_MSG" | grep -qiE "^Merge pull request #[0-9]+"; then
+            echo "Verified: commit message matches GitHub pull request merge pattern."
+            exit 0
+          fi
+
+          # Query GitHub API for pull requests associated with this commit
+          PR_COUNT=$(gh api "repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls" --jq '[.[] | select(.state == "closed" and .merged_at != null and .base.ref == "main")] | length' 2>/dev/null || echo "0")
+
+          if [ "$PR_COUNT" -gt 0 ]; then
+            echo "Verified: commit ${COMMIT_SHA} is associated with a merged Pull Request to main."
+            exit 0
+          fi
+
+          echo "::error::Direct push to 'main' detected without an associated merged Pull Request!"
+          echo "SpecThread policy strictly requires all changes to be proposed and merged via Pull Requests."
+          echo "Please create a feature branch, push your changes there, and open a Pull Request to main."
+          exit 1
+
