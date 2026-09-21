@@ -19,9 +19,10 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         model.Entity<AuthAccount>().ToTable("account");
         model.Entity<AuthVerification>().ToTable("verification");
         model.Entity<AuthSigningKey>().ToTable("jwks");
+        model.Entity<AuthRateLimit>().ToTable("rateLimit");
 
         // Preserve Better Auth's default text IDs and case-sensitive field names.
-        foreach (var type in new[] { typeof(AuthUser), typeof(AuthSession), typeof(AuthAccount), typeof(AuthVerification), typeof(AuthSigningKey) })
+        foreach (var type in new[] { typeof(AuthUser), typeof(AuthSession), typeof(AuthAccount), typeof(AuthVerification), typeof(AuthSigningKey), typeof(AuthRateLimit) })
         {
             var entity = model.Entity(type);
             entity.HasKey("Id");
@@ -39,6 +40,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         model.Entity<AuthAccount>().HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         model.Entity<AuthAccount>().HasIndex(x => new { x.ProviderId, x.AccountId }).IsUnique();
         model.Entity<AuthVerification>().HasIndex(x => x.Identifier);
+        model.Entity<AuthRateLimit>().HasIndex(x => x.Key).IsUnique();
+        model.Entity<AuthRateLimit>().HasIndex(x => x.LastRequest);
 
         var project = model.Entity<Project>();
         project.ToTable("projects", table => table.HasCheckConstraint("ck_projects_name", "length(btrim(name)) > 0"));

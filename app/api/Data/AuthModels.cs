@@ -62,3 +62,11 @@ public sealed class AuthSigningKey
     public string? Alg { get; set; }
     public string? Crv { get; set; }
 }
+
+public sealed class AuthRateLimit
+{
+    public required string Id { get; set; }
+    public required string Key { get; set; }
+    public int Count { get; set; }
+    public long LastRequest { get; set; }
+}
