@@ -1,6 +1,31 @@
 # Shared handoff
 
-## Current task: auth configuration fixes (2026-09-19)
+## Current task: Vercel client IP headers (2026-09-20)
+
+- Branch: main, explicitly selected. Recommendation 1 only; no commit or deployment.
+- Completed: Better Auth now prefers x-vercel-forwarded-for, with x-forwarded-for
+  as fallback. Added HTTP-handler tests for header precedence, distinct client
+  buckets, 429 responses, fallback from absent/invalid Vercel headers, and ignoring
+  unrelated Cloudflare headers. Tests use isolated in-memory limits, no live data.
+- Changed files: app/web/src/lib/{auth.ts,auth-config.ts},
+  tests/api/auth-config.spec.ts, docs/{DEPLOYMENT,DECISIONS,HANDOFF}.md.
+- Decision: ADR-013. Trust assumes Vercel-managed ingress. Existing rate-limit
+  defaults and in-memory storage are unchanged; distributed storage is deferred.
+- Verification: npm run lint and npm run typecheck passed;
+  npm test -- --project=api --project=chromium passed all 17 tests, including
+  managed production web and Release API builds. git diff --check passed.
+  The sandbox initially blocked process spawning (EPERM); the approved retry ran.
+  First test run had one assertion failure: this Better Auth version uses
+  X-Retry-After, not Retry-After. Corrected the assertion and reran successfully.
+- Unverified: deployed proxy header handling and distributed rate limiting.
+  Docker schema tests were not run; this task changes no database schema.
+- Prior login follow-up: corrected the ignored local CA environment formatting;
+  the user subsequently confirmed GitHub login both locally and on Vercel.
+- Exact next step: review these uncommitted changes and verify header behavior in
+  a controlled Vercel deployment. Wait for the user's confirmation before starting
+  recommendation 2. OAuth error pages, joins, and app naming remain unchanged.
+
+## Previous task: auth configuration fixes (2026-09-19)
 
 - Branch: main, explicitly selected. Changes remain uncommitted; no deployment,
   production environment edits, key rotation, or database migration performed.

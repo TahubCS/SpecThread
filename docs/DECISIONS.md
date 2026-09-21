@@ -131,6 +131,21 @@ JWT validation, project authorization, and GitHub Apps are separate unfinished w
 Correction to ADR-009: the generated forward/rollback scripts are not idempotent;
 RLS is enabled with no allow policies, rather than user-specific access policies.
 
+ADR-013: Prefer Vercel client IP headers for Better Auth
+
+Status: Accepted
+
+Context: The user approved implementing only recommendation 1 (proxy IP headers)
+on main. Better Auth runs in Next.js on Vercel.
+
+Decision: Resolve client IPs from x-vercel-forwarded-for first, then
+x-forwarded-for. Keep Better Auth's IP parsing and rate-limit defaults; do not
+trust unrelated proxy headers or add speculative trusted proxy ranges.
+
+Consequences: The deployment must use trusted Vercel ingress and must reassess
+header trust if its proxy topology changes. In-memory limits remain per instance;
+shared storage, OAuth error pages, database joins, and app naming are deferred.
+
 New decision template
 
 ADR-NNN: Title

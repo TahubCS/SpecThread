@@ -23,6 +23,9 @@ export const auth = betterAuth({
     ...(config.dashboardApiKey ? [dash({ apiKey: config.dashboardApiKey })] : []),
   ],
   advanced: {
+    ipAddress: {
+      ipAddressHeaders: config.ipAddressHeaders,
+    },
     database: {
       validateSchema: false,
     },

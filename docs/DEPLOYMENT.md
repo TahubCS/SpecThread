@@ -63,6 +63,25 @@ In your GitHub Developer Settings (OAuth Apps):
 * **Homepage URL**: `https://your-app.vercel.app`
 * **Authorization callback URL**: `https://your-app.vercel.app/api/auth/callback/github`
 
+### Client IP headers and rate limiting
+
+Better Auth prefers `x-vercel-forwarded-for`, then `x-forwarded-for`, for
+client IP detection. This assumes the web application is reached through Vercel's
+managed ingress. Do not add Cloudflare or other proxy headers without verifying
+that the deployment strips client-supplied values and sets trusted replacements.
+Reassess this configuration if another proxy is placed in front of Vercel.
+
+Rate-limit storage remains Better Auth's default in-memory storage: counters are
+not shared across serverless instances. The header change does not provide
+distributed rate limiting. Shared storage requires a separate implementation;
+database storage would require an EF-owned migration before enabling it.
+In a controlled Vercel deployment, verify client separation and header spoofing
+resistance before treating the proxy behavior as verified. Local simulated-header
+tests cannot prove Vercel's actual header handling.
+
+References: [Vercel request headers](https://vercel.com/docs/headers/request-headers)
+and [Better Auth rate limiting](https://better-auth.com/docs/concepts/rate-limit).
+
 ---
 
 ## 2. API Deployment (Render)

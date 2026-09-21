@@ -44,6 +44,7 @@ export function readAuthConfig(env: Environment) {
   };
   return {
     secret, baseURL: origin.origin, trustedOrigins: [origin.origin], pool,
+    ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
     dashboardApiKey: env.BETTER_AUTH_API_KEY?.trim() || undefined,
   };
 }
