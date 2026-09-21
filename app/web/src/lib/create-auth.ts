@@ -16,12 +16,9 @@ export function createAuth(env: Record<string, string | undefined>) {
     trustedOrigins: config.trustedOrigins,
     onAPIError: { errorURL: "/auth/error" },
     rateLimit: { storage: "database" },
+    account: { encryptOAuthTokens: true },
     socialProviders: {
-      github: {
-        clientId: env.GITHUB_CLIENT_ID || "",
-        clientSecret: env.GITHUB_CLIENT_SECRET || "",
-        enabled: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-      },
+      github: config.github,
     },
     plugins: [
       jwt(),

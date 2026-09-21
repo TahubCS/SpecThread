@@ -1,4 +1,5 @@
 import type { PoolConfig } from "pg";
+import { X509Certificate } from "node:crypto";
 
 type Environment = Record<string, string | undefined>;
 
@@ -38,6 +39,22 @@ export function readAuthConfig(env: Environment) {
   }
   database.search = "";
   const ca = env.DATABASE_CA_CERT?.replace(/\\n/g, "\n").trim();
+  if (ca) {
+    const certificates = ca.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) ?? [];
+    try {
+      if (!certificates.length || ca.replace(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g, "").trim()) {
+        throw new Error("Incomplete PEM");
+      }
+      for (const certificate of certificates) new X509Certificate(certificate);
+    } catch {
+      throw new Error("DATABASE_CA_CERT must contain complete PEM certificate contents with preserved newlines, not a file path.");
+    }
+  }
+  const clientId = env.GITHUB_CLIENT_ID?.trim() || "";
+  const clientSecret = env.GITHUB_CLIENT_SECRET?.trim() || "";
+  if (Boolean(clientId) !== Boolean(clientSecret)) {
+    throw new Error("Configure both GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET, or leave both empty to disable GitHub sign-in.");
+  }
   const pool: PoolConfig = {
     connectionString: database.toString(),
     ssl: loopback(database.hostname) ? false : { rejectUnauthorized: true, ...(ca ? { ca } : {}) },
@@ -45,6 +62,7 @@ export function readAuthConfig(env: Environment) {
   return {
     secret, baseURL: origin.origin, trustedOrigins: [origin.origin], pool,
     ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
+    github: { clientId, clientSecret, enabled: Boolean(clientId && clientSecret) },
     dashboardApiKey: env.BETTER_AUTH_API_KEY?.trim() || undefined,
   };
 }

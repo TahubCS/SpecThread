@@ -48,6 +48,24 @@ longer used. URL query parameters are rejected except `sslmode=require` and
 `sslmode=verify-full`, which are removed before passing the URL to pg so they
 cannot replace the explicit certificate-verification options.
 
+CA values are parsed before creating the database pool. A partial, flattened, or
+invalid PEM now produces an actionable DATABASE_CA_CERT configuration error
+without printing its contents. Multiple complete PEM certificates are supported.
+This validates the format; the TLS handshake still verifies the server's chain.
+
+Set both GitHub credential variables together. Values are trimmed; a partial pair
+fails explicitly. Leaving both blank deliberately disables GitHub for offline
+tests. No new environment variables are required.
+
+OAuth access and refresh tokens written through Better Auth are encrypted with
+the auth secret. Existing prefixed plaintext GitHub tokens remain readable in
+Better Auth 1.7.5, but enabling encryption does not rewrite existing rows or backups.
+Reauthentication refreshes the stored tokens; older hex-only tokens may require
+reauthentication because the library detects them as encrypted data. Keep the
+current secret available: replacing it can make encrypted tokens unreadable.
+Do not roll back to a version with encryption disabled after encrypted tokens
+have been stored; keep the option enabled or arrange explicit reauthentication.
+
 The dashboard plugin is disabled when `BETTER_AUTH_API_KEY` is absent. Rotate the
 previously committed dashboard key in Better Auth before using this integration;
 removing the source fallback does not revoke it. If a deployment used the old
