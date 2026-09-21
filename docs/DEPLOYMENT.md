@@ -22,7 +22,6 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 |---|---|---|
 | `BETTER_AUTH_SECRET` | Required random secret, at least 32 characters; no fallback | Generate via `openssl rand -hex 32` |
 | `BETTER_AUTH_URL` | Canonical public URL of your Vercel deployment | `https://your-app.vercel.app` |
-| `NEXT_PUBLIC_APP_URL` | Public frontend URL | `https://your-app.vercel.app` |
 | `DATABASE_URL` | Supabase connection string for Better Auth auth tables | `postgres://postgres.[ref]:[pass]@[host]:5432/postgres` |
 | `DATABASE_CA_CERT` | Full PEM contents of the project's CA certificate when not trusted by Node | Copy the certificate contents, not its local path |
 | `GITHUB_CLIENT_ID` | Client ID from your GitHub OAuth App | `Ov23li...` |
@@ -71,16 +70,42 @@ managed ingress. Do not add Cloudflare or other proxy headers without verifying
 that the deployment strips client-supplied values and sets trusted replacements.
 Reassess this configuration if another proxy is placed in front of Vercel.
 
-Rate-limit storage remains Better Auth's default in-memory storage: counters are
-not shared across serverless instances. The header change does not provide
-distributed rate limiting. Shared storage requires a separate implementation;
-database storage would require an EF-owned migration before enabling it.
+Rate-limit counters use the shared PostgreSQL `rateLimit` table. Apply the
+AuthRateLimits EF migration before deploying this version of the web app. Limits
+retain Better Auth's defaults (enabled in production, disabled in development);
+the database makes counters visible across serverless instances. Database outages
+can now affect even unauthenticated auth endpoints because production requests
+must consult the limiter. Monitor connection load and 429/5xx rates.
 In a controlled Vercel deployment, verify client separation and header spoofing
 resistance before treating the proxy behavior as verified. Local simulated-header
 tests cannot prove Vercel's actual header handling.
 
 References: [Vercel request headers](https://vercel.com/docs/headers/request-headers)
 and [Better Auth rate limiting](https://better-auth.com/docs/concepts/rate-limit).
+
+### Auth improvements rollout
+
+1. Run the full checks in TESTING.md, including disposable PostgreSQL tests.
+2. With the intended database connection configured, initialize EF with
+   `dotnet ef dbcontext info --project app/api`, inspect migration history, and
+   apply `dotnet ef database update AuthRateLimits --project app/api`.
+   See DATABASE.md for SQL artifacts and rollback. Never migrate at API startup.
+3. Deploy the web app only after the new table is present. No new auth environment
+   variables are required. The browser client now uses its current origin;
+   NEXT_PUBLIC_APP_URL is no longer used. Keep BETTER_AUTH_URL and GitHub's
+   registered callback aligned with the exact domain being verified.
+4. Verify successful GitHub login, provider cancellation, an expired callback,
+   retry after an initiation error, and /auth/error on localhost and Vercel.
+   The public error page does not require a session or database query and never
+   renders raw provider error descriptions. GitHub-side configuration failures
+   may never return to the app and cannot be handled by this page.
+5. In a controlled Vercel environment, verify IP-header precedence and 429 behavior
+   with a test account. Do not stress production or log full request headers,
+   cookies, tokens, OAuth state, or personal IPs. Local simulated headers verify
+   application logic but do not establish the real proxy's trust behavior.
+
+Better Auth uses appName SpecThread and PostgreSQL joins. Local timings are
+attached to the schema test report; they are not a production speedup guarantee.
 
 ---
 

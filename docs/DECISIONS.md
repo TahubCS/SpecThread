@@ -148,6 +148,27 @@ shared storage, OAuth error pages, database joins, and app naming are deferred.
 
 New decision template
 
+ADR-014: Complete auth error handling, joins, and shared rate limits
+
+Status: Accepted
+
+Context: After recommendation 1, the user approved all nine implementation and
+verification steps on main, including shared storage and the remaining insights.
+
+Decision: Name the auth application SpecThread, use the existing PostgreSQL
+adapter's joins, and use database-backed rate limiting through an EF-owned
+AuthRateLimits migration. Keep production-only default enforcement and existing
+thresholds. Provide a public /auth/error page with fixed messages, use both
+global and per-flow error destinations, handle returned initiation errors, and
+use same-origin browser auth requests. Retain exact trusted origins and TLS.
+
+Consequences: Apply the migration before deploying the web app; database outages
+affect rate-limited requests. No new production dependency or service is added.
+Tests now require Docker even for the managed web server to exercise production
+database rate limiting with isolated credentials. Real OAuth and proxy behavior
+still require deployment verification. Rollback order is documented in DATABASE.md.
+
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

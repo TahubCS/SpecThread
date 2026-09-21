@@ -22,11 +22,16 @@ On Linux CI install browsers with `npx playwright install --with-deps chromium`.
 The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
-The schema project also requires a running Docker engine and pulls postgres:17
-for an isolated, disposable container. It has no published ports or persistent
-volume. Auth tests override local environment settings with a random test secret,
-loopback base URL, unreachable local database, and disabled GitHub/dashboard
-credentials. They do not use Supabase or perform real OAuth.
+The test web server and schema project require a running Docker engine and
+postgres:17. scripts/start-test-web.mjs builds the API, verifies EF initialization,
+creates an isolated password-protected database on a random loopback port,
+applies both versioned SQL migrations, and builds/starts Next.js with that database.
+No persistent volume is used. Global teardown also stops the web-test container
+on Windows, where process-tree termination may skip signal handlers.
+Auth tests use a random test secret, loopback base URL, and disabled live
+GitHub/dashboard credentials. They never use Supabase or real OAuth accounts.
+Schema runtime tests use a separate disposable database and simulated provider
+cancellation; successful real GitHub login remains a deployment check.
 
 ```sh
 npm test -- --list         # Discover tests without starting apps
@@ -56,9 +61,15 @@ currently require network access during the web build.
   These invoke the local dotnet-ef tool and never connect to Supabase.
 
 - Auth: explicit configuration failures, verified TLS options, restricted origins,
-  session endpoint, and HTTP rejection of unrelated Vercel/tunnel origins.
+  session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
+  retryable HTTP/network failures, provider redirection, and a safe public error page.
 - Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,
   foreign keys, uniqueness, content constraints, and versioned SQL updates.
+  Auth runtime tests additionally verify the rate-limit schema/RLS, simultaneous
+  requests across independent auth instances, persistence across a fresh instance,
+  window expiry, real OAuth-state cancellation, session joins, expired/revoked
+  sessions, and isolated rate-limit rollback/reapply. Local join timing samples
+  are attached to the Playwright report, without asserting a speedup ratio.
 
 Live OAuth, deployed TLS connectivity, and product flows are not tested. The health
 endpoint is liveness, not database readiness. EF initialization is not proof

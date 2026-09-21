@@ -1,6 +1,45 @@
 # Shared handoff
 
-## Current task: Vercel client IP headers (2026-09-20)
+## Current task: Better Auth error handling, joins, and shared rate limits (2026-09-20)
+
+- Branch: main, explicitly selected. Changes remain uncommitted; no live deployment or Supabase migration performed.
+- Completed:
+  - Added public `/auth/error` page (`app/web/src/app/auth/error/page.tsx`) rendering safe, sanitized error descriptions distinguishing user cancellation (`access_denied`), expired OAuth state (`state_not_found`/`state_mismatch`), and generic provider errors, with links to retry sign-in or return home.
+  - Added `onAPIError: { errorURL: "/auth/error" }` in Better Auth configuration and `errorCallbackURL: "/auth/error"` when initiating social sign-in.
+  - Updated `AuthPlaceholder` (`app/web/src/components/auth-placeholder.tsx`) to handle returned Better Auth errors (including HTTP 429 throttling and network errors) and preserve loading state during redirection.
+  - Set `appName: "SpecThread"` in Better Auth server configuration.
+  - Enabled Kysely PostgreSQL adapter `joins: true` and added session join integrity, expired/revoked session checks, and timing benchmark attachments to schema test reports.
+  - Added shared rate-limiting storage via EF Core: added `AuthRateLimit` model to `app/api/Data/AuthModels.cs` and `SpecThreadDbContext.cs`, scaffolded migration `20260921021458_AuthRateLimits` with Row-Level Security (RLS) enabled and anon/authenticated permissions revoked, and generated idempotent forward/rollback SQL scripts (`docs/schema/auth-rate-limits.sql` and `auth-rate-limits-rollback.sql`).
+  - Added test database automation (`scripts/test-database.mjs`, `scripts/start-test-web.mjs`, and `scripts/stop-test-web-database.mjs`) supporting ephemeral Docker PostgreSQL testing for web and schema suites, resilient against UTF-8 BOMs in SQL migration files.
+  - Added comprehensive Playwright tests in `tests/e2e/auth.spec.ts` (covering error page, retryable initiation, network failure, 429 throttling, accessibility, and narrow screen layout) and `tests/schema/auth-runtime.spec.ts` (covering rate-limit schema match, RLS enforcement, multi-instance rate limiting, OAuth cancellation, session joins, and rollback/reapply).
+- Changed files:
+  - `app/api/Data/AuthModels.cs`, `app/api/Data/SpecThreadDbContext.cs`, `app/api/Migrations/SpecThreadDbContextModelSnapshot.cs`
+  - `app/api/Migrations/20260921021458_AuthRateLimits.cs`, `app/api/Migrations/20260921021458_AuthRateLimits.Designer.cs`
+  - `app/web/src/lib/create-auth.ts`, `app/web/src/lib/auth.ts`, `app/web/src/lib/auth-client.ts`, `app/web/src/components/auth-placeholder.tsx`, `app/web/src/app/auth/error/page.tsx`
+  - `docs/schema/auth-rate-limits.sql`, `docs/schema/auth-rate-limits-rollback.sql`
+  - `scripts/generate-auth-rate-limits.mjs`, `scripts/start-test-web.mjs`, `scripts/stop-test-web-database.mjs`, `scripts/test-database.d.mts`, `scripts/test-database.mjs`
+  - `playwright.config.ts`, `tests/e2e/auth.spec.ts`, `tests/schema/auth-runtime.spec.ts`, `tests/schema/migration.spec.ts`
+  - `docs/DATABASE.md`, `docs/DECISIONS.md` (ADR-014), `docs/DEPLOYMENT.md`, `docs/TESTING.md`, `docs/HANDOFF.md`
+- Decisions: ADR-014. Name auth app SpecThread, enable joins, use PostgreSQL shared rate-limiting storage via EF Core migration. Retain production-only rate limiting defaults. Error page is public and database-independent. Browser auth requests use the current origin.
+- Verification:
+  - `npm run lint`: passed cleanly.
+  - `npm run typecheck`: passed cleanly across Next.js and root workspaces.
+  - `dotnet build app/api --configuration Release`: passed with 0 warnings, 0 errors.
+  - `npx playwright test --project=api`: 11 passed in 36.0s.
+  - `npx playwright test --project=chromium`: 12 passed in 26.0s.
+  - `npx playwright test --project=schema`: 11 passed in 34.1s.
+  - `npm test`: all 34 tests across 7 files passed in 37.2s.
+  - `git diff --check`: passed.
+- Known issues or risks:
+  - Live Supabase database must have the `AuthRateLimits` migration applied (`dotnet ef database update AuthRateLimits --project app/api` or via `docs/schema/auth-rate-limits.sql`) before deploying the updated web application; database outages will affect auth requests subject to rate limiting.
+  - GitHub-side misconfigurations (e.g., unregistered redirect URI) display error messages directly on GitHub and cannot return to the local `/auth/error` page.
+  - Real GitHub login and cancellation on live Vercel deployment must be verified following the rollout steps in `docs/DEPLOYMENT.md`.
+- Exact next step:
+  - Obtain user approval to commit these uncommitted changes to `main`.
+  - Apply `AuthRateLimits` migration to Supabase.
+  - Deploy updated web app to Vercel and verify live GitHub sign-in, cancellation, and error handling.
+
+## Previous task: Vercel client IP headers (2026-09-20)
 
 - Branch: main, explicitly selected. Recommendation 1 only; no commit or deployment.
 - Completed: Better Auth now prefers x-vercel-forwarded-for, with x-forwarded-for

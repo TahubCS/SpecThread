@@ -65,6 +65,35 @@ new EF migrations. See DEPLOYMENT.md for web TLS/CA configuration.
 
 ## Supabase MCP for Codex
 
+## Auth rate-limit migration
+
+AuthRateLimits adds public."rateLimit" with Better Auth 1.7.5's text id/key,
+integer count, and bigint lastRequest (milliseconds). A unique key index supports
+concurrent bucket creation; a lastRequest index supports stale-row cleanup.
+RLS is enabled with no allow policies; PUBLIC, anon, and authenticated grants
+are revoked. The server database role must retain access.
+
+Generation commands (offline connection settings suffice):
+
+```sh
+dotnet ef migrations add AuthRateLimits --project app/api
+node scripts/generate-auth-rate-limits.mjs
+```
+
+The second command appends the explicit RLS statements and generates
+docs/schema/auth-rate-limits.sql and auth-rate-limits-rollback.sql. It can be
+rerun to regenerate these artifacts; do not rerun the initial-schema generator.
+Existing initial/rollback scripts remain the historical InitialSchema pair.
+
+Before live execution, initialize EF and inspect migration history. Apply
+AuthRateLimits before deploying database-backed rate limiting. Rollback requires
+reverting the web app to memory storage first, then running
+`dotnet ef database update InitialSchema --project app/api`. This drops only rate
+limit counters, resetting throttles; it preserves users, sessions, and product
+data. Never apply the full initial rollback to undo this change.
+
+## Supabase tooling
+
 ```sh
 codex mcp add supabase --url "https://mcp.supabase.com/mcp?project_ref=hgcjtecsglksdbsmtcxt&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
 codex mcp login supabase
