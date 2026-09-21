@@ -120,7 +120,13 @@ Git and team coordination
 
 Never commit changes without explicit user approval. Always ask for permission before running git commit, and wait for the user's explicit consent. Keep working tree changes uncommitted until the user explicitly directs or approves committing them.
 
-Before starting each new task, ask the user for permission to create a new task branch and wait for their answer before beginning implementation. If the user approves, create and switch to the task branch from the agreed integration branch before doing the work. If the user says to stay on the current branch, work there without creating or switching branches. An explicit branch choice already given for that task satisfies this requirement; do not ask again during follow-up work on the same task. Keep approved task branches short-lived.
+Branching and `main` protection rules (MANDATORY FOR ALL AGENTS):
+- **Never work directly on `main`**: All new changes, fixes, and features must be developed on a dedicated task branch. Never make code or document edits directly on `main`.
+- **Detecting `main`**: If the agent detects that the current branch is `main`, the agent MUST immediately remind the user that no changes are permitted on `main`, ask the user for a task branch name (or recommend one), and create and switch to that branch before making any changes.
+- **Task boundary vs. prompt follow-up**:
+  - While on a task branch, if the user sends follow-up prompts for the *same* task (e.g. debugging, testing, iterating on feedback), continue working on the current branch without re-asking.
+  - When a task is complete (tested, verified, and fixed) and the user begins a *different* task (a new feature, bug fix, or separate requirement), the agent MUST ask the user if they wish to stay on the current branch or create and switch to a new branch for the new task.
+- **Pull Requests required for merging into `main`**: All code changes must be merged into `main` exclusively through GitHub Pull Requests. Agents must remind users that a PR is required for merging code into `main` and must never run direct merge commands to `main`.
 
 Recommended branch names: feature/<issue>-<short-name>, fix/<issue>-<short-name>, or docs/<issue>-<short-name>.
 

@@ -1,6 +1,20 @@
 # Shared handoff
 
-## Current task: Better Auth error handling, joins, and shared rate limits (2026-09-20)
+## Current task: Branch protection rules and PR enforcement workflow (2026-09-20)
+
+- Branch: main (explicitly authorized one-time exception for establishing repository governance).
+- Completed:
+  - Updated `AGENTS.md` and `docs/WORKFLOW.md` establishing mandatory agent branching instructions:
+    - Never edit or commit directly on `main`.
+    - Detect `main` and immediately warn the user and prompt for a task branch name before making any changes.
+    - On task branches, distinguish prompt iterations on the current task (stay on branch) from starting a different task (ask whether to stay or create a new branch).
+    - Mandatory Pull Requests for merging all code into `main`.
+  - Added `.github/workflows/enforce-pr.yml` CI workflow that validates any push to `main` originated from an associated, merged Pull Request (with `[skip-pr-check]` bypass flag for authorized emergency/setup commits).
+- Changed files: `AGENTS.md`, `docs/WORKFLOW.md`, `.github/workflows/enforce-pr.yml`, `docs/HANDOFF.md`.
+- Verification: `npm run lint` and `npm run typecheck` passed cleanly; `git diff --check` passed.
+- Exact next step: User commits and pushes this configuration to `main`, and configures GitHub branch protection rules in repository settings to require Pull Requests.
+
+## Previous task: Better Auth error handling, joins, and shared rate limits (2026-09-20)
 
 - Branch: main, explicitly selected. Changes remain uncommitted; no live deployment or Supabase migration performed.
 - Completed:
