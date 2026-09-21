@@ -8,6 +8,7 @@ declare const process: {
 const baseURL = "http://127.0.0.1:3100";
 
 export default defineConfig({
+  globalSetup: "./scripts/build-api.mjs",
   globalTeardown: "./scripts/stop-test-web-database.mjs",
   testDir: "./tests",
   forbidOnly: !!process.env.CI,
@@ -56,7 +57,7 @@ export default defineConfig({
     },
     {
       command:
-        "dotnet run --project app/api --configuration Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5100 --environment Development",
+        "dotnet app/api/bin/Release/net10.0/SpecThread.Api.dll --urls http://127.0.0.1:5100 --environment Development",
       url: "http://127.0.0.1:5100/health",
       reuseExistingServer: false,
       timeout: 120_000,

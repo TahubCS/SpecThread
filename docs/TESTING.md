@@ -1,4 +1,4 @@
-﻿# Testing SpecThread
+# Testing SpecThread
 
 Playwright Test is the shared behavior-test runner. Linting, TypeScript checks,
 C# formatting, and builds remain separate checks.
@@ -23,11 +23,12 @@ The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
 The test web server and schema project require a running Docker engine and
-postgres:17. scripts/start-test-web.mjs builds the API, verifies EF initialization,
-creates an isolated password-protected database on a random loopback port,
-applies both versioned SQL migrations, and builds/starts Next.js with that database.
-No persistent volume is used. Global teardown also stops the web-test container
-on Windows, where process-tree termination may skip signal handlers.
+postgres:17. scripts/build-api.mjs builds the API in globalSetup before servers start.
+scripts/start-test-web.mjs verifies EF initialization, creates an isolated
+password-protected database on a random loopback port, applies both versioned SQL
+migrations, and builds/starts Next.js with that database. No persistent volume is
+used. Global teardown also stops the web-test container on Windows, where
+process-tree termination may skip signal handlers.
 Auth tests use a random test secret, loopback base URL, and disabled live
 GitHub/dashboard credentials. They never use Supabase or real OAuth accounts.
 Schema runtime tests use a separate disposable database and simulated provider
