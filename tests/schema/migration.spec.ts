@@ -24,6 +24,9 @@ function sql(statement: string): Promise<string> {
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async () => {
   test.setTimeout(180_000);
+  await run("dotnet", ["ef", "dbcontext", "info", "--project", "app/api", "--configuration", "Release", "--no-build", "--json"], {
+    env: { ...process.env, DOTNET_ENVIRONMENT: "Production", ConnectionStrings__Database: "Host=127.0.0.1;Port=1;Database=offline;Username=placeholder;Password=placeholder" },
+  });
   // No published ports or mounted volumes; trust applies only inside this disposable container.
   await run("docker", ["run", "--rm", "-d", "--name", container, "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "postgres:17"], { timeout: 150_000 });
   started = true;

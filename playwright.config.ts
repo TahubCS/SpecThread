@@ -8,6 +8,7 @@ declare const process: {
 const baseURL = "http://127.0.0.1:3100";
 
 export default defineConfig({
+  globalTeardown: "./scripts/stop-test-web-database.mjs",
   testDir: "./tests",
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -38,10 +39,10 @@ export default defineConfig({
   webServer: [
     {
       command:
-        "npm run build && npm run start --workspace @specthread/web -- --hostname 127.0.0.1 --port 3100",
+        "node scripts/start-test-web.mjs",
       url: baseURL,
       reuseExistingServer: false,
-      timeout: 180_000,
+      timeout: 240_000,
       env: {
         BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
         BETTER_AUTH_URL: baseURL,
@@ -55,7 +56,7 @@ export default defineConfig({
     },
     {
       command:
-        "npm run build:api && dotnet run --project app/api --configuration Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5100 --environment Development",
+        "dotnet run --project app/api --configuration Release --no-build --no-launch-profile -- --urls http://127.0.0.1:5100 --environment Development",
       url: "http://127.0.0.1:5100/health",
       reuseExistingServer: false,
       timeout: 120_000,
