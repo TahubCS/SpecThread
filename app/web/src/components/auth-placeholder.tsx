@@ -12,12 +12,19 @@ export function AuthPlaceholder({ signup = false }: { signup?: boolean }) {
     setLoading(true);
     setError(null);
     try {
-      await authClient.signIn.social({
+      const result = await authClient.signIn.social({
         provider: "github",
         callbackURL: "/dashboard",
+        errorCallbackURL: "/auth/error",
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to initiate GitHub sign-in.");
+      if (result.error) {
+        setError(result.error.status === 429
+          ? "Too many sign-in attempts. Please wait a moment before trying again."
+          : "Unable to start GitHub sign-in. Please try again.");
+        setLoading(false);
+      }
+    } catch {
+      setError("Unable to reach the sign-in service. Please try again.");
       setLoading(false);
     }
   }
