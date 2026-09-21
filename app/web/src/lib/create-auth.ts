@@ -4,6 +4,9 @@ import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
 import { readAuthConfig } from "./auth-config";
 
+/**
+ * Creates a Better Auth instance and its PostgreSQL connection pool from environment settings.
+ */
 export function createAuth(env: Record<string, string | undefined>) {
   const config = readAuthConfig(env);
   const pool = new Pool(config.pool);

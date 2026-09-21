@@ -9,6 +9,9 @@ function required(env: Environment, name: string) {
   return value;
 }
 
+/**
+ * Reads and validates the environment settings required to configure Better Auth.
+ */
 export function readAuthConfig(env: Environment) {
   const secret = required(env, "BETTER_AUTH_SECRET");
   if (secret.length < 32 || secret === "development-secret-key-must-be-at-least-32-chars-long") {
