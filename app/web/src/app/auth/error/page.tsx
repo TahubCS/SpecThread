@@ -12,7 +12,10 @@ export default async function AuthErrorPage({ searchParams }: {
 }) {
   const { error } = await searchParams;
   const cancelled = error === "access_denied";
-  const expired = error === "state_not_found" || error === "state_mismatch";
+  const expired = error === "state_not_found"
+    || error === "state_mismatch"
+    || error === "state_invalid"
+    || error === "state_security_mismatch";
   const message = cancelled
     ? "GitHub sign-in was cancelled. You can try again when you are ready."
     : expired
