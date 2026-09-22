@@ -23,7 +23,9 @@ The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
 The test web server and schema project require a running Docker engine and
-postgres:17. scripts/build-api.mjs builds the API in globalSetup before servers start.
+postgres:17. The first webServer entry calls scripts/build-api.mjs before starting
+the second entry (the API). Do not move that build into globalSetup: Playwright
+runs globalSetup after webServer startup, which locks the API DLL on Windows.
 scripts/start-test-web.mjs verifies EF initialization, creates an isolated
 password-protected database on a random loopback port, applies both versioned SQL
 migrations, and builds/starts Next.js with that database. No persistent volume is
@@ -62,6 +64,7 @@ currently require network access during the web build.
   These invoke the local dotnet-ef tool and never connect to Supabase.
 
 - Auth: explicit configuration failures, verified TLS options, restricted origins,
+  CA PEM parsing/bundles, complete GitHub credential pairs,
   session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
   retryable HTTP/network failures, provider redirection, and a safe public error page.
 - Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,
@@ -71,6 +74,9 @@ currently require network access during the web build.
   window expiry, real OAuth-state cancellation, session joins, expired/revoked
   sessions, and isolated rate-limit rollback/reapply. Local join timing samples
   are attached to the Playwright report, without asserting a speedup ratio.
+  A simulated successful GitHub callback verifies encrypted access/refresh tokens
+  in PostgreSQL, usable token retrieval, prefixed legacy plaintext compatibility,
+  and rejection of corrupt ciphertext. No real provider credentials are used.
 
 Live OAuth, deployed TLS connectivity, and product flows are not tested. The health
 endpoint is liveness, not database readiness. EF initialization is not proof

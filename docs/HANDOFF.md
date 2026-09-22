@@ -1,6 +1,47 @@
 # Shared handoff
 
-## Current task: Branch protection rules and PR enforcement workflow (2026-09-20)
+## Current task: Skill-guided auth configuration improvements (2026-09-21)
+
+- Branch: auth/optimize, explicitly selected; already checked out at task start.
+  Changes grouped into user-authorized skills, test harness, and auth commits.
+  No production deployment, live migration, credential
+  rotation, or existing OAuth-token rewrite was performed.
+- Completed: used better-auth-best-practices and better-auth-security-best-practices,
+  verifying examples against installed 1.7.5 code/types and Context7. Added early
+  PEM parsing (including certificate bundles), trimmed/paired GitHub credentials,
+  and built-in encryption of newly written OAuth tokens. Removed the unused public
+  URL from the env example. Preserved the existing joins, rate limits, error page,
+  exact trusted origins, and verified TLS.
+- Changed files: app/web/.env.example, app/web/src/lib/{auth-config,create-auth}.ts,
+  tests/api/auth-config.spec.ts, tests/schema/auth-runtime.spec.ts,
+  playwright.config.ts, scripts/start-test-web.mjs,
+  docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md.
+- Verification exposed an existing harness defect: globalSetup runs after the
+  webServer entries, so building there tried to overwrite the running API DLL.
+  The first webServer entry now builds the API before the API entry starts.
+- Checks: npm run lint and npm run typecheck passed. Focused auth-runtime schema
+  tests passed 6/6. Final npm test passed 37/37 in 32.0s, with production web and
+  Release API builds. git diff --check passed. Current local env passed config
+  validation without printing values. Initial token retrieval tests were corrected
+  to use 1.7.5's internal account row ID, without providerId, in the HTTP request.
+- Decision: ADR-015; no new dependencies, environment variables, or migrations.
+  Encryption does not backfill historical plaintext. Keep the existing secret
+  and encryption option once ciphertext has been written. Prefixed legacy GitHub
+  tokens are tested; hex-only legacy tokens may need reauthentication.
+- Unverified: real OAuth against GitHub and deployed proxy behavior for this branch;
+  no live Supabase database was touched. Prior handoff deployment/migration claims
+  are historical, not independently reverified here. The existing AuthRateLimits
+  migration is still a deployment prerequisite.
+- User-added canonical .agents/skills files and skills-lock.json are included in
+  the skills commit without content changes. .claude/skills and skills are local
+  Windows junction aliases to those files and remain untracked, avoiding duplicate
+  copies in Git.
+- Exact next step: push auth/optimize and open a PR when requested. Merge into
+  main only through the PR. Before deployment,
+  verify AuthRateLimits is applied, retain BETTER_AUTH_SECRET, and recheck live
+  GitHub sign-in/cancellation using DEPLOYMENT.md.
+
+## Previous task: Branch protection rules and PR enforcement workflow (2026-09-20)
 
 - Branch: main (explicitly authorized one-time exception for establishing repository governance).
 - Completed:
