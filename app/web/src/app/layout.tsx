@@ -30,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="header-inner">
             <Link className="brand" href="/">SpecThread</Link>
             <nav aria-label="Main navigation">
-              <Link href="/dashboard">Dashboard preview</Link>
+              <Link href="/dashboard">Dashboard preview (:</Link>
               <Link href="/login">Log in</Link>
               <Link href="/signup">Sign up</Link>
             </nav>
