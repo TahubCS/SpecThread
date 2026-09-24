@@ -1,5 +1,40 @@
 # Shared handoff
 
+## Current task: API JWT validation (2026-09-23)
+
+- Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
+  - better-auth stays pinned to exactly 1.7.5. A commit loosening it to ^1.7.5 (fe77b92) was reverted in 7188a73, because the key-selection behavior behind the rollout was verified only against 1.7.5.
+  - Deleted app/web/.env.example and app/api/.env.example remain uncommitted in the working tree. They predate this task and are not part of it.
+- Completed:
+  - Better Auth now signs JWTs with ES256 (`app/web/src/lib/create-auth.ts`).
+  - The API validates `Authorization: Bearer` tokens against `{Auth:Issuer}/api/auth/jwks` (`app/api/Auth/`).
+  - Every endpoint requires authentication by default. `/health` and development OpenAPI stay anonymous.
+  - New `GET /me` endpoint returns `{ "userId": sub }`.
+- Changed files:
+  - API: app/api/{Program.cs,SpecThread.Api.csproj,packages.lock.json}, app/api/Auth/{AuthenticationSetup.cs,JwksRetriever.cs}
+  - Web: app/web/src/lib/create-auth.ts
+  - Tests: scripts/start-test-jwks.mjs, playwright.config.ts, tests/api/{auth-jwt,auth-unconfigured,health}.spec.ts, tests/schema/auth-jwt-runtime.spec.ts, tests/support/api-process.ts
+  - Config and docs: render.yaml, README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-015.
+  - ES256 instead of EdDSA, because .NET can't validate EdDSA without an extra library.
+  - Public keys come from the JWKS endpoint over HTTP, not from the jwks table.
+  - Endpoints are authenticated by default. Anonymous callers now get 401 on unknown routes instead of 404; this changed the existing health.spec test.
+  - `/me` is a proposed contract, and the team may rename it.
+  - Local manual testing needs its own database and GitHub OAuth app: the shared Supabase jwks table still holds EdDSA keys, and the team's GitHub App is private (other GitHub users get a 404 at authorize).
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `npm run build:api` all passed (0 warnings).
+  - `npm test`: 48 passed. Docker Desktop had to be started, and Playwright Chromium and dotnet tools had to be installed or restored locally first.
+  - `git diff --check` passed.
+  - Manual check: local web app on a Docker Postgres with a personal GitHub OAuth app. A real ES256 token returned 200 from `GET /me` with the matching user id; the request without a token returned 401.
+- Known issues or risks:
+  - Production needs the ordered rollout in DEPLOYMENT.md: deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render.
+  - The API's key refresh depends on the web app's availability.
+  - No web code sends tokens to the API yet.
+  - Project membership checks are not implemented.
+- Exact next step: push feature/api-jwt-validation and open a PR to main. The PR must describe the new `Auth__Issuer` setting and the ordered rollout in DEPLOYMENT.md. After that, implement project membership authorization.
+  - Team follow-ups:
+    - Make the GitHub App public if non-owners will sign in on Vercel.
+    - Consider trimming the JWT payload to the user id with Better Auth's `definePayload`. By default the token carries name, email, and avatar URL.
 ## Current task: Skill-guided auth configuration improvements (2026-09-21)
 
 - Branch: auth/optimize, explicitly selected; already checked out at task start.

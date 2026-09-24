@@ -55,12 +55,19 @@ export default defineConfig({
       },
     },
     {
+      // Test-only JWKS issuer for API token validation tests.
+      command: "node scripts/start-test-jwks.mjs",
+      url: "http://127.0.0.1:5101/api/auth/jwks",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       command:
         "dotnet app/api/bin/Release/net10.0/SpecThread.Api.dll --urls http://127.0.0.1:5100 --environment Development",
       url: "http://127.0.0.1:5100/health",
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { ConnectionStrings__Database: "" },
+      env: { ConnectionStrings__Database: "", Auth__Issuer: "http://127.0.0.1:5101" },
     },
   ],
 });

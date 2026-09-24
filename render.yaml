@@ -12,3 +12,5 @@ services:
         value: Production
       - key: ConnectionStrings__Database
         sync: false
+      - key: Auth__Issuer
+        sync: false

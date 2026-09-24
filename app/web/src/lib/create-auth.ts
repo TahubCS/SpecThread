@@ -24,7 +24,8 @@ export function createAuth(env: Record<string, string | undefined>) {
       github: config.github,
     },
     plugins: [
-      jwt(),
+      // ES256 so the ASP.NET API can validate tokens natively (ADR-015).
+      jwt({ jwks: { keyPairConfig: { alg: "ES256" } } }),
       ...(config.dashboardApiKey ? [dash({ apiKey: config.dashboardApiKey })] : []),
     ],
     advanced: {
