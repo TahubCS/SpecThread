@@ -1,6 +1,36 @@
 # Shared handoff
 
-## Current task: Branch protection rules and PR enforcement workflow (2026-09-20)
+## Current task: API JWT validation (2026-09-23)
+
+- Branch: feature/api-jwt-validation (from main). Changes are uncommitted. Nothing was deployed and no Supabase changes were made.
+  Unrelated pre-existing working-tree changes were left untouched: deleted app/web/.env.example and app/api/.env.example, and modified package.json and package-lock.json.
+- Completed:
+  - Better Auth now signs JWTs with ES256 (`app/web/src/lib/create-auth.ts`).
+  - The API validates `Authorization: Bearer` tokens against `{Auth:Issuer}/api/auth/jwks` (`app/api/Auth/`).
+  - Every endpoint requires authentication by default. `/health` and development OpenAPI stay anonymous.
+  - New `GET /me` endpoint returns `{ "userId": sub }`.
+- Changed files:
+  - API: app/api/{Program.cs,SpecThread.Api.csproj,packages.lock.json}, app/api/Auth/{AuthenticationSetup.cs,JwksRetriever.cs}
+  - Web: app/web/src/lib/create-auth.ts
+  - Tests: scripts/start-test-jwks.mjs, playwright.config.ts, tests/api/{auth-jwt,auth-unconfigured,health}.spec.ts, tests/schema/auth-jwt-runtime.spec.ts, tests/support/api-process.ts
+  - Config and docs: render.yaml, README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-015.
+  - ES256 instead of EdDSA, because .NET can't validate EdDSA without an extra library.
+  - Public keys come from the JWKS endpoint over HTTP, not from the jwks table.
+  - Endpoints are authenticated by default. Anonymous callers now get 401 on unknown routes instead of 404; this changed the existing health.spec test.
+  - `/me` is a proposed contract, and the team may rename it.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `npm run build:api` all passed (0 warnings).
+  - `npm test`: 48 passed. Docker Desktop had to be started, and Playwright Chromium and dotnet tools had to be installed or restored locally first.
+  - `git diff --check` passed.
+- Known issues or risks:
+  - Production needs the ordered rollout in DEPLOYMENT.md: deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render.
+  - The API's key refresh depends on the web app's availability.
+  - No web code sends tokens to the API yet.
+  - Project membership checks are not implemented.
+- Exact next step: review the changes and approve a commit, then open a PR to main. After that, implement project membership authorization.
+
+## Previous task: Branch protection rules and PR enforcement workflow (2026-09-20)
 
 - Branch: main (explicitly authorized one-time exception for establishing repository governance).
 - Completed:

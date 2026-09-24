@@ -169,6 +169,35 @@ database rate limiting with isolated credentials. Real OAuth and proxy behavior
 still require deployment verification. Rollback order is documented in DATABASE.md.
 
 
+ADR-015: Validate Better Auth ES256 JWTs in the API through JWKS
+
+Status: Accepted
+
+Context: The API must identify callers before any product endpoint or project
+membership check can exist. Better Auth's JWT plugin defaults to EdDSA (Ed25519),
+which ASP.NET Core's JwtBearer and IdentityModel cannot validate without an
+additional cryptography dependency. Better Auth publishes a bare JWKS without an
+OpenID discovery document.
+
+Decision: Configure the Better Auth JWT plugin with ES256. The API uses
+Microsoft.AspNetCore.Authentication.JwtBearer and fetches public keys over HTTP from
+{Auth:Issuer}/api/auth/jwks through IdentityModel's cached ConfigurationManager.
+Auth:Issuer (environment Auth__Issuer) is the web app's exact origin: HTTPS, or HTTP
+on loopback. Tokens must be ES256, signed by a published key, unexpired (30-second
+skew), and have iss and aud equal to that origin. The sub claim is the Better Auth
+user id. All endpoints require an authenticated user with a subject unless marked
+AllowAnonymous; /health and development OpenAPI are anonymous. Unknown routes
+return 401 to anonymous callers and 404 to authenticated callers. GET /me returns
+{ "userId": sub } as the smallest verifiable authenticated endpoint.
+
+Consequences: One new direct API package, from the ASP.NET Core release train.
+The API depends on the web app's JWKS endpoint for key refreshes, not the jwks
+table format. A missing or invalid Auth:Issuer keeps the API and /health running
+but fails requests that present a token with an explicit configuration error.
+Existing EdDSA keys must be expired once after deploying the web change, or
+Better Auth keeps signing with them (DEPLOYMENT.md). Project membership, role
+rules, and callers sending tokens from the web app remain separate work.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected
