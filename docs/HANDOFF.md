@@ -1,5 +1,31 @@
 # Shared handoff
 
+## Current task: Refine frontend route hierarchy (2026-09-24)
+
+- Branch: `scaffolding`, continuing the route task on the user-selected branch.
+  Changes are uncommitted.
+- Completed: removed the speculative standalone `/search` page. Added `/about`
+  as an informational hub and moved How it works, Privacy, and Terms to
+  `/about/how-it-works`, `/about/privacy`, and `/about/terms`; linked the hub in
+  the footer. Clarified that `/projects` covers both personal and team-owned
+  projects, while `/teams/[teamId]/projects` is the team subset. Project creation
+  and ownership placeholders now mention both ownership choices.
+- Changed files: `app/web/src/app/about/`, removed top-level information and
+  search `page.tsx` files, updated project placeholder pages and root layout,
+  `tests/e2e/scaffold.spec.ts`, and `docs/{PROJECT,DECISIONS,TESTING,HANDOFF}.md`.
+- Decision: ADR-016 records the route hierarchy. The user selected the About
+  hub with separate child URLs. Search remains a possible control within list
+  pages, with no global search route. No data-model or API contract was changed.
+- Verification: `npm run lint` and `npm run typecheck` passed. `npm test` passed
+  all 57 tests and built the web and API applications. `git diff --check` passed.
+- Known risk: information and product pages remain placeholders. Team
+  membership, authorization, personal/team ownership, and transfer behavior
+  still need backend decisions and implementation. Old top-level information
+  URLs now return 404; they were only scaffold pages and had no navigation links.
+- Exact next step: define the first real project flow and its access rules,
+  then replace the relevant placeholders. Do not commit without the user's
+  explicit approval; merge to `main` only through a pull request.
+
 ## Current task: Frontend route scaffolding (2026-09-24)
 
 - Branch: `scaffolding`, created from `main`. Changes are uncommitted. The

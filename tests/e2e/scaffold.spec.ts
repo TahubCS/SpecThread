@@ -35,3 +35,31 @@ test("unknown routes show a useful not-found page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
 });
+
+test("about groups the informational pages", async ({ page }) => {
+  await page.goto("/about");
+  await expect(page.getByRole("heading", { name: "About SpecThread" })).toBeVisible();
+
+  for (const [name, route] of [
+    ["How SpecThread works", "/about/how-it-works"],
+    ["Privacy", "/about/privacy"],
+    ["Terms of use", "/about/terms"],
+  ] as const) {
+    await page.getByRole("link", { name }).click();
+    await expect(page).toHaveURL(new RegExp(`${route}$`));
+    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
+    await page.goto("/about");
+  }
+});
+
+test("projects includes personal and team-owned projects in its routing scope", async ({ page }) => {
+  await page.goto("/projects");
+  await expect(page.getByText("Browse your personal projects and projects shared through teams.")).toBeVisible();
+  await page.goto("/projects/new");
+  await expect(page.getByText("Create a personal project or choose a team to own it.")).toBeVisible();
+});
+
+test("standalone search is not part of the route map", async ({ page }) => {
+  const response = await page.goto("/search");
+  expect(response?.status()).toBe(404);
+});

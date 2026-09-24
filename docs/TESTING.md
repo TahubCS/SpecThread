@@ -60,8 +60,9 @@ currently require network access during the web build.
   GitHub buttons, disabled product actions, and all four routes at mobile width.
   Desktop/mobile screenshots are saved inside the ignored test-results directory.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
-  placeholder pages, and a useful 404 for an unknown URL. These checks do not
-  imply that product data, authorization, or page actions are implemented.
+  placeholder pages, a useful 404 for an unknown URL, the About hub and its
+  three child pages, and the personal/team project descriptions. These checks
+  do not imply that product data, authorization, or page actions are implemented.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

@@ -40,7 +40,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>{children}</main>
-        <footer>SpecThread · Requirements, evidence, and human review.</footer>
+        <footer>
+          SpecThread · Requirements, evidence, and human review. <Link href="/about">About</Link>
+        </footer>
       </body>
     </html>
   );

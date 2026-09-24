@@ -214,6 +214,27 @@ configuration now fails early without exposing values. Encryption does not
 backfill historical plaintext tokens. Deployment must retain the encryption
 secret and option; see DEPLOYMENT.md for compatibility and rollback limitations.
 
+ADR-016: Group informational routes and show personal and team projects together
+
+Status: Accepted
+
+Context: The frontend scaffold exposed separate Dashboard, Teams, and Projects
+areas. The user clarified that a person can have personal projects as well as
+projects owned by a team, questioned a standalone Search page, and chose an
+About hub for the informational pages.
+
+Decision: Keep `/dashboard` as the overview, `/teams` for team navigation, and
+`/projects` for every project the user can access, including personal and
+team-owned projects. Keep `/teams/[teamId]/projects` as the team-specific subset.
+Remove the standalone `/search` route; search can be added within lists when
+needed. Use `/about` as a hub with `/about/how-it-works`, `/about/privacy`, and
+`/about/terms` as directly linkable pages.
+
+Consequences: The frontend routes remain placeholders until product data and
+authorization are implemented. Team membership, personal-to-team transfers,
+review permissions, and the supporting schema/API contract need separate work.
+No new database field or backend behavior is implied by the scaffold alone.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected
