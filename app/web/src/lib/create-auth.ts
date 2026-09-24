@@ -4,6 +4,9 @@ import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
 import { readAuthConfig } from "./auth-config";
 
+/**
+ * Creates a Better Auth instance and its PostgreSQL connection pool from environment settings.
+ */
 export function createAuth(env: Record<string, string | undefined>) {
   const config = readAuthConfig(env);
   const pool = new Pool(config.pool);
@@ -16,12 +19,9 @@ export function createAuth(env: Record<string, string | undefined>) {
     trustedOrigins: config.trustedOrigins,
     onAPIError: { errorURL: "/auth/error" },
     rateLimit: { storage: "database" },
+    account: { encryptOAuthTokens: true },
     socialProviders: {
-      github: {
-        clientId: env.GITHUB_CLIENT_ID || "",
-        clientSecret: env.GITHUB_CLIENT_SECRET || "",
-        enabled: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-      },
+      github: config.github,
     },
     plugins: [
       // ES256 so the ASP.NET API can validate tokens natively (ADR-015).

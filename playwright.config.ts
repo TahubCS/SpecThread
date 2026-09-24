@@ -8,7 +8,6 @@ declare const process: {
 const baseURL = "http://127.0.0.1:3100";
 
 export default defineConfig({
-  globalSetup: "./scripts/build-api.mjs",
   globalTeardown: "./scripts/stop-test-web-database.mjs",
   testDir: "./tests",
   forbidOnly: !!process.env.CI,
