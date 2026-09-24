@@ -1,0 +1,5 @@
+import { ScaffoldPage } from "@/components/scaffold-page";
+
+export default function Page() {
+  return <ScaffoldPage title="Notifications" description="See updates that need your attention." />;
+}

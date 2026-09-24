@@ -31,6 +31,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link className="brand" href="/">SpecThread</Link>
             <nav aria-label="Main navigation">
               <Link href="/dashboard">Dashboard preview (:</Link>
+              <Link href="/teams">Teams</Link>
+              <Link href="/projects">Projects</Link>
+              <Link href="/reviews">Reviews</Link>
               <Link href="/login">Log in</Link>
               <Link href="/signup">Sign up</Link>
             </nav>

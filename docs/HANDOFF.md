@@ -1,5 +1,41 @@
 # Shared handoff
 
+## Current task: Frontend route scaffolding (2026-09-24)
+
+- Branch: `scaffolding`, created from `main`. Changes are uncommitted. The
+  pre-existing modifications to `package.json`, `package-lock.json`, and
+  `skills-lock.json` were preserved and are outside this task.
+- Completed: added 68 bare frontend pages from the route blueprint covering
+  public help, onboarding, teams, projects, requirements, evidence, review,
+  invitations, account settings, and optional future views. Each uses one
+  shared placeholder that clearly says product data and actions are not
+  connected. Added Teams, Projects, and Reviews header links plus root error
+  and not-found fallbacks. Existing home, auth, and dashboard screens remain.
+- Changed files: `app/web/src/app/layout.tsx`, 68 new route `page.tsx` files in
+  `app/web/src/app/`, `app/web/src/app/{error,not-found}.tsx`,
+  `app/web/src/components/scaffold-page.tsx`, `tests/e2e/scaffold.spec.ts`,
+  `docs/{TESTING,HANDOFF}.md`.
+- Decisions and assumptions: route paths reserve navigation only and are not
+  API or data-model contracts. A team-owned project is a proposed product
+  direction; team ownership, membership, invitations, review permissions, and
+  authorization remain undecided. Dynamic placeholder routes intentionally
+  show no real entity data and do not validate IDs yet. No new dependencies,
+  database changes, or backend endpoints were added.
+- Verification: `npm run lint` and `npm run typecheck` passed. `npm run build`
+  passed with network access for the existing Google Fonts imports. Focused
+  scaffold Playwright tests passed (2 tests before the 404 test was added),
+  and the final full `npm test` passed (54 tests, including all 3 scaffold
+  tests). Final lint and typecheck passed after the last code edit;
+  `git diff --check` passed. Docker Desktop was started for the disposable
+  test database.
+- Known risks: all new pages are publicly reachable placeholders. They must
+  gain real session and project authorization checks before showing product
+  data. Later feature routes should be removed if the team rejects them.
+- Exact next step: choose the first vertical slice and settle team ownership
+  and review permissions before connecting these pages to product data. Keep
+  this branch uncommitted until the user approves a commit; use a pull request
+  for any merge into `main`.
+
 ## Current task: API JWT validation (2026-09-23)
 
 - Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
