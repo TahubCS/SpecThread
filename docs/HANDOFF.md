@@ -1,5 +1,23 @@
 # Shared handoff
 
+## Current task: Public page design concepts (2026-09-25)
+
+- Branch: `scaffolding`; no application code was changed for this task.
+- Completed: generated matching landing, login, and signup visual concepts and
+  saved them with relative links in `docs/landing-design/` for team review.
+- Changed files: `docs/landing-design/{README.md,landing.png,login.png,signup.png}`
+  and this handoff.
+- Decisions and assumptions: continue the dashboard's charcoal and lavender
+  visual language; show an inspectable evidence path; preserve GitHub-only auth.
+  The images are proposals, not accepted UI specifications.
+- Verification: inspected each image for layout and product-language fit. The
+  first landing draft had extra panels; its saved revision removes them. No app
+  build or test was needed because this task changes only design artifacts.
+- Known limits: image-generated text and icons need normal implementation review;
+  the concepts are desktop views and do not define responsive layouts.
+- Exact next step: get the team's feedback on these concepts, then implement
+  the selected direction with responsive and accessible behavior.
+
 ## Current task: Show the brand mark in the public header (2026-09-25)
 
 - Branch: `scaffolding`; this follows the browser icon correction.
