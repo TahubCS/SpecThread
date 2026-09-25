@@ -4,17 +4,21 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  await page.setViewportSize({ width: 1505, height: 1045 });
   await page.goto("/");
   await expect(page).toHaveTitle("SpecThread");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /\/icon\.png\?/);
   await expect(page.locator(".site-header .brand img")).toHaveJSProperty("naturalWidth", 112);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Follow the work behind every requirement.");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Product" })).toHaveAttribute("href", "#product");
+  await expect(page.locator(".landing-actions").getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/signup");
+  await expect(page.getByRole("list", { name: "Example evidence path for Invite teammates" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("home-desktop.png"), fullPage: true });
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
-  await page.screenshot({ path: testInfo.outputPath("home-desktop.png"), fullPage: true });
-  await page.getByRole("link", { name: "Preview dashboard", exact: true }).click();
+  await page.getByRole("link", { name: "Explore the dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText("Preview · Sample requirements, no project data connected")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
@@ -23,6 +27,16 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("dashboard-desktop.png"), fullPage: true });
   expect(errors).toEqual([]);
+});
+
+test("landing page stays navigable on a narrow screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator(".landing-mobile-menu summary").click();
+  await expect(page.getByRole("link", { name: "How it works" })).toBeVisible();
+  await page.locator(".landing-actions").getByRole("link", { name: "Get started" }).click();
+  await expect(page).toHaveURL(/\/signup$/);
 });
 
 test("dashboard preview switches views and expands an evidence thread", async ({ page }) => {

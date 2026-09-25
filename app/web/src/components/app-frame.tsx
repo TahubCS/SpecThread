@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { MainNavigation } from "./main-navigation";
+import { LandingNavigation, MainNavigation } from "./main-navigation";
 
 const appPrefixes = ["/dashboard", "/projects", "/teams", "/reviews", "/notifications", "/settings"];
 
@@ -166,19 +166,24 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   if (appPrefixes.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
     return <AppShell>{children}</AppShell>;
   }
+  const landing = pathname === "/";
   return (
-    <div className="public-frame">
+    <div className={`public-frame${landing ? " landing-frame" : ""}`}>
       <header className="site-header">
         <div className="header-inner">
           <Link className="brand" href="/">
             <Image src="/thread-mark.png" alt="" width={39} height={22} unoptimized />
             <span>SpecThread</span>
           </Link>
-          <MainNavigation />
+          {landing ? <LandingNavigation /> : <MainNavigation />}
         </div>
       </header>
       <main id="main-content" tabIndex={-1}>{children}</main>
-      <footer>SpecThread · Requirements, evidence, and human review. <Link href="/about">About</Link></footer>
+      {landing ? (
+        <footer className="landing-footer">See the evidence. Make the decision.</footer>
+      ) : (
+        <footer>SpecThread · Requirements, evidence, and human review. <Link href="/about">About</Link></footer>
+      )}
     </div>
   );
 }
