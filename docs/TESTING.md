@@ -57,8 +57,8 @@ currently require network access during the web build.
 ## Current coverage
 
 - Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
-  GitHub buttons, dashboard links to placeholder product routes, and the original
-  four routes at mobile width.
+  GitHub buttons, labeled dashboard preview tabs and evidence expansion, shared
+  sidebar route transitions, and the original four routes at mobile width.
   Desktop/mobile screenshots are saved inside the ignored test-results directory.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
   placeholder pages, a useful 404 for an unknown URL, the About hub and its

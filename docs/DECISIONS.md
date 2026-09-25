@@ -257,6 +257,27 @@ browser token or cookie presence, determines the server redirect. Product data
 and authorization still require separate implementation before protected pages
 are exposed.
 
+ADR-018: Share a product shell and show a labeled dashboard preview
+
+Status: Accepted
+
+Context: The user selected a compact dashboard design with a persistent sidebar,
+grouped requirement rows, and an inline evidence path. Product data and membership
+authorization are not yet available, while the route scaffold remains public.
+
+Decision: Use one persistent client shell in the Next.js root layout for product
+routes, retaining the existing public header for public pages. The dashboard shows
+illustrative requirement and evidence rows with a visible preview label. Its links
+to entity pages use clearly labeled example routes. Keep login and signup session
+redirects unchanged. Use a single line-icon package for interface icons and a
+small generated image asset for the thread-inspired brand mark.
+
+Consequences: Route transitions retain the sidebar and only the central page
+content changes. The preview does not represent account data or claim that
+repository evidence has been collected. Replace sample rows and example team links
+when authorized project APIs are available, and protect product routes before
+showing private data. This supersedes the empty-preview state in ADR-017.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

@@ -1,5 +1,42 @@
 # Shared handoff
 
+## Current task: Build the dashboard shell and preview (2026-09-24)
+
+- Branch: `scaffolding`; the shell is committed as `9b7f652` and the dashboard
+  preview as `a68e465`. The QA artifacts and documentation are in a separate
+  follow-up commit.
+- Completed: replaced the dashboard cards with the approved compact work list and
+  inline evidence path. Product routes now share a persistent dark sidebar and
+  route header; public pages retain their existing header and footer. Dashboard
+  tabs, row expansion, group collapse, sorting, filtering, quick navigation,
+  mobile drawer, and links to existing example routes work. Sample requirements
+  and the example team are explicitly labeled as preview content.
+- Changed files: `app/web/src/{app/{layout,globals.css,app-shell.css,dashboard/page.tsx},components/{app-frame,dashboard-preview}.tsx}`,
+  `app/web/public/thread-mark.png`, `app/web/package.json`, `package-lock.json`,
+  `tests/e2e/{home,scaffold,auth}.spec.ts`, `docs/assets/thread-mark-source.png`,
+  `docs/dashboard-qa/` (the QA report and three image artifacts),
+  `scripts/process-thread-mark.py`, and `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
+- Decisions: ADR-018 records the shared shell and public sample preview. Added
+  `lucide-react` because the web app had no reusable icon set; no API, schema,
+  session, or authorization behavior changed. The transparent brand mark is
+  produced from `docs/assets/thread-mark-source.png` with
+  `python scripts/process-thread-mark.py` (requires Pillow).
+- Verification: browser inspection covered desktop and 390px mobile layouts,
+  evidence expansion, tabs, and a route transition. `npm test` passed 63 tests,
+  including the web and API builds. The focused dashboard suite passed 8 tests
+  after the tab refinement and console-error assertion; the final screenshot
+  test passed after the logo update. `npm run lint`, `npm run typecheck`, and
+  standalone `npm run build` passed on the final code. Asset regeneration passed.
+  `git diff --check` and the final diff review passed. The design QA report and
+  its source, implementation, and comparison images are stored together in
+  `docs/dashboard-qa/` with relative links.
+- Known limits: dashboard rows and team navigation are examples, not account data.
+  Project authorization and real requirement APIs are still pending. The current
+  product routes remain public and must be protected before showing private data.
+- Exact next step: define the authorized project and requirement read contract,
+  then replace the preview rows and example team with real accessible data. Do
+  request explicit approval for future commits; merge through a pull request only.
+
 ## Current task: Navigate the frontend scaffold (2026-09-24)
 
 - Branch: `scaffolding`, continuing the user's routing work. Changes remain
