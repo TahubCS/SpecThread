@@ -1,5 +1,22 @@
 # Shared handoff
 
+## Current task: Simplify the public page concepts (2026-09-25)
+
+- Branch: `scaffolding`; no application code was changed.
+- Completed: revised all three public-page concepts with less visual weight and
+  saved the new versions next to the original images in `docs/landing-design/`.
+- Changed files: `docs/landing-design/{landing-v2,login-v2,signup-v2}.png`,
+  `docs/landing-design/README.md`, and this handoff.
+- Decisions and assumptions: retain the dashboard's charcoal/lavender language,
+  the requirement-to-review thread, and GitHub-only authentication. The revised
+  set is the current proposal; the originals remain for comparison.
+- Verification: visually inspected each generated image and checked its local
+  file and README link. No app build or test was needed for image-only changes.
+- Known limits: image-generated copy and icons need review during implementation;
+  the concepts remain desktop-only and are not implemented pages.
+- Exact next step: collect feedback on the simpler set before implementing
+  responsive, accessible landing and authentication pages.
+
 ## Current task: Public page design concepts (2026-09-25)
 
 - Branch: `scaffolding`; no application code was changed for this task.
