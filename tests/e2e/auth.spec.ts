@@ -32,7 +32,7 @@ test("an active session skips login and signup", async ({ page }) => {
       await page.goto(route);
       await expect(page).toHaveURL(/\/dashboard$/);
     }
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Account" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Account" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Log in" })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Sign up" })).toHaveCount(0);
   } finally {

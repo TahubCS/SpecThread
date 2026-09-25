@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
-import { MainNavigation } from "@/components/main-navigation";
+import { AppFrame } from "@/components/app-frame";
 import "./globals.css";
+import "./app-shell.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,16 +27,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <a className="skip-link" href="#main-content">Skip to content</a>
-        <header className="site-header">
-          <div className="header-inner">
-            <Link className="brand" href="/">SpecThread</Link>
-            <MainNavigation />
-          </div>
-        </header>
-        <main id="main-content" tabIndex={-1}>{children}</main>
-        <footer>
-          SpecThread · Requirements, evidence, and human review. <Link href="/about">About</Link>
-        </footer>
+        <AppFrame>{children}</AppFrame>
       </body>
     </html>
   );

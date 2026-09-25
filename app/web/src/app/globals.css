@@ -3,6 +3,8 @@
 :root { color-scheme: light; }
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; background: #fafafa; color: #202020; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; }
+.public-frame { min-height: 100vh; display: flex; flex-direction: column; }
+.public-frame > main { flex: 1; }
 a { color: inherit; text-underline-offset: 4px; }
 a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, main:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
