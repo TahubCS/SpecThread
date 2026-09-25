@@ -1,5 +1,21 @@
 # Shared handoff
 
+## Current task: Replace the template browser icon (2026-09-24)
+
+- Branch: `scaffolding`; this is a follow-up to the dashboard shell work.
+- Completed: removed the default Next.js/Vercel `favicon.ico` and installed
+  the existing SpecThread thread mark as the root App Router `icon.png`.
+- Changed files: `app/web/src/app/favicon.ico` (removed),
+  `app/web/src/app/icon.png` (added), `tests/e2e/home.spec.ts`, and this handoff.
+- Decision: reuse `app/web/public/thread-mark.png` so the browser tab and
+  product sidebar show the same brand mark; no additional image dependency.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright browser test passed (1 test), including the web and API test builds
+  and an assertion that the page emits the new `/icon.png` metadata link.
+- Known limits: browsers may retain an old tab icon until they reload the page.
+- Exact next step: continue the project and requirement data contract work;
+  merge branch changes through a pull request, not directly into `main`.
+
 ## Current task: Build the dashboard shell and preview (2026-09-24)
 
 - Branch: `scaffolding`; the shell is committed as `9b7f652` and the dashboard
