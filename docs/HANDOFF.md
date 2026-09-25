@@ -1,5 +1,21 @@
 # Shared handoff
 
+## Current task: Show the brand mark in the public header (2026-09-25)
+
+- Branch: `scaffolding`; this follows the browser icon correction.
+- Completed: the landing page and other public pages now show the existing
+  SpecThread thread mark beside the brand name in the shared header.
+- Changed files: `app/web/src/components/app-frame.tsx`,
+  `app/web/src/app/globals.css`, `tests/e2e/home.spec.ts`, and this handoff.
+- Decision: reuse the same image as the product sidebar and browser tab.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright home-to-dashboard browser test passed (1 test); its public-header
+  image assertion and screenshot confirm that the mark loads.
+- Known limits: the landing page body is still the initial light scaffold and
+  has not received a broader design pass.
+- Exact next step: confirm whether the user wants a full landing page redesign;
+  if so, treat it as a separate visual feature and retain the shared header.
+
 ## Current task: Replace the template browser icon (2026-09-24)
 
 - Branch: `scaffolding`; this is a follow-up to the dashboard shell work.

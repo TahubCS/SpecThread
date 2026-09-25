@@ -10,7 +10,8 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, main:focus-visible { outline: 3px solid #2563eb; outline-offset: 4px; }
 .site-header { border-bottom: 1px solid #ddd; background: white; }
 .header-inner { max-width: 1000px; margin: auto; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 1.15rem; text-decoration: none; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.15rem; text-decoration: none; }
+.brand img { flex: none; width: 39px; height: 22px; object-fit: contain; }
 nav, .actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 main { max-width: 1000px; margin: auto; padding: 48px 24px; width: 100%; }
 h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.2; font-weight: 700; max-width: 720px; }

@@ -7,6 +7,7 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   await page.goto("/");
   await expect(page).toHaveTitle("SpecThread");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /\/icon\.png\?/);
+  await expect(page.locator(".site-header .brand img")).toHaveJSProperty("naturalWidth", 112);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Follow the work behind every requirement.");
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();

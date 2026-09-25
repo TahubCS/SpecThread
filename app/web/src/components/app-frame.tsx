@@ -170,7 +170,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     <div className="public-frame">
       <header className="site-header">
         <div className="header-inner">
-          <Link className="brand" href="/">SpecThread</Link>
+          <Link className="brand" href="/">
+            <Image src="/thread-mark.png" alt="" width={39} height={22} unoptimized />
+            <span>SpecThread</span>
+          </Link>
           <MainNavigation />
         </div>
       </header>
