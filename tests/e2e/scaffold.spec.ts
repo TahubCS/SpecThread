@@ -69,7 +69,7 @@ test("standalone search is not part of the route map", async ({ page }) => {
 
 test("route navigation connects teams, projects, requirements, evidence, and review", async ({ page }) => {
   await page.goto("/dashboard");
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Teams" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams", exact: true }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team overview (example route)" }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team projects" }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Project overview (example route)" }).click();

@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("home links to the public dashboard preview", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
   await page.goto("/");
   await expect(page).toHaveTitle("SpecThread");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Follow the work behind every requirement.");
@@ -13,10 +14,40 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   await page.screenshot({ path: testInfo.outputPath("home-desktop.png"), fullPage: true });
   await page.getByRole("link", { name: "Preview dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByText("Public preview. No account, projects, or repository data is connected.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Create project" })).toHaveAttribute("href", "/projects/new");
-  await expect(page.getByRole("link", { name: "Connect GitHub" })).toHaveAttribute("href", "/onboarding/repository");
+  await expect(page.getByText("Preview · Sample requirements, no project data connected")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
+  await expect(page.locator(".app-brand img")).toHaveJSProperty("naturalWidth", 112);
+  await expect(page.getByRole("link", { name: "New requirement" })).toHaveAttribute("href", "/projects/example-project/requirements/new");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("dashboard-desktop.png"), fullPage: true });
   expect(errors).toEqual([]);
+});
+
+test("dashboard preview switches views and expands an evidence thread", async ({ page }) => {
+  await page.goto("/dashboard");
+  await expect(page.getByRole("list", { name: "Evidence path for ST-104" })).toBeVisible();
+  await page.getByRole("button", { name: /ST-098 Connect GitHub repository/ }).click();
+  await expect(page.getByRole("list", { name: "Evidence path for ST-098" })).toBeVisible();
+  await expect(page.getByText("Pull request evidence missing")).toBeVisible();
+  await page.getByRole("tab", { name: "Recent" }).click();
+  await expect(page.getByRole("region", { name: /Recently updated/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: /Needs review/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "All" }).click();
+  await expect(page.getByRole("region", { name: /All requirements/ })).toBeVisible();
+  await page.getByRole("tab", { name: "Attention" }).click();
+  await expect(page.getByRole("region", { name: /Needs review/ })).toBeVisible();
+  await page.getByRole("heading", { name: /Missing evidence/ }).getByRole("button").click();
+  await expect(page.getByRole("button", { name: /ST-098 Connect GitHub repository/ })).toHaveCount(0);
+});
+
+test("app navigation keeps the sidebar while routes change", async ({ page }) => {
+  await page.goto("/dashboard");
+  const sidebar = page.getByRole("navigation", { name: "Main navigation" });
+  await sidebar.getByRole("link", { name: "Projects", exact: true }).first().click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(sidebar.getByRole("link", { name: "Overview" })).toBeVisible();
+  await sidebar.getByRole("link", { name: "Overview" }).click();
+  await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
 });
 
 for (const route of ["login", "signup"] as const) {
@@ -30,7 +61,7 @@ for (const route of ["login", "signup"] as const) {
     await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
     await page.getByRole("link", { name: "Explore the dashboard preview" }).click();
-    await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your work", exact: true })).toBeVisible();
   });
 }
 
