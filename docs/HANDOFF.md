@@ -1,5 +1,39 @@
 # Shared handoff
 
+## Current task: Navigate the frontend scaffold (2026-09-24)
+
+- Branch: `scaffolding`, continuing the user's routing work. Changes remain
+  uncommitted; no CSS or backend product endpoint was changed.
+- Completed: added one route catalog and shared navigation to the dashboard and
+  all placeholder pages. Parent, child, and related links connect Teams,
+  personal/team Projects, Requirements, Evidence, Review, account Settings,
+  onboarding, help, invitations, and optional routes. Links needing unknown IDs
+  are explicitly marked as example routes. Added a Settings landing page and
+  made the dashboard's Create project and Connect GitHub controls link to their
+  placeholder routes. The main header now links to Notifications and Settings
+  and shows Account instead of Log in/Sign up for an active client session.
+- Auth behavior: login and signup use Better Auth's server-validated session to
+  redirect an already signed-in user to `/dashboard`. The existing GitHub OAuth
+  callback already targets `/dashboard`; no raw browser token is trusted for
+  the redirect. The dashboard remains a public empty preview.
+- Changed files: `app/web/src/{lib/scaffold-routes.ts,components/{scaffold-navigation,main-navigation,scaffold-page}.tsx,app/{layout,dashboard/page,login/page,signup/page,settings/page}.tsx}`;
+  `playwright.config.ts`; `tests/e2e/{auth,home,scaffold}.spec.ts`;
+  `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
+- Decision: ADR-017 records navigation and session redirect semantics. A
+  per-run random test secret is shared across Playwright workers so the
+  disposable session test uses the same secret as the test web server.
+- Verification: `npm run lint` and `npm run typecheck` passed. Final `npm test`
+  passed 61 tests and built the web and API applications. The browser tests
+  cover the main route journey, active and invalid sessions, and registration
+  of all reserved pages in navigation. `git diff --check` passed.
+- Known risks: pages remain public placeholders without project membership
+  checks or real entity links. Example IDs exist only to exercise the route
+  structure. Real GitHub OAuth, deployed session behavior, and product data
+  navigation were not verified in this task.
+- Exact next step: implement a real project list and authorization contract,
+  then replace example links with IDs from accessible projects. Do not commit
+  without explicit user approval; merge to `main` only through a pull request.
+
 ## Current task: Refine frontend route hierarchy (2026-09-24)
 
 - Branch: `scaffolding`, continuing the route task on the user-selected branch.

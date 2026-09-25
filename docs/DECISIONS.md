@@ -235,6 +235,28 @@ authorization are implemented. Team membership, personal-to-team transfers,
 review permissions, and the supporting schema/API contract need separate work.
 No new database field or backend behavior is implied by the scaffold alone.
 
+ADR-017: Navigate the route scaffold and redirect existing sessions
+
+Status: Accepted
+
+Context: The frontend scaffold had valid URLs but few links between pages. The
+user requested navigation through all reserved pages without a visual redesign,
+and a dashboard redirect when an existing user visits login or signup.
+
+Decision: Keep one catalog of reserved frontend routes for parent, child, and
+related placeholder links. Use clearly labeled example IDs where no project
+data exists. Keep the dashboard public while it is an empty preview. On login
+and signup, validate the Better Auth session on the server and redirect an
+already authenticated user to `/dashboard`; successful GitHub OAuth already
+uses `/dashboard` as its callback URL. Show login and signup links in the main
+navigation only when there is no active client session.
+
+Consequences: Placeholder links demonstrate the intended journey but do not
+assert that example entities exist. The Better Auth session, rather than a raw
+browser token or cookie presence, determines the server redirect. Product data
+and authorization still require separate implementation before protected pages
+are exposed.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

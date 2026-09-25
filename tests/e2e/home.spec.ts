@@ -14,8 +14,8 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   await page.getByRole("link", { name: "Preview dashboard", exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText("Public preview. No account, projects, or repository data is connected.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create project" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Connect GitHub" })).toBeDisabled();
+  await expect(page.getByRole("link", { name: "Create project" })).toHaveAttribute("href", "/projects/new");
+  await expect(page.getByRole("link", { name: "Connect GitHub" })).toHaveAttribute("href", "/onboarding/repository");
   expect(errors).toEqual([]);
 });
 

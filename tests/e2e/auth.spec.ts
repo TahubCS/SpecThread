@@ -1,4 +1,53 @@
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { makeSignature } from "better-auth/crypto";
+
+test("an active session skips login and signup", async ({ page }) => {
+  const { name } = JSON.parse(await readFile("playwright/.cache/test-web-database.json", "utf8"));
+  const secret = process.env.SPECTHREAD_TEST_AUTH_SECRET;
+  if (!secret) throw new Error("Test auth secret is missing");
+  const userId = randomUUID();
+  const sessionId = randomUUID();
+  const token = randomUUID();
+  const runSql = (sql: string) => execFileSync("docker", [
+    "exec", "-u", "postgres", name, "psql", "-U", "postgres", "-d", "postgres",
+    "-v", "ON_ERROR_STOP=1", "-c", sql,
+  ], { stdio: "ignore" });
+
+  runSql(`INSERT INTO public."user" (id,name,email,"emailVerified","createdAt","updatedAt")
+    VALUES ('${userId}','Navigation test','${userId}@example.invalid',true,now(),now());
+    INSERT INTO public.session (id,"userId",token,"expiresAt","createdAt","updatedAt")
+    VALUES ('${sessionId}','${userId}','${token}',now() + interval '1 hour',now(),now());`);
+  try {
+    await page.context().addCookies([{
+      name: "better-auth.session_token",
+      value: `${token}.${await makeSignature(token, secret)}`,
+      url: "http://127.0.0.1:3100",
+    }]);
+    const sessionResponse = await page.request.get("/api/auth/get-session");
+    expect((await sessionResponse.json())?.user?.id).toBe(userId);
+    for (const route of ["/login", "/signup"]) {
+      await page.goto(route);
+      await expect(page).toHaveURL(/\/dashboard$/);
+    }
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Account" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Log in" })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Sign up" })).toHaveCount(0);
+  } finally {
+    runSql(`DELETE FROM public."user" WHERE id = '${userId}'`);
+  }
+});
+
+test("an invalid session cookie does not skip login", async ({ page }) => {
+  await page.context().addCookies([{
+    name: "better-auth.session_token", value: "not-a-valid-session",
+    url: "http://127.0.0.1:3100",
+  }]);
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+});
 
 for (const path of ["/login", "/signup"]) {
   test(`${path} handles returned errors and retries on the current origin`, async ({ page }) => {

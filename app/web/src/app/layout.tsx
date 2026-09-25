@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
+import { MainNavigation } from "@/components/main-navigation";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,14 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="site-header">
           <div className="header-inner">
             <Link className="brand" href="/">SpecThread</Link>
-            <nav aria-label="Main navigation">
-              <Link href="/dashboard">Dashboard preview (:</Link>
-              <Link href="/teams">Teams</Link>
-              <Link href="/projects">Projects</Link>
-              <Link href="/reviews">Reviews</Link>
-              <Link href="/login">Log in</Link>
-              <Link href="/signup">Sign up</Link>
-            </nav>
+            <MainNavigation />
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>{children}</main>
