@@ -169,6 +169,35 @@ database rate limiting with isolated credentials. Real OAuth and proxy behavior
 still require deployment verification. Rollback order is documented in DATABASE.md.
 
 
+ADR-015: Validate Better Auth ES256 JWTs in the API through JWKS
+
+Status: Accepted
+
+Context: The API must identify callers before any product endpoint or project
+membership check can exist. Better Auth's JWT plugin defaults to EdDSA (Ed25519),
+which ASP.NET Core's JwtBearer and IdentityModel cannot validate without an
+additional cryptography dependency. Better Auth publishes a bare JWKS without an
+OpenID discovery document.
+
+Decision: Configure the Better Auth JWT plugin with ES256. The API uses
+Microsoft.AspNetCore.Authentication.JwtBearer and fetches public keys over HTTP from
+{Auth:Issuer}/api/auth/jwks through IdentityModel's cached ConfigurationManager.
+Auth:Issuer (environment Auth__Issuer) is the web app's exact origin: HTTPS, or HTTP
+on loopback. Tokens must be ES256, signed by a published key, unexpired (30-second
+skew), and have iss and aud equal to that origin. The sub claim is the Better Auth
+user id. All endpoints require an authenticated user with a subject unless marked
+AllowAnonymous; /health and development OpenAPI are anonymous. Unknown routes
+return 401 to anonymous callers and 404 to authenticated callers. GET /me returns
+{ "userId": sub } as the smallest verifiable authenticated endpoint.
+
+Consequences: One new direct API package, from the ASP.NET Core release train.
+The API depends on the web app's JWKS endpoint for key refreshes, not the jwks
+table format. A missing or invalid Auth:Issuer keeps the API and /health running
+but fails requests that present a token with an explicit configuration error.
+Existing EdDSA keys must be expired once after deploying the web change, or
+Better Auth keeps signing with them (DEPLOYMENT.md). Project membership, role
+rules, and callers sending tokens from the web app remain separate work.
+
 ADR-016: Email/password and Google sign-in with account linking
 
 Status: Accepted
@@ -206,35 +235,8 @@ failures block sign-up verification and resets until fixed. The team GitHub App 
 private, so non-owners cannot use it for sign-in or linking until it is made public
 or replaced with an OAuth App. Two-factor authentication, email changes, and
 account deletion remain out of scope.
-ADR-015: Validate Better Auth ES256 JWTs in the API through JWKS
 
-Status: Accepted
-
-Context: The API must identify callers before any product endpoint or project
-membership check can exist. Better Auth's JWT plugin defaults to EdDSA (Ed25519),
-which ASP.NET Core's JwtBearer and IdentityModel cannot validate without an
-additional cryptography dependency. Better Auth publishes a bare JWKS without an
-OpenID discovery document.
-
-Decision: Configure the Better Auth JWT plugin with ES256. The API uses
-Microsoft.AspNetCore.Authentication.JwtBearer and fetches public keys over HTTP from
-{Auth:Issuer}/api/auth/jwks through IdentityModel's cached ConfigurationManager.
-Auth:Issuer (environment Auth__Issuer) is the web app's exact origin: HTTPS, or HTTP
-on loopback. Tokens must be ES256, signed by a published key, unexpired (30-second
-skew), and have iss and aud equal to that origin. The sub claim is the Better Auth
-user id. All endpoints require an authenticated user with a subject unless marked
-AllowAnonymous; /health and development OpenAPI are anonymous. Unknown routes
-return 401 to anonymous callers and 404 to authenticated callers. GET /me returns
-{ "userId": sub } as the smallest verifiable authenticated endpoint.
-
-Consequences: One new direct API package, from the ASP.NET Core release train.
-The API depends on the web app's JWKS endpoint for key refreshes, not the jwks
-table format. A missing or invalid Auth:Issuer keeps the API and /health running
-but fails requests that present a token with an explicit configuration error.
-Existing EdDSA keys must be expired once after deploying the web change, or
-Better Auth keeps signing with them (DEPLOYMENT.md). Project membership, role
-rules, and callers sending tokens from the web app remain separate work.
-ADR-015: Validate auth inputs early and encrypt newly stored OAuth tokens
+ADR-017: Validate auth inputs early and encrypt newly stored OAuth tokens
 
 Status: Accepted
 
@@ -250,6 +252,70 @@ Consequences: No new dependency, environment variable, or migration. Bad local
 configuration now fails early without exposing values. Encryption does not
 backfill historical plaintext tokens. Deployment must retain the encryption
 secret and option; see DEPLOYMENT.md for compatibility and rollback limitations.
+
+ADR-018: Group informational routes and show personal and team projects together
+
+Status: Accepted
+
+Context: The frontend scaffold exposed separate Dashboard, Teams, and Projects
+areas. The user clarified that a person can have personal projects as well as
+projects owned by a team, questioned a standalone Search page, and chose an
+About hub for the informational pages.
+
+Decision: Keep `/dashboard` as the overview, `/teams` for team navigation, and
+`/projects` for every project the user can access, including personal and
+team-owned projects. Keep `/teams/[teamId]/projects` as the team-specific subset.
+Remove the standalone `/search` route; search can be added within lists when
+needed. Use `/about` as a hub with `/about/how-it-works`, `/about/privacy`, and
+`/about/terms` as directly linkable pages.
+
+Consequences: The frontend routes remain placeholders until product data and
+authorization are implemented. Team membership, personal-to-team transfers,
+review permissions, and the supporting schema/API contract need separate work.
+No new database field or backend behavior is implied by the scaffold alone.
+
+ADR-019: Navigate the route scaffold and redirect existing sessions
+
+Status: Accepted
+
+Context: The frontend scaffold had valid URLs but few links between pages. The
+user requested navigation through all reserved pages without a visual redesign,
+and a dashboard redirect when an existing user visits login or signup.
+
+Decision: Keep one catalog of reserved frontend routes for parent, child, and
+related placeholder links. Use clearly labeled example IDs where no project
+data exists. Keep the dashboard public while it is an empty preview. On login
+and signup, validate the Better Auth session on the server and redirect an
+already authenticated user to `/dashboard`; successful GitHub OAuth already
+uses `/dashboard` as its callback URL. Show login and signup links in the main
+navigation only when there is no active client session.
+
+Consequences: Placeholder links demonstrate the intended journey but do not
+assert that example entities exist. The Better Auth session, rather than a raw
+browser token or cookie presence, determines the server redirect. Product data
+and authorization still require separate implementation before protected pages
+are exposed.
+
+ADR-020: Share a product shell and show a labeled dashboard preview
+
+Status: Accepted
+
+Context: The user selected a compact dashboard design with a persistent sidebar,
+grouped requirement rows, and an inline evidence path. Product data and membership
+authorization are not yet available, while the route scaffold remains public.
+
+Decision: Use one persistent client shell in the Next.js root layout for product
+routes, retaining the existing public header for public pages. The dashboard shows
+illustrative requirement and evidence rows with a visible preview label. Its links
+to entity pages use clearly labeled example routes. Keep login and signup session
+redirects unchanged. Use a single line-icon package for interface icons and a
+small generated image asset for the thread-inspired brand mark.
+
+Consequences: Route transitions retain the sidebar and only the central page
+content changes. The preview does not represent account data or claim that
+repository evidence has been collected. Replace sample rows and example team links
+when authorized project APIs are available, and protect product routes before
+showing private data. This supersedes the empty-preview state in ADR-019.
 
 ADR-NNN: Title
 

@@ -57,8 +57,14 @@ currently require network access during the web build.
 ## Current coverage
 
 - Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
-  GitHub buttons, disabled product actions, and all four routes at mobile width.
+  GitHub buttons, labeled dashboard preview tabs and evidence expansion, shared
+  sidebar route transitions, and the original four routes at mobile width.
   Desktop/mobile screenshots are saved inside the ignored test-results directory.
+- Route scaffold: navigation to the Teams area, representative static and dynamic
+  placeholder pages, a useful 404 for an unknown URL, the About hub and its
+  three child pages, the personal/team project descriptions, and a route walk
+  from Dashboard through a team, project, requirement, evidence, and review.
+  These checks do not imply that product data or authorization are implemented.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,
@@ -85,6 +91,9 @@ currently require network access during the web build.
   CA PEM parsing/bundles, complete GitHub credential pairs,
   session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
   retryable HTTP/network failures, provider redirection, and a safe public error page.
+  An active session redirects login and signup to Dashboard; an invalid cookie
+  does not. The browser test creates a disposable user/session in the isolated
+  web-test database and shares one random test secret across Playwright workers.
 - Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,
   foreign keys, uniqueness, content constraints, and versioned SQL updates.
   Auth runtime tests additionally verify the rate-limit schema/RLS, simultaneous
