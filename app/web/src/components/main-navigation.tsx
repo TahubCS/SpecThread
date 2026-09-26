@@ -4,6 +4,10 @@ import Link from "next/link";
 import { Menu } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
+/**
+ * Renders desktop and mobile landing links, hiding account links while the session loads.
+ * A session shows Dashboard; otherwise Log in and Get started are shown.
+ */
 export function LandingNavigation() {
   const { data: session, isPending } = authClient.useSession();
   const accountLinks = !isPending && (session ? (
@@ -36,6 +40,10 @@ export function LandingNavigation() {
   );
 }
 
+/**
+ * Renders product navigation, hiding account links while the client session loads.
+ * A session shows Account; otherwise Log in and Sign up are shown.
+ */
 export function MainNavigation() {
   const { data: session, isPending } = authClient.useSession();
 

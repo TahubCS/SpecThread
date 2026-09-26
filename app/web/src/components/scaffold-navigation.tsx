@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigationFor } from "@/lib/scaffold-routes";
 
+/** Renders parent and related scaffold links for the current pathname, or nothing if it is unrecognized. */
 export function ScaffoldNavigation() {
   const navigation = navigationFor(usePathname());
   if (!navigation) return null;

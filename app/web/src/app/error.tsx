@@ -1,5 +1,6 @@
 "use client";
 
+/** Renders a page error alert and invokes the supplied reset callback when the user retries. */
 export default function ErrorPage({ reset }: { reset: () => void }) {
   return (
     <section className="stack" role="alert">

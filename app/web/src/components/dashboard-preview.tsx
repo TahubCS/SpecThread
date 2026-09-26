@@ -63,6 +63,10 @@ const groups: readonly { id: GroupId; title: string }[] = [
 
 const threadIcons = [FileText, Circle, GitPullRequest, Check, Tag, UserRoundCheck] as const;
 
+/**
+ * Renders a sample requirement's evidence states and note with a link to an example thread.
+ * Steps use the requirement, issue, pull request, checks, release, and review icon order.
+ */
 function EvidencePreview({ requirement }: { requirement: PreviewRequirement }) {
   return (
     <div className="evidence-preview" id={`thread-${requirement.id}`}>
@@ -88,6 +92,11 @@ function EvidencePreview({ requirement }: { requirement: PreviewRequirement }) {
   );
 }
 
+/**
+ * Renders sample requirements with local view, filtering, ordering, and expansion controls.
+ * The action filter excludes the recent group; ordering reverses rows within each group.
+ * Links open example routes, and interactions do not persist changes to product data.
+ */
 export function DashboardPreview() {
   const [tab, setTab] = useState<TabId>("attention");
   const [selected, setSelected] = useState<string | null>("ST-104");

@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   description: "Trace requirements to implementation evidence and human review.",
 };
 
+/** Wraps pages in the shared app frame with global fonts and a skip-to-content link. */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html

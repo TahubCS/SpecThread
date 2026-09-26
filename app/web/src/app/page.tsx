@@ -12,6 +12,7 @@ const evidenceSteps = [
   { label: "Review", detail: "", icon: Users, linked: false },
 ] as const;
 
+/** Renders the public landing page with signup and dashboard links and an illustrative evidence path. */
 export default function Home() {
   return (
     <div className="landing-page">

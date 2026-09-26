@@ -94,6 +94,11 @@ const relatedRoutes: Partial<Record<RoutePattern, RoutePattern[]>> = {
   "/onboarding/repository": ["/projects/[projectId]/settings/repository"],
 };
 
+/**
+ * Matches slash-separated segments literally, capturing nonempty [parameter] segments.
+ * Returns the captured values (without URL decoding), or null for a mismatch.
+ * Paths must have the same segment count; trailing slashes are not normalized.
+ */
 function match(pattern: string, pathname: string): RouteParams | null {
   const expected = pattern.split("/");
   const actual = pathname.split("/");
@@ -111,6 +116,10 @@ function match(pattern: string, pathname: string): RouteParams | null {
   return params;
 }
 
+/**
+ * Returns the nearest cataloged ancestor, falling back to /dashboard.
+ * Onboarding routes use /welcome; /dashboard itself has no parent and returns null.
+ */
 function parentOf(pattern: RoutePattern): RoutePattern | null {
   if (pattern === "/dashboard") return null;
   if (pattern.startsWith("/onboarding/")) return "/welcome";
@@ -123,6 +132,15 @@ function parentOf(pattern: RoutePattern): RoutePattern | null {
   return "/dashboard";
 }
 
+/**
+ * Builds scaffold navigation for a pathname, or returns null when no route matches.
+ * Matches with fewer dynamic segments take precedence. Links include children when
+ * available, otherwise siblings, plus configured related routes, excluding duplicates
+ * and the current route. The parent link is null for /dashboard.
+ *
+ * Captured IDs are reused in links; missing IDs use labeled example values.
+ * @param pathname Path only, without a query string, fragment, or trailing slash.
+ */
 export function navigationFor(pathname: string) {
   const current = [...scaffoldRoutes]
     .sort((a, b) => a[0].split("[").length - b[0].split("[").length)
@@ -137,6 +155,7 @@ export function navigationFor(pathname: string) {
   const targets = [...(children.length ? children : siblings),
     ...(relatedRoutes[current[0]] ?? []).map(pattern => scaffoldRoutes.find(([route]) => route === pattern)!)];
   const unique = [...new Map(targets.map(route => [route[0], route])).values()];
+  /** Builds a route link using captured IDs, labeling any substitutions of example IDs. */
   const toLink = ([pattern, label]: (typeof scaffoldRoutes)[number]) => {
     let example = false;
     const href = pattern.replace(/\[([^\]]+)\]/g, (_, key: string) => {

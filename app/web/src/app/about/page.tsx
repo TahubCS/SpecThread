@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+/** Renders links to the product explanation, privacy, and terms pages. */
 export default function AboutPage() {
   return (
     <section className="stack">

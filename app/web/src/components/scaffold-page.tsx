@@ -5,6 +5,7 @@ type ScaffoldPageProps = {
   description: string;
 };
 
+/** Renders a planned page's title, description, disconnected-data notice, and scaffold navigation. */
 export function ScaffoldPage({ title, description }: ScaffoldPageProps) {
   return (
     <section className="stack" aria-labelledby="page-title">

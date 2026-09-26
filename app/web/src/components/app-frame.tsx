@@ -22,6 +22,7 @@ const destinations = [
   { label: "Teams", href: "/teams", icon: Users },
 ] as const;
 
+/** Returns the product section title for a pathname prefix, defaulting to "Overview". */
 function titleFor(pathname: string) {
   if (pathname.startsWith("/projects")) return "Projects";
   if (pathname.startsWith("/teams")) return "Teams";
@@ -31,6 +32,7 @@ function titleFor(pathname: string) {
   return "Overview";
 }
 
+/** Renders an icon link; current marks the active page, and nested applies indented styling. */
 function AppNavLink({ href, label, icon: Icon, current, nested = false }: {
   href: string;
   label: string;
@@ -47,6 +49,11 @@ function AppNavLink({ href, label, icon: Icon, current, nested = false }: {
   );
 }
 
+/**
+ * Wraps product content in sidebar navigation with a mobile drawer and page search.
+ * Search filters the fixed destination labels, ignoring case and surrounding spaces.
+ * Account links wait for the client session lookup; team and requirement links use example IDs.
+ */
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -57,6 +64,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const matches = destinations.filter(destination =>
     destination.label.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  /** Builds a sidebar link, marking descendants current unless exact is true. */
   const link = (href: string, label: string, icon: LucideIcon, exact = false, nested = false) => (
     <AppNavLink href={href} label={label} icon={icon} nested={nested}
       current={exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`)} />
@@ -161,6 +169,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Selects the product shell for dashboard, project, team, review, notification, and
+ * settings routes and their descendants; other paths receive a public frame.
+ * The home page uses its own navigation and footer. This does not enforce access control.
+ */
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   if (appPrefixes.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
