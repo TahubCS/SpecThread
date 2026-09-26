@@ -18,6 +18,13 @@ Project managers or clients who need a readable view of implementation progress.
 
 Developers and reviewers who need direct links to technical evidence.
 
+Project ownership
+
+A user may have personal projects and may belong to teams that own projects.
+The projects view combines projects the user can access, while a team's
+projects view shows that team's projects. Exact membership and transfer rules
+will be defined with the corresponding backend work.
+
 Core workflow
 
 A user creates a requirement with clear acceptance criteria.
@@ -35,6 +42,8 @@ An authorized reviewer accepts, rejects, or requests more evidence.
 MVP scope
 
 The first usable version should support:
+
+personal projects and teams that can own projects;
 
 creating, viewing, editing, and archiving requirements;
 

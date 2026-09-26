@@ -6,6 +6,8 @@ declare const process: {
 };
 
 const baseURL = "http://127.0.0.1:3100";
+const testAuthSecret = process.env.SPECTHREAD_TEST_AUTH_SECRET ?? randomBytes(32).toString("hex");
+process.env.SPECTHREAD_TEST_AUTH_SECRET = testAuthSecret;
 
 export default defineConfig({
   globalTeardown: "./scripts/stop-test-web-database.mjs",
@@ -44,7 +46,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 240_000,
       env: {
-        BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+        BETTER_AUTH_SECRET: testAuthSecret,
         BETTER_AUTH_URL: baseURL,
         DATABASE_URL: "postgres://placeholder:placeholder@127.0.0.1:1/offline",
         BETTER_AUTH_DATABASE_URL: "",

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Geist, Geist_Mono } from "next/font/google";
+import { AppFrame } from "@/components/app-frame";
 import "./globals.css";
+import "./app-shell.css";
+import "./landing.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +20,7 @@ export const metadata: Metadata = {
   description: "Trace requirements to implementation evidence and human review.",
 };
 
+/** Wraps pages in the shared app frame with global fonts and a skip-to-content link. */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -26,19 +29,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <a className="skip-link" href="#main-content">Skip to content</a>
-        <header className="site-header">
-          <div className="header-inner">
-            <Link className="brand" href="/">SpecThread</Link>
-            <nav aria-label="Main navigation">
-              <Link href="/dashboard">Dashboard preview (:</Link>
-              <Link href="/login">Log in</Link>
-              <Link href="/signup">Sign up</Link>
-              <Link href="/account">Account</Link>
-            </nav>
-          </div>
-        </header>
-        <main id="main-content" tabIndex={-1}>{children}</main>
-        <footer>SpecThread · Requirements, evidence, and human review.</footer>
+        <AppFrame>{children}</AppFrame>
       </body>
     </html>
   );

@@ -1,5 +1,279 @@
 # Shared handoff
 
+## Current task: Resolve PR #7 conflicts with main (2026-09-26)
+
+- Branch: `scaffolding`; merge of `origin/main` (`077b80d`) is resolved locally
+  and remains uncommitted.
+- Completed: combined the scaffold's `AppFrame` and session redirects with the
+  email, Google, and GitHub auth forms from main. Account navigation now opens
+  `/account`. Preserved the local docstring review note below, reconciled the
+  architecture summary, and assigned unique ADR numbers 015 through 020.
+- Changed files: merge updates across web auth, tests, and docs; manual conflict
+  resolutions in `app/web/src/app/layout.tsx`, `app/web/src/app/{login,signup}/page.tsx`,
+  and `docs/{ARCHITECTURE,HANDOFF}.md`, plus account links,
+  `docs/DECISIONS.md`, and `tests/e2e/auth.spec.ts`.
+- Decision: retain the scaffold's route structure and preview while adopting
+  main's newer sign-in methods and account management.
+- Verification: `npm run lint`, `npm run typecheck`, and `npm test` passed (81
+  tests). The focused active-session navigation test passed after its account
+  link assertion was added. The test runner logged a database disconnect during
+  disposable database teardown after the tests passed.
+- Known limits: the resolution is local until committed and pushed. Deployment
+  still needs the email configuration described in `docs/DEPLOYMENT.md`; live
+  OAuth and email flows remain unverified here.
+- Exact next step: review the staged merge resolution, then commit and push it
+  only with explicit user approval; GitHub PR #7 requires the updated branch
+  before it can be merged into `main` through the PR.
+
+## Current task: Review PR docstring coverage (2026-09-26)
+
+- Branch: `scaffolding`; CodeRabbit committed the docstring update as `f898fef`.
+- Completed: reviewed the generated JSDoc across 82 frontend files and
+  synchronized the local branch with that commit. Route-page comments identify
+  placeholders; shared-component and route-helper comments describe behavior
+  and sample-data limits.
+- Changed files: CodeRabbit changed frontend pages, shared components, and
+  `app/web/src/lib/scaffold-routes.ts`; this handoff is the only local edit.
+- Decision: keep the documentation update on the existing PR. It does not
+  change runtime behavior.
+- Verification: `npm run lint`, `npm run typecheck`, and
+  `git diff --check 3e0517e..HEAD` passed locally. The PR `verify` workflow
+  passed on `f898fef`.
+- Known limits: CodeRabbit's 0% pre-merge comment is stale because its next
+  review was skipped pending manual review; the updated percentage is unverified.
+  A separate CodeRabbit task for two review comments reported that its changes
+  were ready but delivery needed attention; no second commit reached this branch.
+- Exact next step: obtain a fresh CodeRabbit review for the docstring metric,
+  inspect the separate task's delivery issue, and commit this handoff only with
+  user approval.
+
+## Current task: Fix scaffold navigation test after landing redesign (2026-09-26)
+
+- Branch: `scaffolding`.
+- Completed: start the main product navigation test at `/dashboard`, where the
+  product sidebar containing the Teams link now appears. The public landing page
+  has separate navigation.
+- Changed files: `tests/e2e/scaffold.spec.ts` and this handoff.
+- Decision: preserve the distinct public and product navigation; the test now
+  enters the product area before asserting its links.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright test passed (1 test), and `npm test` passed all 64 tests, including
+  web and API test builds. The test runner printed a PostgreSQL disconnect
+  warning during disposable database teardown after the tests passed.
+- Known limits: the CI run for this uncommitted fix has not been observed.
+- Exact next step: review the diff, then commit and push the fix to the open
+  pull request with explicit user approval for the commit.
+
+## Current task: Implement the landing page layout and navigation (2026-09-25)
+
+- Branch: `scaffolding`; follows public page design concepts.
+- Completed: implemented the simplified landing page based on `docs/landing-design/landing-v2.png`, including the dark charcoal hero, lavender accent typography, interactive ST-104 evidence thread demo, dedicated landing navigation with session awareness and mobile menu, and quiet landing footer. Removed leftover v1 demo captions and aligned styling to the v2 concept.
+- Changed files: `app/web/src/app/page.tsx`, `app/web/src/app/landing.css`, `app/web/src/app/layout.tsx`, `app/web/src/components/app-frame.tsx`, `app/web/src/components/main-navigation.tsx`, `tests/e2e/home.spec.ts`, and this handoff.
+- Decisions and assumptions: render `LandingNavigation` and the quiet landing footer specifically when `pathname === "/"`; keep the evidence demo deterministic without client-side mock churn; support narrow screens down to 390px using native `<details>` for mobile navigation.
+- Verification: `npm run typecheck` and `npm run lint` both passed with 0 errors. Home and narrow-screen Playwright tests are defined in `tests/e2e/home.spec.ts` (full browser test execution requires local Docker daemon for Better Auth test database).
+- Known limits: authentication pages (`/login` and `/signup`) remain on the previous scaffold and have not yet been updated to match `docs/landing-design/{login-v2,signup-v2}.png`.
+- Exact next step: review and approve changes, then decide whether to proceed with updating the `/login` and `/signup` authentication pages.
+
+## Current task: Simplify the public page concepts (2026-09-25)
+
+- Branch: `scaffolding`; no application code was changed.
+- Completed: revised all three public-page concepts with less visual weight and
+  saved the new versions next to the original images in `docs/landing-design/`.
+- Changed files: `docs/landing-design/{landing-v2,login-v2,signup-v2}.png`,
+  `docs/landing-design/README.md`, and this handoff.
+- Decisions and assumptions: retain the dashboard's charcoal/lavender language,
+  the requirement-to-review thread, and GitHub-only authentication. The revised
+  set is the current proposal; the originals remain for comparison.
+- Verification: visually inspected each generated image and checked its local
+  file and README link. No app build or test was needed for image-only changes.
+- Known limits: image-generated copy and icons need review during implementation;
+  the concepts remain desktop-only and are not implemented pages.
+- Exact next step: collect feedback on the simpler set before implementing
+  responsive, accessible landing and authentication pages.
+
+## Current task: Public page design concepts (2026-09-25)
+
+- Branch: `scaffolding`; no application code was changed for this task.
+- Completed: generated matching landing, login, and signup visual concepts and
+  saved them with relative links in `docs/landing-design/` for team review.
+- Changed files: `docs/landing-design/{README.md,landing.png,login.png,signup.png}`
+  and this handoff.
+- Decisions and assumptions: continue the dashboard's charcoal and lavender
+  visual language; show an inspectable evidence path; preserve GitHub-only auth.
+  The images are proposals, not accepted UI specifications.
+- Verification: inspected each image for layout and product-language fit. The
+  first landing draft had extra panels; its saved revision removes them. No app
+  build or test was needed because this task changes only design artifacts.
+- Known limits: image-generated text and icons need normal implementation review;
+  the concepts are desktop views and do not define responsive layouts.
+- Exact next step: get the team's feedback on these concepts, then implement
+  the selected direction with responsive and accessible behavior.
+
+## Current task: Show the brand mark in the public header (2026-09-25)
+
+- Branch: `scaffolding`; this follows the browser icon correction.
+- Completed: the landing page and other public pages now show the existing
+  SpecThread thread mark beside the brand name in the shared header.
+- Changed files: `app/web/src/components/app-frame.tsx`,
+  `app/web/src/app/globals.css`, `tests/e2e/home.spec.ts`, and this handoff.
+- Decision: reuse the same image as the product sidebar and browser tab.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright home-to-dashboard browser test passed (1 test); its public-header
+  image assertion and screenshot confirm that the mark loads.
+- Known limits: the landing page body is still the initial light scaffold and
+  has not received a broader design pass.
+- Exact next step: confirm whether the user wants a full landing page redesign;
+  if so, treat it as a separate visual feature and retain the shared header.
+
+## Current task: Replace the template browser icon (2026-09-24)
+
+- Branch: `scaffolding`; this is a follow-up to the dashboard shell work.
+- Completed: removed the default Next.js/Vercel `favicon.ico` and installed
+  the existing SpecThread thread mark as the root App Router `icon.png`.
+- Changed files: `app/web/src/app/favicon.ico` (removed),
+  `app/web/src/app/icon.png` (added), `tests/e2e/home.spec.ts`, and this handoff.
+- Decision: reuse `app/web/public/thread-mark.png` so the browser tab and
+  product sidebar show the same brand mark; no additional image dependency.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright browser test passed (1 test), including the web and API test builds
+  and an assertion that the page emits the new `/icon.png` metadata link.
+- Known limits: browsers may retain an old tab icon until they reload the page.
+- Exact next step: continue the project and requirement data contract work;
+  merge branch changes through a pull request, not directly into `main`.
+
+## Current task: Build the dashboard shell and preview (2026-09-24)
+
+- Branch: `scaffolding`; the shell is committed as `9b7f652` and the dashboard
+  preview as `a68e465`. The QA artifacts and documentation are in a separate
+  follow-up commit.
+- Completed: replaced the dashboard cards with the approved compact work list and
+  inline evidence path. Product routes now share a persistent dark sidebar and
+  route header; public pages retain their existing header and footer. Dashboard
+  tabs, row expansion, group collapse, sorting, filtering, quick navigation,
+  mobile drawer, and links to existing example routes work. Sample requirements
+  and the example team are explicitly labeled as preview content.
+- Changed files: `app/web/src/{app/{layout,globals.css,app-shell.css,dashboard/page.tsx},components/{app-frame,dashboard-preview}.tsx}`,
+  `app/web/public/thread-mark.png`, `app/web/package.json`, `package-lock.json`,
+  `tests/e2e/{home,scaffold,auth}.spec.ts`, `docs/assets/thread-mark-source.png`,
+  `docs/dashboard-qa/` (the QA report and three image artifacts),
+  `scripts/process-thread-mark.py`, and `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
+- Decisions: ADR-020 records the shared shell and public sample preview. Added
+  `lucide-react` because the web app had no reusable icon set; no API, schema,
+  session, or authorization behavior changed. The transparent brand mark is
+  produced from `docs/assets/thread-mark-source.png` with
+  `python scripts/process-thread-mark.py` (requires Pillow).
+- Verification: browser inspection covered desktop and 390px mobile layouts,
+  evidence expansion, tabs, and a route transition. `npm test` passed 63 tests,
+  including the web and API builds. The focused dashboard suite passed 8 tests
+  after the tab refinement and console-error assertion; the final screenshot
+  test passed after the logo update. `npm run lint`, `npm run typecheck`, and
+  standalone `npm run build` passed on the final code. Asset regeneration passed.
+  `git diff --check` and the final diff review passed. The design QA report and
+  its source, implementation, and comparison images are stored together in
+  `docs/dashboard-qa/` with relative links.
+- Known limits: dashboard rows and team navigation are examples, not account data.
+  Project authorization and real requirement APIs are still pending. The current
+  product routes remain public and must be protected before showing private data.
+- Exact next step: define the authorized project and requirement read contract,
+  then replace the preview rows and example team with real accessible data. Do
+  request explicit approval for future commits; merge through a pull request only.
+
+## Current task: Navigate the frontend scaffold (2026-09-24)
+
+- Branch: `scaffolding`, continuing the user's routing work. Changes remain
+  uncommitted; no CSS or backend product endpoint was changed.
+- Completed: added one route catalog and shared navigation to the dashboard and
+  all placeholder pages. Parent, child, and related links connect Teams,
+  personal/team Projects, Requirements, Evidence, Review, account Settings,
+  onboarding, help, invitations, and optional routes. Links needing unknown IDs
+  are explicitly marked as example routes. Added a Settings landing page and
+  made the dashboard's Create project and Connect GitHub controls link to their
+  placeholder routes. The main header now links to Notifications and Settings
+  and shows Account instead of Log in/Sign up for an active client session.
+- Auth behavior: login and signup use Better Auth's server-validated session to
+  redirect an already signed-in user to `/dashboard`. The existing GitHub OAuth
+  callback already targets `/dashboard`; no raw browser token is trusted for
+  the redirect. The dashboard remains a public empty preview.
+- Changed files: `app/web/src/{lib/scaffold-routes.ts,components/{scaffold-navigation,main-navigation,scaffold-page}.tsx,app/{layout,dashboard/page,login/page,signup/page,settings/page}.tsx}`;
+  `playwright.config.ts`; `tests/e2e/{auth,home,scaffold}.spec.ts`;
+  `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
+- Decision: ADR-019 records navigation and session redirect semantics. A
+  per-run random test secret is shared across Playwright workers so the
+  disposable session test uses the same secret as the test web server.
+- Verification: `npm run lint` and `npm run typecheck` passed. Final `npm test`
+  passed 61 tests and built the web and API applications. The browser tests
+  cover the main route journey, active and invalid sessions, and registration
+  of all reserved pages in navigation. `git diff --check` passed.
+- Known risks: pages remain public placeholders without project membership
+  checks or real entity links. Example IDs exist only to exercise the route
+  structure. Real GitHub OAuth, deployed session behavior, and product data
+  navigation were not verified in this task.
+- Exact next step: implement a real project list and authorization contract,
+  then replace example links with IDs from accessible projects. Do not commit
+  without explicit user approval; merge to `main` only through a pull request.
+
+## Current task: Refine frontend route hierarchy (2026-09-24)
+
+- Branch: `scaffolding`, continuing the route task on the user-selected branch.
+  Changes are uncommitted.
+- Completed: removed the speculative standalone `/search` page. Added `/about`
+  as an informational hub and moved How it works, Privacy, and Terms to
+  `/about/how-it-works`, `/about/privacy`, and `/about/terms`; linked the hub in
+  the footer. Clarified that `/projects` covers both personal and team-owned
+  projects, while `/teams/[teamId]/projects` is the team subset. Project creation
+  and ownership placeholders now mention both ownership choices.
+- Changed files: `app/web/src/app/about/`, removed top-level information and
+  search `page.tsx` files, updated project placeholder pages and root layout,
+  `tests/e2e/scaffold.spec.ts`, and `docs/{PROJECT,DECISIONS,TESTING,HANDOFF}.md`.
+- Decision: ADR-018 records the route hierarchy. The user selected the About
+  hub with separate child URLs. Search remains a possible control within list
+  pages, with no global search route. No data-model or API contract was changed.
+- Verification: `npm run lint` and `npm run typecheck` passed. `npm test` passed
+  all 57 tests and built the web and API applications. `git diff --check` passed.
+- Known risk: information and product pages remain placeholders. Team
+  membership, authorization, personal/team ownership, and transfer behavior
+  still need backend decisions and implementation. Old top-level information
+  URLs now return 404; they were only scaffold pages and had no navigation links.
+- Exact next step: define the first real project flow and its access rules,
+  then replace the relevant placeholders. Do not commit without the user's
+  explicit approval; merge to `main` only through a pull request.
+
+## Current task: Frontend route scaffolding (2026-09-24)
+
+- Branch: `scaffolding`, created from `main`. Changes are uncommitted. The
+  pre-existing modifications to `package.json`, `package-lock.json`, and
+  `skills-lock.json` were preserved and are outside this task.
+- Completed: added 68 bare frontend pages from the route blueprint covering
+  public help, onboarding, teams, projects, requirements, evidence, review,
+  invitations, account settings, and optional future views. Each uses one
+  shared placeholder that clearly says product data and actions are not
+  connected. Added Teams, Projects, and Reviews header links plus root error
+  and not-found fallbacks. Existing home, auth, and dashboard screens remain.
+- Changed files: `app/web/src/app/layout.tsx`, 68 new route `page.tsx` files in
+  `app/web/src/app/`, `app/web/src/app/{error,not-found}.tsx`,
+  `app/web/src/components/scaffold-page.tsx`, `tests/e2e/scaffold.spec.ts`,
+  `docs/{TESTING,HANDOFF}.md`.
+- Decisions and assumptions: route paths reserve navigation only and are not
+  API or data-model contracts. A team-owned project is a proposed product
+  direction; team ownership, membership, invitations, review permissions, and
+  authorization remain undecided. Dynamic placeholder routes intentionally
+  show no real entity data and do not validate IDs yet. No new dependencies,
+  database changes, or backend endpoints were added.
+- Verification: `npm run lint` and `npm run typecheck` passed. `npm run build`
+  passed with network access for the existing Google Fonts imports. Focused
+  scaffold Playwright tests passed (2 tests before the 404 test was added),
+  and the final full `npm test` passed (54 tests, including all 3 scaffold
+  tests). Final lint and typecheck passed after the last code edit;
+  `git diff --check` passed. Docker Desktop was started for the disposable
+  test database.
+- Known risks: all new pages are publicly reachable placeholders. They must
+  gain real session and project authorization checks before showing product
+  data. Later feature routes should be removed if the team rejects them.
+- Exact next step: choose the first vertical slice and settle team ownership
+  and review permissions before connecting these pages to product data. Keep
+  this branch uncommitted until the user approves a commit; use a pull request
+  for any merge into `main`.
+
 ## Current task: Email/password and Google sign-in with account linking (2026-09-25)
 
 - Branch: feature/email-google-auth (from main). Committed and opened as a PR. Nothing deployed; no database schema changes.
@@ -40,6 +314,7 @@
 - Exact next step:
   - Before merging, a teammate with Vercel access sets `RESEND_API_KEY`, `EMAIL_FROM` (sender on mail.spec-thread.com) and, optionally, the Google credentials, and makes the GitHub App public.
   - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
+
 ## Current task: API JWT validation (2026-09-23)
 
 - Branch: feature/api-jwt-validation, merged into main through PR #5 (840ed6a). Nothing was deployed and no Supabase changes were made.
