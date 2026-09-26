@@ -74,8 +74,9 @@ currently require network access during the web build.
 - Email/password and linking (schema suite, real Better Auth on Docker Postgres,
   captured emails): hashed credentials, verification required before sign-in,
   verify links sign in, duplicate sign-up and unknown-email reset look identical,
-  single-use resets that revoke sessions, link-social for GitHub and Google, and
-  refusal to unlink the last method. Browser tests cover the forms, errors, 429,
+  single-use resets that revoke sessions, link-social for GitHub and Google,
+  refusal to unlink the last method, and refusal to unlink when only a disabled
+  provider would remain. Browser tests cover the forms, errors, 429,
   resend, reset pages, /account redirect, linking error messages, and narrow
   screens with mocked auth responses. Real Google/GitHub linking callbacks and
   Resend delivery are verified manually.

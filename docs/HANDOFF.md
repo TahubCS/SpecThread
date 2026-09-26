@@ -9,6 +9,7 @@
   - Better Auth email/password sign-in: verification required, 12-character minimum, verify links sign in, single-use reset links that revoke sessions.
   - Google sign-in, enabled only when configured. GitHub sign-in kept.
   - `/account` shows the profile and lets users link or unlink Google and GitHub, and sign out.
+  - Unlinking must leave a usable method, meaning email/password or a provider enabled in this deployment. Enforced both in the UI and by a server hook on `/unlink-account` (PR review follow-up).
   - New `/forgot-password` and `/reset-password` pages; login and signup forms; fixed linking error messages; an Account nav link.
   - Email is sent through Resend with `fetch`, or logged on loopback only with `EMAIL_DELIVERY=log`.
 - Changed files:

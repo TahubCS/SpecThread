@@ -115,3 +115,39 @@ test("linking starts provider sign-in for the signed-in user and the last method
   expect(unlink.status).toBe(400);
   expect((await unlink.json()).code).toBe("FAILED_TO_UNLINK_LAST_ACCOUNT");
 });
+
+test("unlinking keeps at least one sign-in method that is enabled in this deployment", async () => {
+  const context = await web.auth.$context;
+  const { rows: [user] } = await database.pool.query('SELECT id FROM "user" WHERE email = $1', [email]);
+  await context.internalAdapter.createAccount({ userId: user.id, providerId: "github", accountId: "github-user-1" });
+  const accountIds = async () => Object.fromEntries((await database.pool.query(
+    'SELECT "providerId", id FROM account WHERE "userId" = $1', [user.id])).rows.map(row => [row.providerId, row.id]));
+  const { credential } = await accountIds();
+
+  // Same database, but GitHub is not configured: the GitHub link cannot sign in.
+  const withoutGitHub = createAuth({
+    BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
+    BETTER_AUTH_URL: baseURL, DATABASE_URL: database.connectionString, EMAIL_DELIVERY: "log",
+  }, { sendEmail: async () => {} });
+  try {
+    const signInResponse = await withoutGitHub.auth.handler(new Request(`${baseURL}/api/auth/sign-in/email`, {
+      method: "POST", headers: { "content-type": "application/json", origin: baseURL },
+      body: JSON.stringify({ email, password: "a brand new passphrase" }),
+    }));
+    const refused = await withoutGitHub.auth.handler(new Request(`${baseURL}/api/auth/unlink-account`, {
+      method: "POST", headers: { "content-type": "application/json", origin: baseURL, cookie: cookieOf(signInResponse) },
+      body: JSON.stringify({ accountId: credential }),
+    }));
+    expect(refused.status).toBe(400);
+    expect((await refused.json()).code).toBe("LAST_USABLE_SIGN_IN_METHOD");
+    expect(await accountIds()).toHaveProperty("credential");
+  } finally {
+    await withoutGitHub.pool.end();
+  }
+
+  // With GitHub enabled, the GitHub link can be removed while email/password remains.
+  const session = cookieOf(await signIn("a brand new passphrase"));
+  const { github } = await accountIds();
+  expect((await call("/unlink-account", { cookie: session, body: { accountId: github } })).status).toBe(200);
+  expect(Object.keys(await accountIds())).toEqual(["credential"]);
+});

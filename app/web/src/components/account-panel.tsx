@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { canUnlink } from "@/lib/sign-in-methods";
 
 type Provider = "google" | "github";
 const labels: Record<string, string> = { credential: "Email and password", google: "Google", github: "GitHub" };
@@ -10,7 +11,7 @@ const TOO_MANY = "Too many attempts. Please wait a moment before trying again.";
 
 export function AccountPanel({ user, linked, available }: {
   user: { name: string; email: string; emailVerified: boolean };
-  linked: { id: string; providerId: string }[];
+  linked: { id: string; providerId: string; usable: boolean }[];
   available: Provider[];
 }) {
   const router = useRouter();
@@ -40,11 +41,11 @@ export function AccountPanel({ user, linked, available }: {
     () => authClient.linkSocial({ provider, callbackURL: "/account", errorCallbackURL: "/auth/error" }),
     `Unable to start linking ${labels[provider]}. Please try again.`);
 
-  async function unlink(account: { id: string; providerId: string }) {
+  async function unlink(account: { id: string; providerId: string; usable: boolean }) {
     const label = labels[account.providerId] ?? account.providerId;
     // Better Auth requires a recent sign-in (fresh session) to unlink.
     if (await run(`unlink-${account.id}`, () => authClient.unlinkAccount({ accountId: account.id }),
-      `Unable to unlink ${label}. You must keep at least one way to sign in.`,
+      `Unable to unlink ${label}. You must keep at least one usable way to sign in.`,
       `For your security, log out and log in again before removing ${label}.`)) {
       setBusy(null);
       router.refresh();
@@ -74,15 +75,20 @@ export function AccountPanel({ user, linked, available }: {
         <ul className="method-list">
           {linked.map(account => (
             <li key={account.id}>
-              <span>{labels[account.providerId] ?? account.providerId}</span>
-              <button className="button secondary" type="button" disabled={busy !== null || linked.length < 2}
+              <span>
+                {labels[account.providerId] ?? account.providerId}
+                {!account.usable && <span className="muted"> (sign-in currently unavailable)</span>}
+              </span>
+              <button className="button secondary" type="button" disabled={busy !== null || !canUnlink(account, linked)}
                 onClick={() => unlink(account)} aria-label={`Unlink ${labels[account.providerId] ?? account.providerId}`}>
                 {busy === `unlink-${account.id}` ? "Unlinking..." : "Unlink"}
               </button>
             </li>
           ))}
         </ul>
-        {linked.length < 2 && <p className="muted">Link another method before removing this one.</p>}
+        {linked.some(account => !canUnlink(account, linked)) && (
+          <p className="muted">You can&apos;t remove your only usable sign-in method. Link another one first.</p>
+        )}
         <div className="actions">
           {available.filter(provider => !linked.some(account => account.providerId === provider)).map(provider => (
             <button key={provider} className="button" type="button" disabled={busy !== null} onClick={() => link(provider)}>

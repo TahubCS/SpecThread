@@ -1,9 +1,11 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { jwt } from "better-auth/plugins";
 import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
 import { readAuthConfig } from "./auth-config";
 import { createEmailSender, passwordResetEmail, verificationEmail, type SendEmail } from "./email";
+import { canUnlink, isUsableSignInMethod } from "./sign-in-methods";
 
 // `sendEmail` lets tests capture messages instead of delivering them.
 export function createAuth(env: Record<string, string | undefined>, overrides: { sendEmail?: SendEmail } = {}) {
@@ -36,10 +38,33 @@ export function createAuth(env: Record<string, string | undefined>, overrides: {
       google: config.google,
     },
     account: {
+      encryptOAuthTokens: true,
+       // Implicit linking by email still requires both emails to be verified
       // Implicit linking by email still requires both emails to be verified
       // (Better Auth default). Explicit linking from /account may use a
       // different provider email because the user is already signed in. ADR-016.
       accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: true },
+    },
+    databaseHooks: {
+      account: {
+        delete: {
+          // Better Auth only refuses to unlink the last linked account. Also refuse
+          // when the remaining accounts use providers disabled in this deployment,
+          // which would lock the user out. Scoped to unlinking so Better Auth's own
+          // security cleanups are unaffected.
+          before: async (account, context) => {
+            if (context?.path !== "/unlink-account") return;
+            const accounts = (await context.context.internalAdapter.findAccounts(account.userId))
+              .map(linked => ({ id: linked.id, usable: isUsableSignInMethod(linked.providerId, config) }));
+            if (!canUnlink({ id: account.id, usable: false }, accounts)) {
+              throw new APIError("BAD_REQUEST", {
+                code: "LAST_USABLE_SIGN_IN_METHOD",
+                message: "Keep at least one usable sign-in method.",
+              });
+            }
+          },
+        },
+      },
     },
     plugins: [
       // ES256 so the ASP.NET API can validate tokens natively (ADR-015).

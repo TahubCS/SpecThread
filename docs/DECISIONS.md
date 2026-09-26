@@ -183,8 +183,11 @@ verification before sign-in, a 12-character minimum password, verification links
 that sign the user in, single-use reset links, and session revocation on reset.
 Keep GitHub sign-in and add Google; each social provider is enabled only when both
 its client ID and secret are set. Signed-in users link or unlink Google and GitHub
-from /account; Better Auth refuses to remove the last sign-in method and requires a
-recent sign-in to unlink. Implicit linking by matching email keeps Better Auth's
+from /account. Unlinking must leave at least one usable method: email/password or
+a provider enabled in this deployment. The account page and a server-side
+account delete hook, scoped to /unlink-account, both enforce this; Better Auth
+alone only refuses to remove the last linked account. Unlinking requires a
+recent sign-in. Implicit linking by matching email keeps Better Auth's
 default: the provider must verify the email and the local email must be verified;
 no provider is trusted to bypass this. Explicit linking allows a provider email
 that differs from the account email (allowDifferentEmails), because the user is
