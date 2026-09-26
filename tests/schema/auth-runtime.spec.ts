@@ -13,6 +13,7 @@ function instance() {
     BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
     BETTER_AUTH_URL: baseURL, DATABASE_URL: database.connectionString,
     GITHUB_CLIENT_ID: "test-client", GITHUB_CLIENT_SECRET: "test-secret",
+    EMAIL_DELIVERY: "log",
   });
   instances.push(value);
   return value;

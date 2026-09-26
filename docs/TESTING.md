@@ -61,7 +61,15 @@ currently require network access during the web build.
   local address, and explicit rejection when connection configuration is missing.
   These invoke the local dotnet-ef tool and never connect to Supabase.
 
-- Auth: explicit configuration failures, verified TLS options, restricted origins,
+- Email/password and linking (schema suite, real Better Auth on Docker Postgres,
+  captured emails): hashed credentials, verification required before sign-in,
+  verify links sign in, duplicate sign-up and unknown-email reset look identical,
+  single-use resets that revoke sessions, link-social for GitHub and Google, and
+  refusal to unlink the last method. Browser tests cover the forms, errors, 429,
+  resend, reset pages, /account redirect, linking error messages, and narrow
+  screens with mocked auth responses. Real Google/GitHub linking callbacks and
+  Resend delivery are verified manually.
+- Auth: explicit configuration failures, email delivery and provider enablement rules, verified TLS options, restricted origins,
   session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
   retryable HTTP/network failures, provider redirection, and a safe public error page.
 - Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,

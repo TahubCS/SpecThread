@@ -33,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/dashboard">Dashboard preview</Link>
               <Link href="/login">Log in</Link>
               <Link href="/signup">Sign up</Link>
+              <Link href="/account">Account</Link>
             </nav>
           </div>
         </header>

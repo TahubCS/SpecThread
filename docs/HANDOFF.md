@@ -1,6 +1,46 @@
 # Shared handoff
 
-## Current task: Branch protection rules and PR enforcement workflow (2026-09-20)
+## Current task: Email/password and Google sign-in with account linking (2026-09-25)
+
+- Branch: feature/email-google-auth (from main). Committed and opened as a PR. Nothing deployed; no database schema changes.
+  - Independent of the open feature/api-jwt-validation PR, which uses ADR-015. This task uses ADR-016.
+  - Restored app/web/.env.example from main to document the new variables. The app/api/.env.example working-tree deletion was left untouched.
+- Completed:
+  - Better Auth email/password sign-in: verification required, 12-character minimum, verify links sign in, single-use reset links that revoke sessions.
+  - Google sign-in, enabled only when configured. GitHub sign-in kept.
+  - `/account` shows the profile and lets users link or unlink Google and GitHub, and sign out.
+  - New `/forgot-password` and `/reset-password` pages; login and signup forms; fixed linking error messages; an Account nav link.
+  - Email is sent through Resend with `fetch`, or logged on loopback only with `EMAIL_DELIVERY=log`.
+- Changed files:
+  - Web library: app/web/src/lib/{auth-config.ts,create-auth.ts,email.ts}
+  - Web components: app/web/src/components/{auth-form.tsx,password-forms.tsx,account-panel.tsx}; auth-placeholder.tsx removed
+  - Web pages: app/web/src/app/{login,signup,forgot-password,reset-password,account,auth/error}/page.tsx, layout.tsx, globals.css
+  - Config: app/web/.env.example, playwright.config.ts
+  - Tests: tests/api/auth-config.spec.ts, tests/e2e/{auth,home}.spec.ts, tests/schema/{auth-email,auth-runtime}.spec.ts
+  - Docs: README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-016.
+  - Implicit linking by email keeps Better Auth's default: both the provider and the local account must have verified the email.
+  - Explicit linking allows a GitHub or Google email that differs from the account email.
+  - Duplicate sign-up and reset requests give the same response, so they don't reveal which emails exist.
+  - No migration was needed; the existing tables cover it.
+- Verification:
+  - `npm run lint`: passed. `npm run typecheck`: passed.
+  - `npm test`: 48 passed, including 5 new schema flow tests, 7 new browser tests and 2 new config tests.
+  - `npm run build`: passes with `EMAIL_DELIVERY=log`. It fails explicitly without Resend settings, as designed.
+  - `git diff --check`: passed.
+  - Manual: a real Resend verification email from mail.spec-thread.com was received locally. The web app pointed at the shared Supabase database during this test, so test sign-ups exist there.
+- Known issues or risks:
+  - **Vercel deploys now fail until `RESEND_API_KEY` and `EMAIL_FROM` are set.** Google needs `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+  - Local `.env.local` needs `EMAIL_DELIVERY=log`, or Resend settings.
+  - The team GitHub App is private, so non-owners get a 404 until it is made public (DEPLOYMENT.md).
+  - Not automated, so still to be verified manually: real Google and GitHub linking callbacks, implicit linking, and Resend delivery.
+  - Unlinking requires a recent sign-in (Better Auth's fresh-session rule).
+  - After sign-in, users still land on the public dashboard preview.
+- Exact next step:
+  - Before merging, a teammate with Vercel access sets `RESEND_API_KEY`, `EMAIL_FROM` (sender on mail.spec-thread.com) and, optionally, the Google credentials, and makes the GitHub App public.
+  - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
+
+## Previous task: Branch protection rules and PR enforcement workflow (2026-09-20)
 
 - Branch: main (explicitly authorized one-time exception for establishing repository governance).
 - Completed:

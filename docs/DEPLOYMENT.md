@@ -26,6 +26,10 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 | `DATABASE_CA_CERT` | Full PEM contents of the project's CA certificate when not trusted by Node | Copy the certificate contents, not its local path |
 | `GITHUB_CLIENT_ID` | Client ID from your GitHub OAuth App | `Ov23li...` |
 | `GITHUB_CLIENT_SECRET` | Client Secret from your GitHub OAuth App | `<secret>` |
+| `GOOGLE_CLIENT_ID` | Client ID from your Google Cloud OAuth client (Google sign-in is off when unset) | `123-abc.apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Client secret from the same Google OAuth client | `<secret>` |
+| `RESEND_API_KEY` | Resend API key for verification and password reset emails | `re_...` |
+| `EMAIL_FROM` | Sender on a Resend-verified domain | `SpecThread <no-reply@yourdomain>` |
 | `BETTER_AUTH_API_KEY` | (Optional) Better Auth Dashboard API key | `ba_...` |
 
 5. Click **Deploy**.
@@ -61,6 +65,30 @@ and [Better Auth origin security](https://www.better-auth.com/docs/reference/sec
 In your GitHub Developer Settings (OAuth Apps):
 * **Homepage URL**: `https://your-app.vercel.app`
 * **Authorization callback URL**: `https://your-app.vercel.app/api/auth/callback/github`
+
+The team's current GitHub App is private: GitHub returns 404 at
+`/login/oauth/authorize` for anyone except its owner. Make it public (GitHub App
+settings > Advanced > Make public) or use an OAuth App before others sign in or
+link GitHub.
+
+### Google OAuth Configuration (ADR-016)
+In Google Cloud Console > APIs & Services > Credentials, create an **OAuth client
+ID** of type **Web application**, after configuring the OAuth consent screen:
+* **Authorized JavaScript origins**: `https://your-app.vercel.app` (and `http://localhost:3000` for a development client)
+* **Authorized redirect URIs**: `https://your-app.vercel.app/api/auth/callback/google` (and `http://localhost:3000/api/auth/callback/google`)
+
+Consider separate development and production clients.
+
+### Email delivery (ADR-016)
+1. In Resend, verify the sending domain (DNS records) and create an API key with
+   sending access only.
+2. Set `RESEND_API_KEY` and `EMAIL_FROM` in Vercel for every environment that
+   runs the web app. Deployments without them fail explicitly at auth startup.
+3. `EMAIL_DELIVERY=log` is only for loopback development and tests; it is rejected
+   for any other `BETTER_AUTH_URL` because it prints one-time links.
+4. After deploying, verify: sign up, receive the verification email, follow it,
+   log in, request a password reset, follow it, and confirm other sessions were
+   signed out. Link and unlink Google and GitHub from `/account`.
 
 ### Client IP headers and rate limiting
 

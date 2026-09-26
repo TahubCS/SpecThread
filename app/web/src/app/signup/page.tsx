@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { AuthPlaceholder } from "@/components/auth-placeholder";
+import { AuthForm } from "@/components/auth-form";
 
 export const metadata: Metadata = { title: "Sign up" };
 
 export default function SignupPage() {
-  return <AuthPlaceholder signup />;
+  return <AuthForm signup />;
 }

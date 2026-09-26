@@ -3,10 +3,13 @@ import { jwt } from "better-auth/plugins";
 import { dash } from "@better-auth/infra";
 import { Pool } from "pg";
 import { readAuthConfig } from "./auth-config";
+import { createEmailSender, passwordResetEmail, verificationEmail, type SendEmail } from "./email";
 
-export function createAuth(env: Record<string, string | undefined>) {
+// `sendEmail` lets tests capture messages instead of delivering them.
+export function createAuth(env: Record<string, string | undefined>, overrides: { sendEmail?: SendEmail } = {}) {
   const config = readAuthConfig(env);
   const pool = new Pool(config.pool);
+  const sendEmail = overrides.sendEmail ?? createEmailSender(config.email);
 
   const auth = betterAuth({
     appName: "SpecThread",
@@ -16,12 +19,27 @@ export function createAuth(env: Record<string, string | undefined>) {
     trustedOrigins: config.trustedOrigins,
     onAPIError: { errorURL: "/auth/error" },
     rateLimit: { storage: "database" },
+    emailAndPassword: {
+      enabled: true,
+      requireEmailVerification: true,
+      minPasswordLength: 12,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: async ({ user, url }) => sendEmail(passwordResetEmail(user.email, url)),
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => sendEmail(verificationEmail(user.email, url)),
+    },
     socialProviders: {
-      github: {
-        clientId: env.GITHUB_CLIENT_ID || "",
-        clientSecret: env.GITHUB_CLIENT_SECRET || "",
-        enabled: Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET),
-      },
+      github: config.github,
+      google: config.google,
+    },
+    account: {
+      // Implicit linking by email still requires both emails to be verified
+      // (Better Auth default). Explicit linking from /account may use a
+      // different provider email because the user is already signed in. ADR-016.
+      accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: true },
     },
     plugins: [
       jwt(),

@@ -6,6 +6,8 @@ const env = {
   BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
   BETTER_AUTH_URL: "https://specthread.example",
   DATABASE_URL: "postgres://user:password@db.example/postgres?sslmode=require",
+  RESEND_API_KEY: "re_test_only",
+  EMAIL_FROM: "SpecThread <no-reply@specthread.example>",
 };
 
 test("auth rate limits prefer the Vercel IP and keep separate clients independent", async () => {
@@ -70,4 +72,22 @@ test("remote PostgreSQL requires verified TLS and URL parameters cannot override
     expect(() => readAuthConfig({ ...env, DATABASE_URL: `postgres://user:password@db.example/postgres?${query}` })).toThrow(/DATABASE_URL supports only/);
   }
   expect(readAuthConfig({ ...env, DATABASE_URL: "postgres://user:password@127.0.0.1:1/offline" }).pool.ssl).toBe(false);
+});
+
+test("email delivery needs Resend settings, and logging links is limited to loopback", () => {
+  expect(readAuthConfig(env).email).toEqual({ delivery: "resend", apiKey: "re_test_only", from: env.EMAIL_FROM });
+  for (const name of ["RESEND_API_KEY", "EMAIL_FROM"]) {
+    expect(() => readAuthConfig({ ...env, [name]: "" })).toThrow(`Configure ${name}`);
+  }
+  expect(() => readAuthConfig({ ...env, EMAIL_DELIVERY: "log" })).toThrow(/only when BETTER_AUTH_URL is a loopback origin/);
+  expect(() => readAuthConfig({ ...env, EMAIL_DELIVERY: "smtp" })).toThrow("EMAIL_DELIVERY must be resend or log.");
+  const local = { ...env, BETTER_AUTH_URL: "http://localhost:3000", RESEND_API_KEY: "", EMAIL_FROM: "", EMAIL_DELIVERY: "log" };
+  expect(readAuthConfig(local).email).toEqual({ delivery: "log" });
+});
+
+test("social providers are enabled only with both client ID and secret", () => {
+  const config = readAuthConfig({ ...env, GOOGLE_CLIENT_ID: "google-id", GOOGLE_CLIENT_SECRET: "google-secret", GITHUB_CLIENT_ID: "github-id" });
+  expect(config.google).toEqual({ clientId: "google-id", clientSecret: "google-secret", enabled: true });
+  expect(config.github.enabled).toBe(false);
+  expect(readAuthConfig(env).google.enabled).toBe(false);
 });
