@@ -52,6 +52,9 @@ export default defineConfig({
         BETTER_AUTH_API_KEY: "",
         GITHUB_CLIENT_ID: "",
         GITHUB_CLIENT_SECRET: "",
+        GOOGLE_CLIENT_ID: "",
+        GOOGLE_CLIENT_SECRET: "",
+        EMAIL_DELIVERY: "log",
       },
     },
     {

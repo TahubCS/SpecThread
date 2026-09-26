@@ -1,8 +1,48 @@
 # Shared handoff
 
+## Current task: Email/password and Google sign-in with account linking (2026-09-25)
+
+- Branch: feature/email-google-auth (from main). Committed and opened as a PR. Nothing deployed; no database schema changes.
+  - Independent of the open feature/api-jwt-validation PR, which uses ADR-015. This task uses ADR-016.
+  - Restored app/web/.env.example from main to document the new variables. The app/api/.env.example working-tree deletion was left untouched.
+- Completed:
+  - Better Auth email/password sign-in: verification required, 12-character minimum, verify links sign in, single-use reset links that revoke sessions.
+  - Google sign-in, enabled only when configured. GitHub sign-in kept.
+  - `/account` shows the profile and lets users link or unlink Google and GitHub, and sign out.
+  - Unlinking must leave a usable method, meaning email/password or a provider enabled in this deployment. Enforced both in the UI and by a server hook on `/unlink-account` (PR review follow-up).
+  - New `/forgot-password` and `/reset-password` pages; login and signup forms; fixed linking error messages; an Account nav link.
+  - Email is sent through Resend with `fetch`, or logged on loopback only with `EMAIL_DELIVERY=log`.
+- Changed files:
+  - Web library: app/web/src/lib/{auth-config.ts,create-auth.ts,email.ts}
+  - Web components: app/web/src/components/{auth-form.tsx,password-forms.tsx,account-panel.tsx}; auth-placeholder.tsx removed
+  - Web pages: app/web/src/app/{login,signup,forgot-password,reset-password,account,auth/error}/page.tsx, layout.tsx, globals.css
+  - Config: app/web/.env.example, playwright.config.ts
+  - Tests: tests/api/auth-config.spec.ts, tests/e2e/{auth,home}.spec.ts, tests/schema/{auth-email,auth-runtime}.spec.ts
+  - Docs: README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-016.
+  - Implicit linking by email keeps Better Auth's default: both the provider and the local account must have verified the email.
+  - Explicit linking allows a GitHub or Google email that differs from the account email.
+  - Duplicate sign-up and reset requests give the same response, so they don't reveal which emails exist.
+  - No migration was needed; the existing tables cover it.
+- Verification:
+  - `npm run lint`: passed. `npm run typecheck`: passed.
+  - `npm test`: 48 passed, including 5 new schema flow tests, 7 new browser tests and 2 new config tests.
+  - `npm run build`: passes with `EMAIL_DELIVERY=log`. It fails explicitly without Resend settings, as designed.
+  - `git diff --check`: passed.
+  - Manual: a real Resend verification email from mail.spec-thread.com was received locally. The web app pointed at the shared Supabase database during this test, so test sign-ups exist there.
+- Known issues or risks:
+  - **Vercel deploys now fail until `RESEND_API_KEY` and `EMAIL_FROM` are set.** Google needs `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+  - Local `.env.local` needs `EMAIL_DELIVERY=log`, or Resend settings.
+  - The team GitHub App is private, so non-owners get a 404 until it is made public (DEPLOYMENT.md).
+  - Not automated, so still to be verified manually: real Google and GitHub linking callbacks, implicit linking, and Resend delivery.
+  - Unlinking requires a recent sign-in (Better Auth's fresh-session rule).
+  - After sign-in, users still land on the public dashboard preview.
+- Exact next step:
+  - Before merging, a teammate with Vercel access sets `RESEND_API_KEY`, `EMAIL_FROM` (sender on mail.spec-thread.com) and, optionally, the Google credentials, and makes the GitHub App public.
+  - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
 ## Current task: API JWT validation (2026-09-23)
 
-- Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
+- Branch: feature/api-jwt-validation, merged into main through PR #5 (840ed6a). Nothing was deployed and no Supabase changes were made.
   - better-auth stays pinned to exactly 1.7.5. A commit loosening it to ^1.7.5 (fe77b92) was reverted in 7188a73, because the key-selection behavior behind the rollout was verified only against 1.7.5.
   - Deleted app/web/.env.example and app/api/.env.example remain uncommitted in the working tree. They predate this task and are not part of it.
 - Completed:
@@ -31,7 +71,7 @@
   - The API's key refresh depends on the web app's availability.
   - No web code sends tokens to the API yet.
   - Project membership checks are not implemented.
-- Exact next step: push feature/api-jwt-validation and open a PR to main. The PR must describe the new `Auth__Issuer` setting and the ordered rollout in DEPLOYMENT.md. After that, implement project membership authorization.
+- Exact next step: carry out the ordered rollout in DEPLOYMENT.md (deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render). After that, implement project membership authorization.
   - Team follow-ups:
     - Make the GitHub App public if non-owners will sign in on Vercel.
     - Consider trimming the JWT payload to the user id with Better Auth's `definePayload`. By default the token carries name, email, and avatar URL.

@@ -20,13 +20,15 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
 });
 
 for (const route of ["login", "signup"] as const) {
-  test(`${route} provides interactive GitHub sign-in button`, async ({ page }) => {
+  test(`${route} offers email, Google and GitHub sign-in`, async ({ page }) => {
     await page.goto(`/${route}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       route === "login" ? "Welcome back" : "Create your account",
     );
-    await expect(page.getByRole("button", { name: /with GitHub/ })).toBeEnabled();
-    await expect(page.locator("input")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
+    await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("autocomplete", route === "login" ? "current-password" : "new-password");
     await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
     await page.getByRole("link", { name: "Explore the dashboard preview" }).click();
@@ -57,11 +59,11 @@ test("Better Auth rejects other Vercel and tunnel origins", async ({ request }) 
 
 test("all skeleton pages fit a narrow screen", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ["/", "/login", "/signup", "/dashboard"]) {
+  for (const route of ["/", "/login", "/signup", "/dashboard", "/forgot-password", "/reset-password?token=t"]) {
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`${route.slice(1) || "home"}-mobile.png`), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath(`${route.slice(1).split("?")[0] || "home"}-mobile.png`), fullPage: true });
   }
 });

@@ -21,7 +21,7 @@ test.beforeAll(async () => {
   database = await startTestDatabase();
   web = createAuth({
     BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
-    BETTER_AUTH_URL: authOrigin, DATABASE_URL: database.connectionString,
+    BETTER_AUTH_URL: authOrigin, DATABASE_URL: database.connectionString, EMAIL_DELIVERY: "log",
   });
   server = createServer(toNodeHandler(web.auth));
   await new Promise<void>(resolve => server.listen(5102, "127.0.0.1", resolve));

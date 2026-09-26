@@ -16,7 +16,7 @@ for (const path of ["/login", "/signup"]) {
     await expect(alert).toHaveText("Unable to start GitHub sign-in. Please try again.");
     await expect(button).toBeEnabled();
     await button.click();
-    await expect(alert).toContainText("Too many sign-in attempts");
+    await expect(alert).toContainText("Too many attempts");
     await expect(button).toBeEnabled();
     expect(attempts).toBe(2);
   });
@@ -59,4 +59,97 @@ test("error page handles cancellation and untrusted input accessibly", async ({ 
   await expect(page.locator('a[href*="evil.example"]')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("auth-error-mobile.png"), fullPage: true });
+});
+
+test("Google sign-in requests the Google provider", async ({ page }) => {
+  let body: unknown;
+  await page.route("**/api/auth/sign-in/social", async route => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ status: 500, json: {} });
+  });
+  await page.goto("/login");
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("Unable to start Google sign-in. Please try again.");
+  expect(body).toMatchObject({ provider: "google", callbackURL: "/dashboard", errorCallbackURL: "/auth/error" });
+});
+
+test("email login handles wrong passwords, throttling and unverified email by keyboard", async ({ page }) => {
+  const statuses = [401, 429, 403];
+  await page.route("**/api/auth/sign-in/email", route => {
+    const status = statuses.shift()!;
+    return route.fulfill({ status, json: { code: status === 403 ? "EMAIL_NOT_VERIFIED" : "ERROR", message: "private-detail" } });
+  });
+  let resent: unknown;
+  await page.route("**/api/auth/send-verification-email", async route => {
+    resent = route.request().postDataJSON();
+    await route.fulfill({ json: { status: true } });
+  });
+  await page.goto("/login");
+  await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
+  await page.getByLabel("Password", { exact: true }).fill("a long enough password");
+  await page.keyboard.press("Enter");
+  const alert = page.locator(".auth-panel [role='alert']");
+  await expect(alert).toHaveText("Incorrect email or password.");
+  await page.keyboard.press("Enter");
+  await expect(alert).toContainText("Too many attempts");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await expect(page.getByText("private-detail")).toHaveCount(0);
+  await page.getByRole("button", { name: "Resend verification email" }).click();
+  await expect(page.getByRole("status")).toContainText("a new email is on its way");
+  expect(resent).toMatchObject({ email: "person@example.invalid", callbackURL: "/dashboard" });
+});
+
+test("sign-up validates the password and then asks the user to check their email", async ({ page }) => {
+  let body: Record<string, unknown> = {};
+  await page.route("**/api/auth/sign-up/email", async route => {
+    body = route.request().postDataJSON();
+    await route.fulfill({ json: { token: null, user: {} } });
+  });
+  await page.goto("/signup");
+  await page.getByLabel("Name", { exact: true }).fill("Person");
+  await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
+  await page.getByLabel("Password", { exact: true }).fill("short");
+  await page.getByRole("button", { name: "Sign up" }).click();
+  expect(await page.getByLabel("Password", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
+  await page.getByLabel("Password", { exact: true }).fill("a long enough password");
+  await page.getByRole("button", { name: "Sign up" }).click();
+  await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  expect(body).toMatchObject({ name: "Person", email: "person@example.invalid", callbackURL: "/dashboard" });
+});
+
+test("forgot password never reveals whether an account exists", async ({ page }) => {
+  await page.route("**/api/auth/request-password-reset", route => route.fulfill({ json: { status: true } }));
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+  await page.getByLabel("Email", { exact: true }).fill("anyone@example.invalid");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+  await expect(page.getByRole("status")).toHaveText("If an account uses that email, we sent a link to reset its password.");
+});
+
+test("reset password checks confirmation and handles expired links", async ({ page }) => {
+  await page.route("**/api/auth/reset-password", route => route.fulfill({ status: 400, json: { code: "INVALID_TOKEN" } }));
+  await page.goto("/reset-password?token=test-token");
+  await page.getByLabel("New password", { exact: true }).fill("a long enough password");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("a different long password");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("The passwords do not match.");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("a long enough password");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+  await page.goto("/reset-password?error=INVALID_TOKEN");
+  await expect(page.getByRole("link", { name: "Request a new link" })).toBeVisible();
+});
+
+test("account page requires sign-in", async ({ page }) => {
+  await page.goto("/account");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("linking errors show fixed guidance", async ({ page }) => {
+  await page.goto("/auth/error?error=account_already_linked_to_different_user");
+  await expect(page.getByText("already linked to a different SpecThread account")).toBeVisible();
+  await page.goto("/auth/error?error=account_not_linked");
+  await expect(page.getByText("An account with this email already exists.")).toBeVisible();
 });
