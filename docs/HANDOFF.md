@@ -1,5 +1,52 @@
 # Shared handoff
 
+## Current task: Resolve PR #7 conflicts with main (2026-09-26)
+
+- Branch: `scaffolding`; merge of `origin/main` (`077b80d`) is resolved locally
+  and remains uncommitted.
+- Completed: combined the scaffold's `AppFrame` and session redirects with the
+  email, Google, and GitHub auth forms from main. Account navigation now opens
+  `/account`. Preserved the local docstring review note below, reconciled the
+  architecture summary, and assigned unique ADR numbers 015 through 020.
+- Changed files: merge updates across web auth, tests, and docs; manual conflict
+  resolutions in `app/web/src/app/layout.tsx`, `app/web/src/app/{login,signup}/page.tsx`,
+  and `docs/{ARCHITECTURE,HANDOFF}.md`, plus account links,
+  `docs/DECISIONS.md`, and `tests/e2e/auth.spec.ts`.
+- Decision: retain the scaffold's route structure and preview while adopting
+  main's newer sign-in methods and account management.
+- Verification: `npm run lint`, `npm run typecheck`, and `npm test` passed (81
+  tests). The focused active-session navigation test passed after its account
+  link assertion was added. The test runner logged a database disconnect during
+  disposable database teardown after the tests passed.
+- Known limits: the resolution is local until committed and pushed. Deployment
+  still needs the email configuration described in `docs/DEPLOYMENT.md`; live
+  OAuth and email flows remain unverified here.
+- Exact next step: review the staged merge resolution, then commit and push it
+  only with explicit user approval; GitHub PR #7 requires the updated branch
+  before it can be merged into `main` through the PR.
+
+## Current task: Review PR docstring coverage (2026-09-26)
+
+- Branch: `scaffolding`; CodeRabbit committed the docstring update as `f898fef`.
+- Completed: reviewed the generated JSDoc across 82 frontend files and
+  synchronized the local branch with that commit. Route-page comments identify
+  placeholders; shared-component and route-helper comments describe behavior
+  and sample-data limits.
+- Changed files: CodeRabbit changed frontend pages, shared components, and
+  `app/web/src/lib/scaffold-routes.ts`; this handoff is the only local edit.
+- Decision: keep the documentation update on the existing PR. It does not
+  change runtime behavior.
+- Verification: `npm run lint`, `npm run typecheck`, and
+  `git diff --check 3e0517e..HEAD` passed locally. The PR `verify` workflow
+  passed on `f898fef`.
+- Known limits: CodeRabbit's 0% pre-merge comment is stale because its next
+  review was skipped pending manual review; the updated percentage is unverified.
+  A separate CodeRabbit task for two review comments reported that its changes
+  were ready but delivery needed attention; no second commit reached this branch.
+- Exact next step: obtain a fresh CodeRabbit review for the docstring metric,
+  inspect the separate task's delivery issue, and commit this handoff only with
+  user approval.
+
 ## Current task: Fix scaffold navigation test after landing redesign (2026-09-26)
 
 - Branch: `scaffolding`.
@@ -110,7 +157,7 @@
   `tests/e2e/{home,scaffold,auth}.spec.ts`, `docs/assets/thread-mark-source.png`,
   `docs/dashboard-qa/` (the QA report and three image artifacts),
   `scripts/process-thread-mark.py`, and `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
-- Decisions: ADR-018 records the shared shell and public sample preview. Added
+- Decisions: ADR-020 records the shared shell and public sample preview. Added
   `lucide-react` because the web app had no reusable icon set; no API, schema,
   session, or authorization behavior changed. The transparent brand mark is
   produced from `docs/assets/thread-mark-source.png` with
@@ -150,7 +197,7 @@
 - Changed files: `app/web/src/{lib/scaffold-routes.ts,components/{scaffold-navigation,main-navigation,scaffold-page}.tsx,app/{layout,dashboard/page,login/page,signup/page,settings/page}.tsx}`;
   `playwright.config.ts`; `tests/e2e/{auth,home,scaffold}.spec.ts`;
   `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
-- Decision: ADR-017 records navigation and session redirect semantics. A
+- Decision: ADR-019 records navigation and session redirect semantics. A
   per-run random test secret is shared across Playwright workers so the
   disposable session test uses the same secret as the test web server.
 - Verification: `npm run lint` and `npm run typecheck` passed. Final `npm test`
@@ -178,7 +225,7 @@
 - Changed files: `app/web/src/app/about/`, removed top-level information and
   search `page.tsx` files, updated project placeholder pages and root layout,
   `tests/e2e/scaffold.spec.ts`, and `docs/{PROJECT,DECISIONS,TESTING,HANDOFF}.md`.
-- Decision: ADR-016 records the route hierarchy. The user selected the About
+- Decision: ADR-018 records the route hierarchy. The user selected the About
   hub with separate child URLs. Search remains a possible control within list
   pages, with no global search route. No data-model or API contract was changed.
 - Verification: `npm run lint` and `npm run typecheck` passed. `npm test` passed
@@ -227,9 +274,50 @@
   this branch uncommitted until the user approves a commit; use a pull request
   for any merge into `main`.
 
+## Current task: Email/password and Google sign-in with account linking (2026-09-25)
+
+- Branch: feature/email-google-auth (from main). Committed and opened as a PR. Nothing deployed; no database schema changes.
+  - Independent of the open feature/api-jwt-validation PR, which uses ADR-015. This task uses ADR-016.
+  - Restored app/web/.env.example from main to document the new variables. The app/api/.env.example working-tree deletion was left untouched.
+- Completed:
+  - Better Auth email/password sign-in: verification required, 12-character minimum, verify links sign in, single-use reset links that revoke sessions.
+  - Google sign-in, enabled only when configured. GitHub sign-in kept.
+  - `/account` shows the profile and lets users link or unlink Google and GitHub, and sign out.
+  - Unlinking must leave a usable method, meaning email/password or a provider enabled in this deployment. Enforced both in the UI and by a server hook on `/unlink-account` (PR review follow-up).
+  - New `/forgot-password` and `/reset-password` pages; login and signup forms; fixed linking error messages; an Account nav link.
+  - Email is sent through Resend with `fetch`, or logged on loopback only with `EMAIL_DELIVERY=log`.
+- Changed files:
+  - Web library: app/web/src/lib/{auth-config.ts,create-auth.ts,email.ts}
+  - Web components: app/web/src/components/{auth-form.tsx,password-forms.tsx,account-panel.tsx}; auth-placeholder.tsx removed
+  - Web pages: app/web/src/app/{login,signup,forgot-password,reset-password,account,auth/error}/page.tsx, layout.tsx, globals.css
+  - Config: app/web/.env.example, playwright.config.ts
+  - Tests: tests/api/auth-config.spec.ts, tests/e2e/{auth,home}.spec.ts, tests/schema/{auth-email,auth-runtime}.spec.ts
+  - Docs: README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-016.
+  - Implicit linking by email keeps Better Auth's default: both the provider and the local account must have verified the email.
+  - Explicit linking allows a GitHub or Google email that differs from the account email.
+  - Duplicate sign-up and reset requests give the same response, so they don't reveal which emails exist.
+  - No migration was needed; the existing tables cover it.
+- Verification:
+  - `npm run lint`: passed. `npm run typecheck`: passed.
+  - `npm test`: 48 passed, including 5 new schema flow tests, 7 new browser tests and 2 new config tests.
+  - `npm run build`: passes with `EMAIL_DELIVERY=log`. It fails explicitly without Resend settings, as designed.
+  - `git diff --check`: passed.
+  - Manual: a real Resend verification email from mail.spec-thread.com was received locally. The web app pointed at the shared Supabase database during this test, so test sign-ups exist there.
+- Known issues or risks:
+  - **Vercel deploys now fail until `RESEND_API_KEY` and `EMAIL_FROM` are set.** Google needs `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+  - Local `.env.local` needs `EMAIL_DELIVERY=log`, or Resend settings.
+  - The team GitHub App is private, so non-owners get a 404 until it is made public (DEPLOYMENT.md).
+  - Not automated, so still to be verified manually: real Google and GitHub linking callbacks, implicit linking, and Resend delivery.
+  - Unlinking requires a recent sign-in (Better Auth's fresh-session rule).
+  - After sign-in, users still land on the public dashboard preview.
+- Exact next step:
+  - Before merging, a teammate with Vercel access sets `RESEND_API_KEY`, `EMAIL_FROM` (sender on mail.spec-thread.com) and, optionally, the Google credentials, and makes the GitHub App public.
+  - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
+
 ## Current task: API JWT validation (2026-09-23)
 
-- Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
+- Branch: feature/api-jwt-validation, merged into main through PR #5 (840ed6a). Nothing was deployed and no Supabase changes were made.
   - better-auth stays pinned to exactly 1.7.5. A commit loosening it to ^1.7.5 (fe77b92) was reverted in 7188a73, because the key-selection behavior behind the rollout was verified only against 1.7.5.
   - Deleted app/web/.env.example and app/api/.env.example remain uncommitted in the working tree. They predate this task and are not part of it.
 - Completed:
@@ -258,7 +346,7 @@
   - The API's key refresh depends on the web app's availability.
   - No web code sends tokens to the API yet.
   - Project membership checks are not implemented.
-- Exact next step: push feature/api-jwt-validation and open a PR to main. The PR must describe the new `Auth__Issuer` setting and the ordered rollout in DEPLOYMENT.md. After that, implement project membership authorization.
+- Exact next step: carry out the ordered rollout in DEPLOYMENT.md (deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render). After that, implement project membership authorization.
   - Team follow-ups:
     - Make the GitHub App public if non-owners will sign in on Vercel.
     - Consider trimming the JWT payload to the user id with Better Auth's `definePayload`. By default the token carries name, email, and avatar URL.

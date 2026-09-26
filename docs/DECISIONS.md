@@ -197,7 +197,46 @@ but fails requests that present a token with an explicit configuration error.
 Existing EdDSA keys must be expired once after deploying the web change, or
 Better Auth keeps signing with them (DEPLOYMENT.md). Project membership, role
 rules, and callers sending tokens from the web app remain separate work.
-ADR-015: Validate auth inputs early and encrypt newly stored OAuth tokens
+
+ADR-016: Email/password and Google sign-in with account linking
+
+Status: Accepted
+
+Context: The team decided SpecThread accounts should not depend on GitHub alone.
+Users need traditional sign-in and Google sign-in, and must be able to connect
+GitHub to an existing account. (ADR-015 is used by the separate API JWT
+validation change.)
+
+Decision: Enable Better Auth 1.7.5 email/password sign-in with required email
+verification before sign-in, a 12-character minimum password, verification links
+that sign the user in, single-use reset links, and session revocation on reset.
+Keep GitHub sign-in and add Google; each social provider is enabled only when both
+its client ID and secret are set. Signed-in users link or unlink Google and GitHub
+from /account. Unlinking must leave at least one usable method: email/password or
+a provider enabled in this deployment. The account page and a server-side
+account delete hook, scoped to /unlink-account, both enforce this; Better Auth
+alone only refuses to remove the last linked account. Unlinking requires a
+recent sign-in. Implicit linking by matching email keeps Better Auth's
+default: the provider must verify the email and the local email must be verified;
+no provider is trusted to bypass this. Explicit linking allows a provider email
+that differs from the account email (allowDifferentEmails), because the user is
+already signed in and completes the provider's OAuth. Duplicate sign-ups and reset
+requests answer identically, so they do not reveal which emails have accounts.
+
+Email is sent through Resend's HTTP API with fetch; no new package. RESEND_API_KEY
+and EMAIL_FROM are required unless EMAIL_DELIVERY=log, which prints messages
+(including one-time links) to the server console and is accepted only for a
+loopback BETTER_AUTH_URL, for local development and tests.
+
+Consequences: No database migration; the existing account, user, and verification
+tables already hold credentials, verification state, and links. Deployments need
+Resend and Google configuration before shipping (DEPLOYMENT.md). Email delivery
+failures block sign-up verification and resets until fixed. The team GitHub App is
+private, so non-owners cannot use it for sign-in or linking until it is made public
+or replaced with an OAuth App. Two-factor authentication, email changes, and
+account deletion remain out of scope.
+
+ADR-017: Validate auth inputs early and encrypt newly stored OAuth tokens
 
 Status: Accepted
 
@@ -214,7 +253,7 @@ configuration now fails early without exposing values. Encryption does not
 backfill historical plaintext tokens. Deployment must retain the encryption
 secret and option; see DEPLOYMENT.md for compatibility and rollback limitations.
 
-ADR-016: Group informational routes and show personal and team projects together
+ADR-018: Group informational routes and show personal and team projects together
 
 Status: Accepted
 
@@ -235,7 +274,7 @@ authorization are implemented. Team membership, personal-to-team transfers,
 review permissions, and the supporting schema/API contract need separate work.
 No new database field or backend behavior is implied by the scaffold alone.
 
-ADR-017: Navigate the route scaffold and redirect existing sessions
+ADR-019: Navigate the route scaffold and redirect existing sessions
 
 Status: Accepted
 
@@ -257,7 +296,7 @@ browser token or cookie presence, determines the server redirect. Product data
 and authorization still require separate implementation before protected pages
 are exposed.
 
-ADR-018: Share a product shell and show a labeled dashboard preview
+ADR-020: Share a product shell and show a labeled dashboard preview
 
 Status: Accepted
 
@@ -276,7 +315,7 @@ Consequences: Route transitions retain the sidebar and only the central page
 content changes. The preview does not represent account data or claim that
 repository evidence has been collected. Replace sample rows and example team links
 when authorized project APIs are available, and protect product routes before
-showing private data. This supersedes the empty-preview state in ADR-017.
+showing private data. This supersedes the empty-preview state in ADR-019.
 
 ADR-NNN: Title
 

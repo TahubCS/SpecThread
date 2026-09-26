@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { AuthPlaceholder } from "@/components/auth-placeholder";
+import { AuthForm } from "@/components/auth-form";
 import { auth } from "@/lib/auth";
 
 export const metadata: Metadata = { title: "Log in" };
 
 /**
- * Renders the GitHub login screen when the request has no valid session;
+ * Renders the login screen when the request has no valid session;
  * otherwise redirects to /dashboard. Session lookup may refresh stored sessions
  * or remove expired ones.
  *
@@ -16,5 +16,5 @@ export const metadata: Metadata = { title: "Log in" };
 export default async function LoginPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (session) redirect("/dashboard");
-  return <AuthPlaceholder />;
+  return <AuthForm />;
 }

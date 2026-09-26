@@ -136,7 +136,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <div className="app-sidebar-bottom">
           {link("/settings", "Settings", Settings)}
           {!isPending && (session ? (
-            <Link className="app-account-link" href="/settings/account">Account</Link>
+            <Link className="app-account-link" href="/account">Account</Link>
           ) : (
             <Link className="app-account-link" href="/login"><LogIn size={15} aria-hidden="true" /> Log in</Link>
           ))}

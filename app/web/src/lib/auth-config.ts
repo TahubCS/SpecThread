@@ -65,7 +65,32 @@ export function readAuthConfig(env: Environment) {
   return {
     secret, baseURL: origin.origin, trustedOrigins: [origin.origin], pool,
     ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
-    github: { clientId, clientSecret, enabled: Boolean(clientId && clientSecret) },
     dashboardApiKey: env.BETTER_AUTH_API_KEY?.trim() || undefined,
+    email: readEmailConfig(env, loopback(origin.hostname)),
+    github: readProvider(env, "GITHUB"),
+    google: readProvider(env, "GOOGLE"),
   };
+}
+
+export type EmailConfig =
+  | { delivery: "resend"; apiKey: string; from: string }
+  | { delivery: "log" };
+
+// Verification and reset links carry tokens, so logging them is allowed only for
+// a loopback BETTER_AUTH_URL (local development and tests). See ADR-016.
+function readEmailConfig(env: Environment, loopbackOrigin: boolean): EmailConfig {
+  const delivery = env.EMAIL_DELIVERY?.trim() || "resend";
+  if (delivery === "log") {
+    if (!loopbackOrigin) throw new Error("EMAIL_DELIVERY=log is allowed only when BETTER_AUTH_URL is a loopback origin.");
+    return { delivery };
+  }
+  if (delivery !== "resend") throw new Error("EMAIL_DELIVERY must be resend or log.");
+  return { delivery, apiKey: required(env, "RESEND_API_KEY"), from: required(env, "EMAIL_FROM") };
+}
+
+// A social provider is enabled only when both its client ID and secret are set.
+function readProvider(env: Environment, prefix: "GITHUB" | "GOOGLE") {
+  const clientId = env[`${prefix}_CLIENT_ID`]?.trim() || "";
+  const clientSecret = env[`${prefix}_CLIENT_SECRET`]?.trim() || "";
+  return { clientId, clientSecret, enabled: Boolean(clientId && clientSecret) };
 }

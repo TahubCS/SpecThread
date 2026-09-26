@@ -56,7 +56,7 @@ export function MainNavigation() {
       <Link href="/notifications">Notifications</Link>
       <Link href="/settings">Settings</Link>
       {!isPending && (session ? (
-        <Link href="/settings/account">Account</Link>
+        <Link href="/account">Account</Link>
       ) : (
         <>
           <Link href="/login">Log in</Link>

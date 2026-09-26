@@ -41,11 +41,15 @@ npm run dev:api   # API: http://127.0.0.1:5100
 local web app, e.g. `dotnet user-secrets set Auth:Issuer http://localhost:3000 --project app/api`
 (ADR-015).
 Development OpenAPI is at `http://127.0.0.1:5100/openapi/v1.json`.
-Better Auth with GitHub OAuth is wired into Next.js; EF models and the initial
-migration exist. C# JWT validation and product endpoints remain unimplemented.
+Better Auth (email/password, Google, and GitHub) is wired into Next.js; EF models and
+migrations exist, and the API validates Better Auth JWTs. Project membership checks
+and product endpoints remain unimplemented.
 
-The web skeleton has `/`, `/login`, `/signup`, and `/dashboard`. Login and signup
-provide GitHub sign-in; the dashboard is an explicitly public, empty preview.
+The web app has `/`, `/login`, `/signup`, `/forgot-password`, `/reset-password`,
+`/account`, and `/dashboard`. Login and signup offer email/password, Google, and
+GitHub; `/account` links sign-in methods. The dashboard is an explicitly public,
+empty preview. For local development without Resend, set `EMAIL_DELIVERY=log` in
+app/web/.env.local to print verification and reset links in the dev server console.
 Configure app/web/.env.local using its .env.example before running or building
 the web app. Required auth configuration and certificate trust are documented in
 [DEPLOYMENT.md](docs/DEPLOYMENT.md). No product data is displayed yet.
