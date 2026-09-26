@@ -14,6 +14,7 @@ export function createEmailSender(config: EmailConfig): SendEmail {
       method: "POST",
       headers: { authorization: `Bearer ${config.apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({ from: config.from, ...message }),
+      signal: AbortSignal.timeout(10_000),
     });
     // Never log the message body or key: they contain one-time links and credentials.
     if (!response.ok) throw new Error(`Email delivery failed with status ${response.status}.`);
