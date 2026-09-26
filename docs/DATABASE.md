@@ -13,8 +13,8 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps five Better Auth tables and four product tables in
-`public`, with the InitialSchema migration. Startup never calls `EnsureCreated`, `Migrate`, or a database
+`SpecThreadDbContext` maps six Better Auth tables and four product tables in
+`public`, with the InitialSchema and AuthRateLimits migrations. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.

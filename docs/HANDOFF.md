@@ -42,7 +42,7 @@
   - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
 ## Current task: API JWT validation (2026-09-23)
 
-- Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
+- Branch: feature/api-jwt-validation, merged into main through PR #5 (840ed6a). Nothing was deployed and no Supabase changes were made.
   - better-auth stays pinned to exactly 1.7.5. A commit loosening it to ^1.7.5 (fe77b92) was reverted in 7188a73, because the key-selection behavior behind the rollout was verified only against 1.7.5.
   - Deleted app/web/.env.example and app/api/.env.example remain uncommitted in the working tree. They predate this task and are not part of it.
 - Completed:
@@ -71,7 +71,7 @@
   - The API's key refresh depends on the web app's availability.
   - No web code sends tokens to the API yet.
   - Project membership checks are not implemented.
-- Exact next step: push feature/api-jwt-validation and open a PR to main. The PR must describe the new `Auth__Issuer` setting and the ordered rollout in DEPLOYMENT.md. After that, implement project membership authorization.
+- Exact next step: carry out the ordered rollout in DEPLOYMENT.md (deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render). After that, implement project membership authorization.
   - Team follow-ups:
     - Make the GitHub App public if non-owners will sign in on Vercel.
     - Consider trimming the JWT payload to the user id with Better Auth's `definePayload`. By default the token carries name, email, and avatar URL.
