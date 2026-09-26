@@ -42,7 +42,8 @@ export function createAuth(env: Record<string, string | undefined>, overrides: {
       accountLinking: { enabled: true, trustedProviders: [], allowDifferentEmails: true },
     },
     plugins: [
-      jwt(),
+      // ES256 so the ASP.NET API can validate tokens natively (ADR-015).
+      jwt({ jwks: { keyPairConfig: { alg: "ES256" } } }),
       ...(config.dashboardApiKey ? [dash({ apiKey: config.dashboardApiKey })] : []),
     ],
     advanced: {

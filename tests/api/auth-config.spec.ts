@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { betterAuth } from "better-auth";
 import { readAuthConfig } from "../../app/web/src/lib/auth-config";
+import { readFileSync } from "node:fs";
+
+const certificate = readFileSync("app/api/certs/prod-ca-2021.crt", "utf8").trim();
 
 const env = {
   BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
@@ -65,8 +68,8 @@ test("auth trusts only the configured origin and dashboard integration is opt-in
 });
 
 test("remote PostgreSQL requires verified TLS and URL parameters cannot override it", () => {
-  const config = readAuthConfig({ ...env, DATABASE_CA_CERT: "certificate\\ncontents" });
-  expect(config.pool.ssl).toEqual({ rejectUnauthorized: true, ca: "certificate\ncontents" });
+  const config = readAuthConfig({ ...env, DATABASE_CA_CERT: certificate.replace(/\r?\n/g, "\\n") });
+  expect(config.pool.ssl).toEqual({ rejectUnauthorized: true, ca: certificate.replace(/\r\n/g, "\n") });
   expect(config.pool.connectionString).not.toContain("sslmode");
   for (const query of ["sslmode=no-verify", "sslmode=disable", "ssl=false", "sslrootcert=untrusted", "host=localhost"]) {
     expect(() => readAuthConfig({ ...env, DATABASE_URL: `postgres://user:password@db.example/postgres?${query}` })).toThrow(/DATABASE_URL supports only/);
@@ -90,4 +93,20 @@ test("social providers are enabled only with both client ID and secret", () => {
   expect(config.google).toEqual({ clientId: "google-id", clientSecret: "google-secret", enabled: true });
   expect(config.github.enabled).toBe(false);
   expect(readAuthConfig(env).google.enabled).toBe(false);
+test("auth validates complete CA certificates and bundles without leaking input", () => {
+  expect(readAuthConfig({ ...env, DATABASE_CA_CERT: certificate }).pool.ssl).toEqual({ rejectUnauthorized: true, ca: certificate });
+  const bundle = `${certificate}\n${certificate}`;
+  expect(readAuthConfig({ ...env, DATABASE_CA_CERT: bundle }).pool.ssl).toEqual({ rejectUnauthorized: true, ca: bundle });
+  for (const invalid of ["C:/private/certs/root.crt", "-----BEGIN CERTIFICATE-----", certificate.replace(/\r?\n/g, ""), `${certificate}\n-----BEGIN CERTIFICATE-----`, "-----BEGIN CERTIFICATE-----\nprivate-invalid-input\n-----END CERTIFICATE-----"]) {
+    expect(() => readAuthConfig({ ...env, DATABASE_CA_CERT: invalid })).toThrow("DATABASE_CA_CERT must contain complete PEM certificate contents with preserved newlines, not a file path.");
+  }
+});
+
+test("GitHub credentials are trimmed and must be configured together", () => {
+  expect(readAuthConfig(env).github.enabled).toBe(false);
+  expect(readAuthConfig({ ...env, GITHUB_CLIENT_ID: "  ", GITHUB_CLIENT_SECRET: "\n" }).github.enabled).toBe(false);
+  expect(readAuthConfig({ ...env, GITHUB_CLIENT_ID: " test-client ", GITHUB_CLIENT_SECRET: " test-secret\n" }).github).toEqual({ clientId: "test-client", clientSecret: "test-secret", enabled: true });
+  for (const partial of [{ GITHUB_CLIENT_ID: "private-client-value" }, { GITHUB_CLIENT_SECRET: "private-secret-value" }, { GITHUB_CLIENT_ID: "test-client", GITHUB_CLIENT_SECRET: " " }]) {
+    expect(() => readAuthConfig({ ...env, ...partial })).toThrow("Configure both GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET, or leave both empty to disable GitHub sign-in.");
+  }
 });

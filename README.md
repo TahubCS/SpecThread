@@ -37,6 +37,9 @@ npm run dev:api   # API: http://127.0.0.1:5100
 ```
 
 `GET /health` returns `{ "status": "ok" }` without accessing the database.
+`GET /me` requires a Better Auth JWT. For local development, point the API at the
+local web app, e.g. `dotnet user-secrets set Auth:Issuer http://localhost:3000 --project app/api`
+(ADR-015).
 Development OpenAPI is at `http://127.0.0.1:5100/openapi/v1.json`.
 Better Auth (email/password, Google, and GitHub) is wired into Next.js; EF models and the initial
 migration exist. C# JWT validation and product endpoints remain unimplemented.

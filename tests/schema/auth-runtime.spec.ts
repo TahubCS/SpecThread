@@ -121,6 +121,47 @@ test("joins preserve valid, expired and revoked session behavior", async ({}, te
   expect(await context.internalAdapter.findSession(active!.token)).toBeNull();
 });
 
+test("OAuth stores encrypted tokens, reads legacy GitHub tokens, and rejects corrupt ciphertext", async () => {
+  const { auth } = instance();
+  const context = await auth.$context;
+  const provider = context.socialProviders.find(value => value.id === "github")!;
+  // Exercise the real callback/storage pipeline without sending credentials to GitHub.
+  const accessToken = "gho_test_access_token_never_sent_to_github";
+  const refreshToken = "ghr_test_refresh_token_never_sent_to_github";
+  provider.validateAuthorizationCode = async () => ({ accessToken, refreshToken, accessTokenExpiresAt: new Date(Date.now() + 3_600_000) });
+  provider.getUserInfo = async () => ({ user: { name: "OAuth test", email: "encrypted@example.invalid", emailVerified: true }, data: { id: 1234567890 } });
+  const start = await auth.handler(request("/sign-in/social", "192.0.2.84", { provider: "github", callbackURL: "/dashboard", errorCallbackURL: "/auth/error" }));
+  expect(start.status).toBe(200);
+  const state = new URL((await start.json()).url).searchParams.get("state")!;
+  const callback = request(`/callback/github?state=${encodeURIComponent(state)}&code=test-code`, "192.0.2.84");
+  callback.headers.set("cookie", start.headers.getSetCookie().map(value => value.split(";")[0]).join("; "));
+  const result = await auth.handler(callback);
+  expect(result.status).toBe(302);
+  expect(new URL(result.headers.get("location")!, baseURL).pathname).toBe("/dashboard");
+  const cookie = result.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
+  const { rows: [account] } = await database.pool.query('SELECT id,"accessToken","refreshToken" FROM account WHERE "accountId"=$1', ["1234567890"]);
+  expect(account.accessToken).not.toBe(accessToken);
+  expect(account.refreshToken).not.toBe(refreshToken);
+  const { symmetricDecrypt } = await import("better-auth/crypto");
+  expect(await symmetricDecrypt({ key: context.secretConfig, data: account.accessToken })).toBe(accessToken);
+  expect(await symmetricDecrypt({ key: context.secretConfig, data: account.refreshToken })).toBe(refreshToken);
+  const getToken = () => {
+    const req = request("/get-access-token", "192.0.2.84", { accountId: account.id });
+    req.headers.set("cookie", cookie);
+    return auth.handler(req);
+  };
+  const encryptedResponse = await getToken();
+  const tokenResult = await encryptedResponse.json();
+  expect(encryptedResponse.status, tokenResult.code).toBe(200);
+  expect(tokenResult.accessToken).toBe(accessToken);
+  await database.pool.query('UPDATE account SET "accessToken"=$1 WHERE id=$2', [accessToken, account.id]);
+  expect((await (await getToken()).json()).accessToken).toBe(accessToken);
+  await database.pool.query('UPDATE account SET "accessToken"=$1 WHERE id=$2', ["$ba$0$invalid-ciphertext", account.id]);
+  const corrupt = await getToken();
+  expect(corrupt.ok).toBe(false);
+  expect(await corrupt.text()).not.toContain("invalid-ciphertext");
+});
+
 test("rate-limit rollback preserves existing auth tables and can be reapplied", async () => {
   const readSql = async (path: string) => (await readFile(path, "utf8")).replace(/^\uFEFF/, "");
   await database.pool.query(await readSql("docs/schema/auth-rate-limits-rollback.sql"));

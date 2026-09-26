@@ -52,6 +52,24 @@ longer used. URL query parameters are rejected except `sslmode=require` and
 `sslmode=verify-full`, which are removed before passing the URL to pg so they
 cannot replace the explicit certificate-verification options.
 
+CA values are parsed before creating the database pool. A partial, flattened, or
+invalid PEM now produces an actionable DATABASE_CA_CERT configuration error
+without printing its contents. Multiple complete PEM certificates are supported.
+This validates the format; the TLS handshake still verifies the server's chain.
+
+Set both GitHub credential variables together. Values are trimmed; a partial pair
+fails explicitly. Leaving both blank deliberately disables GitHub for offline
+tests. No new environment variables are required.
+
+OAuth access and refresh tokens written through Better Auth are encrypted with
+the auth secret. Existing prefixed plaintext GitHub tokens remain readable in
+Better Auth 1.7.5, but enabling encryption does not rewrite existing rows or backups.
+Reauthentication refreshes the stored tokens; older hex-only tokens may require
+reauthentication because the library detects them as encrypted data. Keep the
+current secret available: replacing it can make encrypted tokens unreadable.
+Do not roll back to a version with encryption disabled after encrypted tokens
+have been stored; keep the option enabled or arrange explicit reauthentication.
+
 The dashboard plugin is disabled when `BETTER_AUTH_API_KEY` is absent. Rotate the
 previously committed dashboard key in Better Auth before using this integration;
 removing the source fallback does not revoke it. If a deployment used the old
@@ -145,7 +163,7 @@ The ASP.NET Core Web API is packaged as an unprivileged, multi-stage Linux conta
 1. In the Render Dashboard, click **New > Blueprint**.
 2. Connect the **SpecThread** repository.
 3. Render will detect [`render.yaml`](../render.yaml) and configure the `specthread-api` web service automatically.
-4. Enter the required secret value for `ConnectionStrings__Database`.
+4. Enter the required values for `ConnectionStrings__Database` and `Auth__Issuer` (the web app's exact origin, e.g. `https://web-alpha-lovat-61.vercel.app`, no trailing slash).
 5. Click **Apply**.
 
 ### Method B: Manual Web Service Setup
@@ -161,6 +179,7 @@ The ASP.NET Core Web API is packaged as an unprivileged, multi-stage Linux conta
    * **Health Check Path**: `/health` (returns `{"status":"ok"}`)
    * **Environment Variables**:
      * `ASPNETCORE_ENVIRONMENT`: `Production`
+     * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://web-alpha-lovat-61.vercel.app`). Required for authenticated endpoints; see ADR-015.
      * `ConnectionStrings__Database`: Your Supabase Npgsql connection string (e.g. `Host=aws-0-us-west-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.hgcjtecsglksdbsmtcxt;Password=<PASSWORD>;SSL Mode=VerifyFull;`)
 5. Click **Deploy Web Service**.
 
@@ -169,6 +188,26 @@ The Supabase PostgreSQL cluster uses the `Supabase Root 2021 CA`. To support str
 - The public root CA certificate is stored in `app/api/certs/prod-ca-2021.crt`.
 - The Docker runtime image automatically copies this certificate to `/usr/local/share/ca-certificates/supabase-root-2021.crt` and executes `update-ca-certificates`.
 - Linux OpenSSL and .NET `X509Chain` trust the certificate natively from `/etc/ssl/certs/ca-certificates.crt`. No `Root Certificate=` parameter is needed in your Render connection string.
+
+### API token validation rollout (ADR-015)
+
+Better Auth falls back to its newest live key, so a deployment that already
+minted an EdDSA key keeps issuing EdDSA tokens after the ES256 change. In order:
+
+1. Deploy the web change.
+2. Once, with approval, expire the EdDSA keys in Supabase. Do this only after
+   step 1: the previous web code mints a new EdDSA key on its next session check.
+   ```sql
+   UPDATE public.jwks SET "expiresAt" = now() WHERE alg IS NULL OR alg = 'EdDSA';
+   ```
+3. Set `Auth__Issuer` on Render and deploy the API.
+
+The next token request mints an ES256 key. Expired keys stay published for Better
+Auth's 30-day grace period and the API ignores them. Tokens last 15 minutes and no
+client sent them to the API before this change, so users need not sign in again.
+The schema test tests/schema/auth-jwt-runtime.spec.ts exercises this step.
+Rollback: revert the web and API changes. Better Auth then keeps signing with the
+ES256 key, its newest live key, which is harmless while no other client uses tokens.
 
 ---
 
@@ -189,3 +228,10 @@ The Supabase PostgreSQL cluster uses the `Supabase Root 2021 CA`. To support str
   curl https://your-render-service.onrender.com/health
   ```
   Expected: `{"status":"ok"}`.
+- Test token validation: sign in on the web app, request a token from
+  `https://your-app.vercel.app/api/auth/token` in the same browser session, then:
+  ```sh
+  curl -H "Authorization: Bearer <token>" https://your-render-service.onrender.com/me
+  ```
+  Expected: `{"userId":"..."}`. Without the header, expect `401`. Never paste
+  tokens into shared logs or chat.

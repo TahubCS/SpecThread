@@ -39,6 +39,81 @@
 - Exact next step:
   - Before merging, a teammate with Vercel access sets `RESEND_API_KEY`, `EMAIL_FROM` (sender on mail.spec-thread.com) and, optionally, the Google credentials, and makes the GitHub App public.
   - Still to verify manually: verify link then password login, password reset, linking GitHub or Google from `/account`, and Google sign-in.
+## Current task: API JWT validation (2026-09-23)
+
+- Branch: feature/api-jwt-validation (from main). Committed as db21959, not yet pushed; no PR yet. Nothing was deployed and no Supabase changes were made.
+  - better-auth stays pinned to exactly 1.7.5. A commit loosening it to ^1.7.5 (fe77b92) was reverted in 7188a73, because the key-selection behavior behind the rollout was verified only against 1.7.5.
+  - Deleted app/web/.env.example and app/api/.env.example remain uncommitted in the working tree. They predate this task and are not part of it.
+- Completed:
+  - Better Auth now signs JWTs with ES256 (`app/web/src/lib/create-auth.ts`).
+  - The API validates `Authorization: Bearer` tokens against `{Auth:Issuer}/api/auth/jwks` (`app/api/Auth/`).
+  - Every endpoint requires authentication by default. `/health` and development OpenAPI stay anonymous.
+  - New `GET /me` endpoint returns `{ "userId": sub }`.
+- Changed files:
+  - API: app/api/{Program.cs,SpecThread.Api.csproj,packages.lock.json}, app/api/Auth/{AuthenticationSetup.cs,JwksRetriever.cs}
+  - Web: app/web/src/lib/create-auth.ts
+  - Tests: scripts/start-test-jwks.mjs, playwright.config.ts, tests/api/{auth-jwt,auth-unconfigured,health}.spec.ts, tests/schema/auth-jwt-runtime.spec.ts, tests/support/api-process.ts
+  - Config and docs: render.yaml, README.md, docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md
+- Decisions: ADR-015.
+  - ES256 instead of EdDSA, because .NET can't validate EdDSA without an extra library.
+  - Public keys come from the JWKS endpoint over HTTP, not from the jwks table.
+  - Endpoints are authenticated by default. Anonymous callers now get 401 on unknown routes instead of 404; this changed the existing health.spec test.
+  - `/me` is a proposed contract, and the team may rename it.
+  - Local manual testing needs its own database and GitHub OAuth app: the shared Supabase jwks table still holds EdDSA keys, and the team's GitHub App is private (other GitHub users get a 404 at authorize).
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `npm run build:api` all passed (0 warnings).
+  - `npm test`: 48 passed. Docker Desktop had to be started, and Playwright Chromium and dotnet tools had to be installed or restored locally first.
+  - `git diff --check` passed.
+  - Manual check: local web app on a Docker Postgres with a personal GitHub OAuth app. A real ES256 token returned 200 from `GET /me` with the matching user id; the request without a token returned 401.
+- Known issues or risks:
+  - Production needs the ordered rollout in DEPLOYMENT.md: deploy the web change, expire the EdDSA keys, then set `Auth__Issuer` on Render.
+  - The API's key refresh depends on the web app's availability.
+  - No web code sends tokens to the API yet.
+  - Project membership checks are not implemented.
+- Exact next step: push feature/api-jwt-validation and open a PR to main. The PR must describe the new `Auth__Issuer` setting and the ordered rollout in DEPLOYMENT.md. After that, implement project membership authorization.
+  - Team follow-ups:
+    - Make the GitHub App public if non-owners will sign in on Vercel.
+    - Consider trimming the JWT payload to the user id with Better Auth's `definePayload`. By default the token carries name, email, and avatar URL.
+## Current task: Skill-guided auth configuration improvements (2026-09-21)
+
+- Branch: auth/optimize, explicitly selected; already checked out at task start.
+  Changes grouped into user-authorized skills, test harness, and auth commits.
+  No production deployment, live migration, credential
+  rotation, or existing OAuth-token rewrite was performed.
+- Completed: used better-auth-best-practices and better-auth-security-best-practices,
+  verifying examples against installed 1.7.5 code/types and Context7. Added early
+  PEM parsing (including certificate bundles), trimmed/paired GitHub credentials,
+  and built-in encryption of newly written OAuth tokens. Removed the unused public
+  URL from the env example. Preserved the existing joins, rate limits, error page,
+  exact trusted origins, and verified TLS.
+- Changed files: app/web/.env.example, app/web/src/lib/{auth-config,create-auth}.ts,
+  tests/api/auth-config.spec.ts, tests/schema/auth-runtime.spec.ts,
+  playwright.config.ts, scripts/start-test-web.mjs,
+  docs/{ARCHITECTURE,DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md.
+- Verification exposed an existing harness defect: globalSetup runs after the
+  webServer entries, so building there tried to overwrite the running API DLL.
+  The first webServer entry now builds the API before the API entry starts.
+- Checks: npm run lint and npm run typecheck passed. Focused auth-runtime schema
+  tests passed 6/6. Final npm test passed 37/37 in 32.0s, with production web and
+  Release API builds. git diff --check passed. Current local env passed config
+  validation without printing values. Initial token retrieval tests were corrected
+  to use 1.7.5's internal account row ID, without providerId, in the HTTP request.
+- Decision: ADR-015; no new dependencies, environment variables, or migrations.
+  Encryption does not backfill historical plaintext. Keep the existing secret
+  and encryption option once ciphertext has been written. Prefixed legacy GitHub
+  tokens are tested; hex-only legacy tokens may need reauthentication.
+- Unverified: real OAuth against GitHub and deployed proxy behavior for this branch;
+  no live Supabase database was touched. Prior handoff deployment/migration claims
+  are historical, not independently reverified here. The existing AuthRateLimits
+  migration is still a deployment prerequisite.
+- User-added canonical .agents/skills files and skills-lock.json are included in
+  the skills commit without content changes. .claude/skills and skills are local
+  Windows junction aliases to those files and remain untracked, avoiding duplicate
+  copies in Git.
+- Exact next step: push auth/optimize and open a PR when requested. Merge into
+  main only through the PR. Before deployment,
+  verify AuthRateLimits is applied, retain BETTER_AUTH_SECRET, and recheck live
+  GitHub sign-in/cancellation using DEPLOYMENT.md.
 
 ## Previous task: Branch protection rules and PR enforcement workflow (2026-09-20)
 

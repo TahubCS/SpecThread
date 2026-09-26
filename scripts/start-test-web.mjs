@@ -1,11 +1,11 @@
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { startTestDatabase } from "./test-database.mjs";
+import buildApi from "./build-api.mjs";
 
-if (!existsSync("app/api/bin/Release/net10.0/SpecThread.Api.dll")) {
-  execFileSync("dotnet", ["build", "app/api", "--configuration", "Release"], { stdio: "inherit" });
-}
+// Playwright starts webServer entries in order, before globalSetup.
+// Build here before the second entry starts the API and locks its DLL on Windows.
+buildApi();
 let database;
 let server;
 let stopping = false;

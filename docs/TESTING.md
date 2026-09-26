@@ -23,7 +23,9 @@ The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
 The test web server and schema project require a running Docker engine and
-postgres:17. scripts/build-api.mjs builds the API in globalSetup before servers start.
+postgres:17. The first webServer entry calls scripts/build-api.mjs before starting
+the second entry (the API). Do not move that build into globalSetup: Playwright
+runs globalSetup after webServer startup, which locks the API DLL on Windows.
 scripts/start-test-web.mjs verifies EF initialization, creates an isolated
 password-protected database on a random loopback port, applies both versioned SQL
 migrations, and builds/starts Next.js with that database. No persistent volume is
@@ -45,7 +47,9 @@ npm run build:api          # Standalone Release API build
 ```
 
 `npm test` builds the web app and the Release API before tests. It starts the
-web app at 127.0.0.1:3100 and the API in Development at 127.0.0.1:5100. Keep both
+web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
+at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
+issuer. Auth tests also start extra API instances on 5102-5104. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
 or development processes in this checkout: they share app/web/.next. Google Fonts
 currently require network access during the web build.
@@ -56,7 +60,13 @@ currently require network access during the web build.
   GitHub buttons, disabled product actions, and all four routes at mobile width.
   Desktop/mobile screenshots are saved inside the ignored test-results directory.
 - API: health response without database credentials, development OpenAPI, and
-  a 404 for an unimplemented route.
+  unknown routes (401 anonymous, 404 authenticated).
+- API JWT validation: valid tokens identify the user; missing, malformed,
+  expired, wrong-issuer, wrong-audience, no-expiry, unpublished-key, HS256, and
+  alg-none tokens are rejected; missing subjects are forbidden; a missing
+  Auth:Issuer fails explicitly. The test issuer generates keys per run.
+  The schema suite validates a real Better Auth ES256 token against the API after
+  expiring a legacy EdDSA key.
 - EF: PostgreSQL provider initialization using dummy credentials at an unreachable
   local address, and explicit rejection when connection configuration is missing.
   These invoke the local dotnet-ef tool and never connect to Supabase.
@@ -70,6 +80,8 @@ currently require network access during the web build.
   screens with mocked auth responses. Real Google/GitHub linking callbacks and
   Resend delivery are verified manually.
 - Auth: explicit configuration failures, email delivery and provider enablement rules, verified TLS options, restricted origins,
+- Auth: explicit configuration failures, verified TLS options, restricted origins,
+  CA PEM parsing/bundles, complete GitHub credential pairs,
   session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
   retryable HTTP/network failures, provider redirection, and a safe public error page.
 - Schema: migration/rollback in Docker, Better Auth column compatibility, RLS,
@@ -79,6 +91,9 @@ currently require network access during the web build.
   window expiry, real OAuth-state cancellation, session joins, expired/revoked
   sessions, and isolated rate-limit rollback/reapply. Local join timing samples
   are attached to the Playwright report, without asserting a speedup ratio.
+  A simulated successful GitHub callback verifies encrypted access/refresh tokens
+  in PostgreSQL, usable token retrieval, prefixed legacy plaintext compatibility,
+  and rejection of corrupt ciphertext. No real provider credentials are used.
 
 Live OAuth, deployed TLS connectivity, and product flows are not tested. The health
 endpoint is liveness, not database readiness. EF initialization is not proof

@@ -203,6 +203,50 @@ failures block sign-up verification and resets until fixed. The team GitHub App 
 private, so non-owners cannot use it for sign-in or linking until it is made public
 or replaced with an OAuth App. Two-factor authentication, email changes, and
 account deletion remain out of scope.
+ADR-015: Validate Better Auth ES256 JWTs in the API through JWKS
+
+Status: Accepted
+
+Context: The API must identify callers before any product endpoint or project
+membership check can exist. Better Auth's JWT plugin defaults to EdDSA (Ed25519),
+which ASP.NET Core's JwtBearer and IdentityModel cannot validate without an
+additional cryptography dependency. Better Auth publishes a bare JWKS without an
+OpenID discovery document.
+
+Decision: Configure the Better Auth JWT plugin with ES256. The API uses
+Microsoft.AspNetCore.Authentication.JwtBearer and fetches public keys over HTTP from
+{Auth:Issuer}/api/auth/jwks through IdentityModel's cached ConfigurationManager.
+Auth:Issuer (environment Auth__Issuer) is the web app's exact origin: HTTPS, or HTTP
+on loopback. Tokens must be ES256, signed by a published key, unexpired (30-second
+skew), and have iss and aud equal to that origin. The sub claim is the Better Auth
+user id. All endpoints require an authenticated user with a subject unless marked
+AllowAnonymous; /health and development OpenAPI are anonymous. Unknown routes
+return 401 to anonymous callers and 404 to authenticated callers. GET /me returns
+{ "userId": sub } as the smallest verifiable authenticated endpoint.
+
+Consequences: One new direct API package, from the ASP.NET Core release train.
+The API depends on the web app's JWKS endpoint for key refreshes, not the jwks
+table format. A missing or invalid Auth:Issuer keeps the API and /health running
+but fails requests that present a token with an explicit configuration error.
+Existing EdDSA keys must be expired once after deploying the web change, or
+Better Auth keeps signing with them (DEPLOYMENT.md). Project membership, role
+rules, and callers sending tokens from the web app remain separate work.
+ADR-015: Validate auth inputs early and encrypt newly stored OAuth tokens
+
+Status: Accepted
+
+Context: The user requested a skill-guided auth configuration improvement on
+auth/optimize after the earlier configuration work was merged.
+
+Decision: Parse configured CA PEM certificates before constructing the pool;
+trim GitHub credentials and require a complete pair when enabled; use Better
+Auth 1.7.5's built-in account.encryptOAuthTokens for OAuth writes. Keep the
+existing EF schema, secret, exact origins, joins, and shared rate-limit storage.
+
+Consequences: No new dependency, environment variable, or migration. Bad local
+configuration now fails early without exposing values. Encryption does not
+backfill historical plaintext tokens. Deployment must retain the encryption
+secret and option; see DEPLOYMENT.md for compatibility and rollback limitations.
 
 ADR-NNN: Title
 
