@@ -18,7 +18,9 @@ export default function Home() {
       <section className="landing-hero" aria-labelledby="landing-heading">
         <div className="landing-copy">
           <p className="landing-eyebrow">Requirements. Code. Context.</p>
-          <h1 id="landing-heading">Follow the work behind every requirement.</h1>
+          <h1 id="landing-heading">
+            Follow the work behind every requirement<span className="landing-accent">.</span>
+          </h1>
           <p className="landing-lede">
             Trace the issue, code, checks, release, and review in one clear thread.
           </p>
@@ -31,7 +33,6 @@ export default function Home() {
         </div>
 
         <section className="landing-demo" id="product" aria-labelledby="landing-demo-heading">
-          <p className="landing-demo-caption">Example thread</p>
           <div className="landing-demo-header">
             <span>ST-104</span>
             <h2 id="landing-demo-heading">Invite teammates</h2>
@@ -49,7 +50,6 @@ export default function Home() {
               ))}
             </ol>
           </div>
-          <p className="landing-demo-note">Release missing · review pending</p>
         </section>
       </section>
     </div>

@@ -42,6 +42,7 @@
 }
 .landing-eyebrow { margin: 0 0 42px; color: #c8c8cf; font-size: 12px; font-weight: 600; letter-spacing: .27em; text-transform: uppercase; }
 .landing-copy h1 { max-width: 570px; margin: 0; font-size: clamp(48px, 4.35vw, 68px); font-weight: 600; letter-spacing: -.045em; line-height: 1.08; }
+.landing-accent { color: #b5a9f5; }
 .landing-lede { max-width: 540px; margin: 34px 0 0; color: #b6b6bd; font-size: clamp(18px, 1.55vw, 23px); line-height: 1.45; }
 .landing-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 32px; margin-top: 49px; }
 .landing-cta { min-height: 56px; padding: 0 32px; font-size: 16px; }
@@ -49,7 +50,6 @@
 .landing-secondary:hover { color: #e1dcff; }
 
 .landing-demo { min-width: 0; scroll-margin-top: 130px; }
-.landing-demo-caption { margin: 0 0 12px; color: #85858d; font-size: 11px; font-weight: 600; letter-spacing: .11em; text-transform: uppercase; }
 .landing-demo-header { padding-bottom: 24px; border-bottom: 1px solid #3a3a3e; }
 .landing-demo-header > span { color: #aaaab1; font-size: 14px; }
 .landing-demo h2 { margin: 3px 0 0; font-size: 25px; font-weight: 600; letter-spacing: -.02em; }
@@ -63,7 +63,6 @@
 .landing-evidence .is-pending { color: #b1b1b8; }
 .landing-evidence .is-pending .landing-evidence-icon { border-color: #73737a; color: #a0a0a8; }
 .landing-evidence small { color: #acacb3; font-size: 13px; line-height: 1; }
-.landing-demo-note { margin: 25px 0 0; color: #a8a8ae; font-size: 14px; }
 
 .landing-frame .landing-footer { display: flex; align-items: center; max-width: none; min-height: 134px; margin: 0; padding: 28px clamp(24px, 4vw, 60px); border-top: 1px solid #343437; color: #c4c4ca; font-size: 24px; letter-spacing: -.02em; }
 

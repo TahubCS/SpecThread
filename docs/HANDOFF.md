@@ -1,5 +1,15 @@
 # Shared handoff
 
+## Current task: Implement the landing page layout and navigation (2026-09-25)
+
+- Branch: `scaffolding`; follows public page design concepts.
+- Completed: implemented the simplified landing page based on `docs/landing-design/landing-v2.png`, including the dark charcoal hero, lavender accent typography, interactive ST-104 evidence thread demo, dedicated landing navigation with session awareness and mobile menu, and quiet landing footer. Removed leftover v1 demo captions and aligned styling to the v2 concept.
+- Changed files: `app/web/src/app/page.tsx`, `app/web/src/app/landing.css`, `app/web/src/app/layout.tsx`, `app/web/src/components/app-frame.tsx`, `app/web/src/components/main-navigation.tsx`, `tests/e2e/home.spec.ts`, and this handoff.
+- Decisions and assumptions: render `LandingNavigation` and the quiet landing footer specifically when `pathname === "/"`; keep the evidence demo deterministic without client-side mock churn; support narrow screens down to 390px using native `<details>` for mobile navigation.
+- Verification: `npm run typecheck` and `npm run lint` both passed with 0 errors. Home and narrow-screen Playwright tests are defined in `tests/e2e/home.spec.ts` (full browser test execution requires local Docker daemon for Better Auth test database).
+- Known limits: authentication pages (`/login` and `/signup`) remain on the previous scaffold and have not yet been updated to match `docs/landing-design/{login-v2,signup-v2}.png`.
+- Exact next step: review and approve changes, then decide whether to proceed with updating the `/login` and `/signup` authentication pages.
+
 ## Current task: Simplify the public page concepts (2026-09-25)
 
 - Branch: `scaffolding`; no application code was changed.
