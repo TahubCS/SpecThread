@@ -16,7 +16,7 @@ const routes = [
 ] as const;
 
 test("scaffold navigation reaches the main product areas", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/dashboard");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams" }).click();
   await expect(page).toHaveURL(/\/teams$/);
   await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();

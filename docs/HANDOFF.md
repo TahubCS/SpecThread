@@ -1,5 +1,22 @@
 # Shared handoff
 
+## Current task: Fix scaffold navigation test after landing redesign (2026-09-26)
+
+- Branch: `scaffolding`.
+- Completed: start the main product navigation test at `/dashboard`, where the
+  product sidebar containing the Teams link now appears. The public landing page
+  has separate navigation.
+- Changed files: `tests/e2e/scaffold.spec.ts` and this handoff.
+- Decision: preserve the distinct public and product navigation; the test now
+  enters the product area before asserting its links.
+- Verification: `npm run lint` and `npm run typecheck` passed. The focused
+  Playwright test passed (1 test), and `npm test` passed all 64 tests, including
+  web and API test builds. The test runner printed a PostgreSQL disconnect
+  warning during disposable database teardown after the tests passed.
+- Known limits: the CI run for this uncommitted fix has not been observed.
+- Exact next step: review the diff, then commit and push the fix to the open
+  pull request with explicit user approval for the commit.
+
 ## Current task: Implement the landing page layout and navigation (2026-09-25)
 
 - Branch: `scaffolding`; follows public page design concepts.
