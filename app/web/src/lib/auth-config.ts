@@ -65,7 +65,6 @@ export function readAuthConfig(env: Environment) {
   return {
     secret, baseURL: origin.origin, trustedOrigins: [origin.origin], pool,
     ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
-    github: { clientId, clientSecret, enabled: Boolean(clientId && clientSecret) },
     dashboardApiKey: env.BETTER_AUTH_API_KEY?.trim() || undefined,
     email: readEmailConfig(env, loopback(origin.hostname)),
     github: readProvider(env, "GITHUB"),

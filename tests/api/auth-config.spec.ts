@@ -89,10 +89,12 @@ test("email delivery needs Resend settings, and logging links is limited to loop
 });
 
 test("social providers are enabled only with both client ID and secret", () => {
-  const config = readAuthConfig({ ...env, GOOGLE_CLIENT_ID: "google-id", GOOGLE_CLIENT_SECRET: "google-secret", GITHUB_CLIENT_ID: "github-id" });
+  const config = readAuthConfig({ ...env, GOOGLE_CLIENT_ID: "google-id", GOOGLE_CLIENT_SECRET: "google-secret" });
   expect(config.google).toEqual({ clientId: "google-id", clientSecret: "google-secret", enabled: true });
-  expect(config.github.enabled).toBe(false);
+  expect(readAuthConfig({ ...env, GOOGLE_CLIENT_ID: "google-id" }).google.enabled).toBe(false);
   expect(readAuthConfig(env).google.enabled).toBe(false);
+});
+
 test("auth validates complete CA certificates and bundles without leaking input", () => {
   expect(readAuthConfig({ ...env, DATABASE_CA_CERT: certificate }).pool.ssl).toEqual({ rejectUnauthorized: true, ca: certificate });
   const bundle = `${certificate}\n${certificate}`;
