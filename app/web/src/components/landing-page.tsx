@@ -81,6 +81,7 @@ function useInView<T extends Element>(threshold = 0.4) {
 
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 
+/** Subscribes to reduced-motion preference changes and returns a listener cleanup function. */
 function subscribeToReducedMotion(onChange: () => void) {
   const query = window.matchMedia(reducedMotionQuery);
   query.addEventListener("change", onChange);
@@ -93,6 +94,7 @@ export function usePrefersReducedMotion() {
     () => window.matchMedia(reducedMotionQuery).matches, () => false);
 }
 
+/** Renders the decorative thread mark at the requested width, preserving its aspect ratio. */
 function Logo({ size = 34 }: { size?: number }) {
   return <Image src="/thread-mark.png" alt="" width={size} height={Math.round(size * 0.59)} unoptimized />;
 }
@@ -143,6 +145,7 @@ function Header() {
   );
 }
 
+/** Renders illustrative workspace and project entries inside the landing product preview. */
 function MockSidebar() {
   const nav = [
     { label: "Requirements", count: 24, active: true },
@@ -170,6 +173,7 @@ function MockSidebar() {
   );
 }
 
+/** Renders sample requirements, revealing the live row's evidence and completion status as `step` advances. */
 function RequirementsTable({ step }: { step: number }) {
   return (
     <div className="landing-table">
@@ -254,6 +258,7 @@ function ProductWindow({ step, paused, reduced, onTogglePause }: {
   );
 }
 
+/** Renders the product introduction and looping preview, with pause support and a finished reduced-motion state. */
 function Hero({ reduced }: { reduced: boolean }) {
   const [tick, setTick] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -284,6 +289,7 @@ function Hero({ reduced }: { reduced: boolean }) {
   );
 }
 
+/** Explains the product purpose, intended audience, and role of human acceptance decisions. */
 function About() {
   return (
     <section id="about" className="landing-section" aria-labelledby="about-title">
@@ -307,6 +313,7 @@ function About() {
   );
 }
 
+/** Renders the three steps for writing requirements, linking work, and reviewing evidence. */
 function HowItWorks() {
   return (
     <section id="how" className="landing-section" aria-labelledby="how-title">
@@ -327,11 +334,13 @@ function HowItWorks() {
   );
 }
 
+/** Gathers sample artifacts into a chronological thread while visible; reduced motion shows them already gathered. */
 function EvidenceThread({ reduced }: { reduced: boolean }) {
   const [ref, inView] = useInView<HTMLDivElement>(0.4);
   const [replaying, setReplaying] = useState(false);
   const gathered = reduced || (inView && !replaying);
 
+  /** Briefly scatters the evidence cards so they gather again when the replay delay ends. */
   const replay = () => {
     setReplaying(true);
     window.setTimeout(() => setReplaying(false), 900);
@@ -385,6 +394,7 @@ function EvidenceThread({ reduced }: { reduced: boolean }) {
   );
 }
 
+/** Illustrates a human review decision after the card enters view, showing acceptance immediately under reduced motion. */
 function ReviewDecision({ reduced }: { reduced: boolean }) {
   const [ref, inView] = useInView<HTMLDivElement>(0.4);
   const [timerDone, setTimerDone] = useState(false);
@@ -458,6 +468,7 @@ function ReviewDecision({ reduced }: { reduced: boolean }) {
   );
 }
 
+/** Renders the closing invitation to create an account and start a requirement thread. */
 function FinalCta() {
   return (
     <section className="landing-final" aria-labelledby="final-title">

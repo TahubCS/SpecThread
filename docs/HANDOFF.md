@@ -1,6 +1,25 @@
 # Shared handoff
 
-## Current task: Login and signup design (2026-09-29)
+## Current task: PR #8 docstring coverage (2026-09-29)
+
+- Branch: `coderabbit/improve-docstring-coverage/84e64e39`; uncommitted changes
+  based on verified PR head `4702b29280c0b0cbac524873197247c66d0d2855`.
+- Added 14 JSDoc comments in `app/web/src/components/landing-page.tsx` and
+  `app/web/src/components/auth-form.tsx`; no executable changes or new dependencies.
+- Local TypeScript AST audit of named functions intersecting PR hunks: 54/64
+  documented (84.38%). This approximates the hosted check, which counted 62
+  functions; its result must be confirmed after publication.
+- Comment-stripped TypeScript compilation matched the PR head for all 37 changed
+  TypeScript files. Behavior tests were skipped for this documentation-only patch.
+- Validation: `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  `npm run build` passed with temporary loopback auth configuration (random secret,
+  offline placeholder database URL, email logging, and disabled OAuth providers).
+  Restored missing sandbox dependencies with `npm ci --no-audit --no-fund`.
+- CodeRabbit review could not run because it is disabled for this coding task.
+- Next step: publish the documentation changes with approval and rerun PR #8's hosted
+  Docstring Coverage check. No application behavior or architectural decisions changed.
+
+## Previous task: Login and signup design (2026-09-29)
 
 - Branch: `scaffolding`; builds on commit `51432b0`. Changes are uncommitted.
 - Completed:

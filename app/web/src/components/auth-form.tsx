@@ -22,6 +22,7 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
   const [status, setStatus] = useState<string | null>(null);
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
+  /** Starts provider sign-in with the validated return path and reports service or rate-limit failures. */
   async function handleSocial(provider: Provider) {
     setBusy(provider);
     setError(null);
@@ -41,6 +42,7 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
     }
   }
 
+  /** Submits email login or signup, showing verification prompts when needed and returning successful logins to `next`. */
   async function handleEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -88,6 +90,7 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
     setBusy(null);
   }
 
+  /** Requests another verification email for the pending address, preserving the validated return path. */
   async function handleResend() {
     if (!pendingEmail) return;
     setBusy("resend");
