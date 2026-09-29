@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { frameFor, initialsOf, isCurrentLink } from "../../app/web/src/lib/app-navigation";
 
 const fakeSession = {
@@ -38,7 +38,7 @@ test("profile initials use the name, then the email", () => {
   expect(initialsOf("   ", "")).toBe("?");
 });
 
-test("settings pages use the settings sidebar instead of the workspace sidebar", async ({ page }) => {
+test("settings pages use the settings sidebar and return to the workspace", async ({ page }) => {
   await page.goto("/help/example-article");
   const settingsNav = page.getByRole("navigation", { name: "Settings navigation" });
   for (const heading of ["Personal", "Security & data", "Getting started"]) {
@@ -50,19 +50,12 @@ test("settings pages use the settings sidebar instead of the workspace sidebar",
   await expect(settingsNav.getByRole("link", { name: /About|Privacy|Terms|How it works/ })).toHaveCount(0);
   await settingsNav.getByRole("link", { name: "Welcome" }).click();
   await expect(page).toHaveURL(/\/welcome$/);
-  await page.getByRole("link", { name: "Back to home" }).click();
-  await expect(page).toHaveURL(/:\d+\/$/);
-  await expect(page.locator(".site-header, .landing-header")).toBeVisible();
-});
-
-test("signed-in users return from settings to the workspace", async ({ page }) => {
-  await page.route("**/api/auth/get-session*", route => route.fulfill({ json: fakeSession }));
-  await page.goto("/help");
+  await page.route("**/api/auth/get-session*", route => route.fulfill({ json: null }));
+  await page.reload();
   await expect(page.getByRole("link", { name: "Back to home" })).toHaveCount(0);
   await page.getByRole("link", { name: "Back to app" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Inbox" })).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Settings navigation" })).toHaveCount(0);
 });
 
 test("work pages and unknown routes use the workspace sidebar without a top header", async ({ page }) => {
@@ -72,7 +65,7 @@ test("work pages and unknown routes use the workspace sidebar without a top head
     await expect(page.getByRole("navigation", { name: "Settings navigation" }), route).toHaveCount(0);
     await expect(page.locator(".site-header, .landing-header"), route).toHaveCount(0);
   }
-  for (const route of ["/", "/login", "/signup"]) {
+  for (const route of ["/", "/privacy", "/terms"]) {
     await page.goto(route);
     await expect(page.locator(".site-header, .landing-header"), route).toBeVisible();
     await expect(page.locator(".app-sidebar"), route).toHaveCount(0);
@@ -92,6 +85,7 @@ test("the settings drawer works on a narrow screen and closes after navigation",
 });
 
 test("the profile menu offers settings and sign-in when signed out", async ({ page }) => {
+  await page.route("**/api/auth/get-session*", route => route.fulfill({ json: null }));
   await page.goto("/dashboard");
   await expect(page.locator(".app-profile-menu summary")).toHaveAccessibleName("Profile menu, SpecThread");
   await page.getByLabel("Profile menu").click();

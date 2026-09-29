@@ -1,6 +1,67 @@
 # Shared handoff
 
-## Current task: Landing page redesign and public About sections (2026-09-29)
+## Current task: Route protection (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `58ea223`. Changes are uncommitted.
+- Completed:
+  - The deny-by-default `app/web/src/proxy.ts` validates the Better Auth session
+    for every page except `/`, `/login`, `/signup`, `/forgot-password`,
+    `/reset-password`, `/auth/error`, `/privacy`, and `/terms`.
+  - Signed-out visitors are redirected to `/login?next=<path and query>`.
+  - `safeNextPath` accepts only same-site paths. Email, social, and
+    verification sign-in all return to `next`.
+  - Signed-in visitors to login and signup go straight to `next`.
+  - The dashboard-preview link on the sign-in pages is removed.
+  - The settings sidebar always links "Back to app".
+  - Browser tests run signed in by default through `tests/e2e/fixtures.ts`,
+    using a real seeded session.
+- Changed files:
+  - `app/web/src/proxy.ts`
+  - `app/web/src/lib/app-navigation.ts`
+  - `app/web/src/app/{login,signup}/page.tsx`
+  - `app/web/src/components/{auth-form,settings-sidebar}.tsx`
+  - `tests/e2e/{fixtures,protection,auth,home,landing,scaffold,shell}.spec.ts`
+    (`fixtures.ts` is not a spec)
+  - `README.md` and `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - Recorded in ADR-023, which supersedes the public dashboard in ADR-019 and
+    ADR-020.
+  - The spec and plan are in
+    `docs/superpowers/{specs,plans}/2026-09-29-route-protection*`, which
+    `.gitignore` ignores.
+  - The C# API is unchanged. It already requires a JWT on every endpoint except
+    `/health` and development OpenAPI.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 111 tests.
+  - A signed-out probe of the dev server returned 307 to
+    `/login?next=%2Fdashboard` for `/dashboard`. It returned 307 to
+    `/login?next=%2Fteams%3Ftab%3Dmembers` for `/teams?tab=members`.
+    `/icon.png/x` was also redirected to login.
+  - `/`, `/privacy`, `/terms`, `/login`, `/thread-mark.png`, and `/icon.png`
+    returned 200, and `/about` still redirected to `/#about`.
+  - A fresh reviewer checked the whole change and found no bypass or open
+    redirect. The fixes it prompted are in:
+    - the proxy now forwards Better Auth's refreshed session cookie, so active
+      users are not logged out after 7 days;
+    - `safeNextPath` is at least as strict as Better Auth's `callbackURL` check;
+    - the matcher's image exclusions are anchored;
+    - ARCHITECTURE.md is updated.
+- Known issues:
+  - API authorization (project and team membership checks) is still
+    unimplemented. It belongs with the data features.
+  - Deferred review minors:
+    - The profile menu's "Log in" link and `/settings/account`'s fallback
+      redirect omit `next`.
+    - `auth-form` shows "verify your email" for any 403.
+    - The return-to test does not include a query string.
+  - At teardown the web server logs pool errors when the test database stops.
+    This does not affect any test.
+  - Each protected page request performs one session lookup.
+- Exact next step: the user reviews, then commit and push to the existing PR only
+  after explicit user approval. Merge into `main` through the pull request.
+
+## Previous task: Landing page redesign and public About sections (2026-09-29)
 
 - Branch: `scaffolding`; builds on commit `c173d61`, the sidebar task below.
   Changes are uncommitted.

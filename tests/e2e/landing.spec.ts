@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
+
+test.use({ signedIn: false });
 
 const fakeSession = {
   session: { id: "s1", userId: "u1", token: "t1", expiresAt: "2099-01-01T00:00:00.000Z",

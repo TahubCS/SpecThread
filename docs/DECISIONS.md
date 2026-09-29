@@ -367,6 +367,31 @@ shell. Application routes such as `/dashboard` and `/settings` remain reachable 
 URL until route protection is implemented; this decision does not add access
 control. Policy text is still a placeholder.
 
+ADR-023: Deny-by-default page access through a Next.js proxy
+
+Status: Accepted
+
+Context: Every application page, including the dashboard preview, settings, and
+invitations, rendered for visitors without a session. The user treated this as a
+security issue and chose to require sign-in everywhere except the landing, sign-in,
+and policy pages.
+
+Decision: `app/web/src/proxy.ts` validates the Better Auth session with
+`auth.api.getSession` for every page request except `/`, `/login`, `/signup`,
+`/forgot-password`, `/reset-password`, `/auth/error`, `/privacy`, and `/terms`, which
+`isPublicPath` in `lib/app-navigation.ts` lists once. The matcher skips `/api/*`,
+Next.js internals, and the public image files. Without a valid session the visitor is
+redirected to `/login?next=<requested path and query>`; `safeNextPath` accepts only
+same-site paths other than login and signup, defaulting to `/dashboard`, and every
+sign-in method returns there. Session lookup errors propagate so a failed lookup never
+renders a page. Pages that load data keep their own session checks. This supersedes
+the public dashboard preview in ADR-019 and ADR-020, and ADR-021's signed-out "Back to
+home" link in the settings sidebar, which only signed-in users now reach.
+
+Consequences: New pages are protected unless deliberately added to the public list.
+Each protected page request performs one session lookup. API authorization (project
+and team membership) remains separate work in the C# API.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

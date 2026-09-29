@@ -3,18 +3,22 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
 import { auth } from "@/lib/auth";
+import { safeNextPath } from "@/lib/app-navigation";
 
 export const metadata: Metadata = { title: "Sign up" };
 
 /**
- * Renders the signup screen when the request has no valid session;
- * otherwise redirects to /dashboard. Session lookup may refresh stored sessions
+ * Renders the signup screen when the request has no valid session; otherwise redirects to the
+ * validated `next` path, defaulting to /dashboard. Session lookup may refresh stored sessions
  * or remove expired ones.
  *
  * @throws Propagates session lookup errors; a failed lookup does not render the form.
  */
-export default async function SignupPage() {
+export default async function SignupPage({ searchParams }: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  const next = safeNextPath((await searchParams).next);
   const session = await auth.api.getSession({ headers: await headers() });
-  if (session) redirect("/dashboard");
-  return <AuthForm signup />;
+  if (session) redirect(next);
+  return <AuthForm signup next={next} />;
 }

@@ -7,7 +7,6 @@ import {
   MonitorSmartphone, Plug, SlidersHorizontal, UserRound,
 } from "lucide-react";
 import { isCurrentLink } from "@/lib/app-navigation";
-import { authClient } from "@/lib/auth-client";
 import { AppNavLink } from "./app-nav-link";
 
 const groups = [
@@ -33,19 +32,14 @@ const groups = [
 /**
  * Renders the sidebar for personal settings, onboarding, and help pages.
  * Invitation pages share this frame without a link because users reach them from invite URLs.
- * Signed-out visitors, who often arrive from the landing page, get a link back home instead
- * of back to the workspace.
+ * Only signed-in users reach it (ADR-023), so it always links back to the workspace.
  */
 export function SettingsSidebar() {
   const pathname = usePathname();
-  const { data: session, isPending } = authClient.useSession();
-  const signedOut = !isPending && !session;
   return (
     <>
       <div className="app-sidebar-top">
-        <Link className="app-back-link" href={signedOut ? "/" : "/dashboard"}>
-          <ChevronLeft size={16} aria-hidden="true" /> {signedOut ? "Back to home" : "Back to app"}
-        </Link>
+        <Link className="app-back-link" href="/dashboard"><ChevronLeft size={16} aria-hidden="true" /> Back to app</Link>
       </div>
       <nav className="app-sidebar-nav" aria-label="Settings navigation">
         {groups.map(group => (

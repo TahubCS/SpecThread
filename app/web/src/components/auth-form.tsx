@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DEFAULT_AFTER_SIGN_IN } from "@/lib/app-navigation";
 import { authClient } from "@/lib/auth-client";
 import { AuthLayout } from "./auth-layout";
 
@@ -12,7 +13,8 @@ const MIN_PASSWORD_LENGTH = 12;
 const TOO_MANY = "Too many attempts. Please wait a moment before trying again.";
 const UNREACHABLE = "Unable to reach the sign-in service. Please try again.";
 
-export function AuthForm({ signup = false }: { signup?: boolean }) {
+/** Renders the login or signup form; every sign-in path returns to `next`, a pre-validated same-site path. */
+export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { signup?: boolean; next?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"email" | Provider | "resend" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
     try {
       const result = await authClient.signIn.social({
         provider,
-        callbackURL: "/dashboard",
+        callbackURL: next,
         errorCallbackURL: "/auth/error",
       });
       if (result.error) {
@@ -52,7 +54,7 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
           name: String(form.get("name") ?? "").trim(),
           email,
           password,
-          callbackURL: "/dashboard",
+          callbackURL: next,
         });
         if (result.error) {
           setError(result.error.status === 429 ? TOO_MANY
@@ -64,7 +66,7 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
           setPendingEmail(email);
         }
       } else {
-        const result = await authClient.signIn.email({ email, password, callbackURL: "/dashboard" });
+        const result = await authClient.signIn.email({ email, password, callbackURL: next });
         if (result.error) {
           if (result.error.status === 403) {
             setPendingEmail(email);
@@ -74,7 +76,7 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
                 : "Unable to log in. Please try again.");
           }
         } else {
-          router.push("/dashboard");
+          router.push(next);
           router.refresh();
           return;
         }
@@ -91,7 +93,7 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
     setError(null);
     setStatus(null);
     try {
-      const result = await authClient.sendVerificationEmail({ email: pendingEmail, callbackURL: "/dashboard" });
+      const result = await authClient.sendVerificationEmail({ email: pendingEmail, callbackURL: next });
       if (result.error) setError(result.error.status === 429 ? TOO_MANY : "Unable to send the email. Please try again.");
       else setStatus("If an account needs verification, a new email is on its way.");
     } catch {
@@ -170,9 +172,10 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
       </div>
       <p>
         {signup ? "Already have an account? " : "New to SpecThread? "}
-        <Link href={signup ? "/login" : "/signup"}>{signup ? "Log in" : "Sign up"}</Link>
+        <Link href={`${signup ? "/login" : "/signup"}${next === DEFAULT_AFTER_SIGN_IN ? "" : `?next=${encodeURIComponent(next)}`}`}>
+          {signup ? "Log in" : "Sign up"}
+        </Link>
       </p>
-      <p><Link href="/dashboard">Explore the dashboard preview</Link></p>
     </section>
     </AuthLayout>
   );

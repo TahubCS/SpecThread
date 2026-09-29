@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { navigationFor, scaffoldRoutes } from "../../app/web/src/lib/scaffold-routes";

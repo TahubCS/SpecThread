@@ -1,31 +1,12 @@
-import { expect, test } from "@playwright/test";
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { makeSignature } from "better-auth/crypto";
+import { createTestSession, expect, test } from "./fixtures";
+
+test.use({ signedIn: false });
 
 test("an active session skips login and signup", async ({ page }) => {
-  const { name } = JSON.parse(await readFile("playwright/.cache/test-web-database.json", "utf8"));
-  const secret = process.env.SPECTHREAD_TEST_AUTH_SECRET;
-  if (!secret) throw new Error("Test auth secret is missing");
-  const userId = randomUUID();
-  const sessionId = randomUUID();
-  const token = randomUUID();
-  const runSql = (sql: string) => execFileSync("docker", [
-    "exec", "-u", "postgres", name, "psql", "-U", "postgres", "-d", "postgres",
-    "-v", "ON_ERROR_STOP=1", "-c", sql,
-  ], { stdio: "ignore" });
-
-  runSql(`INSERT INTO public."user" (id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES ('${userId}','Navigation test','${userId}@example.invalid',true,now(),now());
-    INSERT INTO public.session (id,"userId",token,"expiresAt","createdAt","updatedAt")
-    VALUES ('${sessionId}','${userId}','${token}',now() + interval '1 hour',now(),now());`);
+  const seeded = await createTestSession("Navigation test");
+  const userId = seeded.userId;
   try {
-    await page.context().addCookies([{
-      name: "better-auth.session_token",
-      value: `${token}.${await makeSignature(token, secret)}`,
-      url: "http://127.0.0.1:3100",
-    }]);
+    await page.context().addCookies([seeded.cookie]);
     const sessionResponse = await page.request.get("/api/auth/get-session");
     expect((await sessionResponse.json())?.user?.id).toBe(userId);
     for (const route of ["/login", "/signup"]) {
@@ -53,7 +34,7 @@ test("an active session skips login and signup", async ({ page }) => {
     await expect(page).toHaveURL(/:\d+\/$/);
     expect(await (await page.request.get("/api/auth/get-session")).json()).toBeNull();
   } finally {
-    runSql(`DELETE FROM public."user" WHERE id = '${userId}'`);
+    seeded.remove();
   }
 });
 
@@ -217,7 +198,9 @@ test("reset password checks confirmation and handles expired links", async ({ pa
 test("account page requires sign-in at its new and former addresses", async ({ page }) => {
   for (const route of ["/settings/account", "/account"]) {
     await page.goto(route);
-    await expect(page, route).toHaveURL(/\/login$/);
+    const url = new URL(page.url());
+    expect(url.pathname, route).toBe("/login");
+    expect(url.searchParams.get("next"), route).toBe(route);
   }
 });
 

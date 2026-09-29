@@ -67,6 +67,11 @@ currently require network access during the web build.
   sidebar, the hero animation with its pause control, evidence gathering and
   replay, the review decision on scroll, finished states under reduced motion,
   the signed-in Dashboard link, and narrow-screen layout and menu.
+- Route protection: signed-out redirects to login with the requested path for each
+  route family and unknown URLs, forged and revoked sessions, public pages and their
+  images, return to the requested page after email and social sign-in, and
+  `safeNextPath` rejection of other origins, control characters, over-long values,
+  and login/signup loops.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
   placeholder pages, a useful 404 for an unknown URL, the personal/team project
   descriptions, and a route walk
@@ -118,7 +123,11 @@ that live database credentials work.
 
 ## Conventions
 
-Use browser fixtures in tests/e2e and request fixtures in tests/api. Use accessible
+Use browser fixtures in tests/e2e and request fixtures in tests/api. Browser tests
+import `test` from `tests/e2e/fixtures.ts`, which signs each test in with a real seeded
+session by default. Signed-out tests set `test.use({ signedIn: false })`. Tests that
+log out must create their own session with `createTestSession`, because the default
+session is shared per worker. Use accessible
 locators and retrying assertions, not arbitrary sleeps. Browser-free TypeScript
 logic tests can get a separate Playwright project when such logic exists.
 Playwright cannot directly run C# unit tests; a different runner requires an
