@@ -60,8 +60,12 @@ export function AccountPanel({ user, linked, available }: {
   }
 
   return (
-    <div className="stack">
-      <h1>Account</h1>
+    <div className="scaffold-page account-page">
+      <header className="scaffold-heading">
+        <p className="scaffold-kicker">SpecThread / Account</p>
+        <h1>Account</h1>
+        <p>Review your profile and sign-in methods.</p>
+      </header>
       {error && <p role="alert" className="notice text-red-600">{error}</p>}
       <section className="panel stack" aria-labelledby="profile-heading">
         <h2 id="profile-heading">Profile</h2>

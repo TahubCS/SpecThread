@@ -4,6 +4,7 @@ import { AppFrame } from "@/components/app-frame";
 import "./globals.css";
 import "./app-shell.css";
 import "./landing.css";
+import "./public-pages.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

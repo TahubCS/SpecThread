@@ -67,13 +67,16 @@ test("app navigation keeps the sidebar while routes change", async ({ page }) =>
 });
 
 for (const route of ["login", "signup"] as const) {
-  test(`${route} offers email, Google and GitHub sign-in`, async ({ page }) => {
+  test(`${route} offers email, Google and GitHub sign-in`, async ({ page }, testInfo) => {
     await page.goto(`/${route}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       route === "login" ? "Welcome back" : "Create your account",
     );
     await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
+    await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Back to home" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`${route}-desktop.png`), fullPage: true });
     await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("autocomplete", route === "login" ? "current-password" : "new-password");
     await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();

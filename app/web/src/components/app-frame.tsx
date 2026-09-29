@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import {
-  Bell, ChevronDown, FileText, FolderKanban, House, Inbox,
+  ArrowLeft, Bell, ChevronDown, FileText, FolderKanban, House, Inbox,
   LogIn, Menu, Plus, Search, Settings, Users, X,
   type LucideIcon,
 } from "lucide-react";
@@ -180,15 +180,18 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     return <AppShell>{children}</AppShell>;
   }
   const landing = pathname === "/";
+  const authPage = ["/login", "/signup", "/forgot-password", "/reset-password", "/auth/error"].includes(pathname);
   return (
-    <div className={`public-frame${landing ? " landing-frame" : ""}`}>
+    <div className={`public-frame${landing ? " landing-frame" : ""}${authPage ? " auth-frame" : ""}`}>
       <header className="site-header">
         <div className="header-inner">
           <Link className="brand" href="/">
             <Image src="/thread-mark.png" alt="" width={39} height={22} unoptimized />
             <span>SpecThread</span>
           </Link>
-          {landing ? <LandingNavigation /> : <MainNavigation />}
+          {landing ? <LandingNavigation /> : authPage ? (
+            <Link className="auth-back" href="/"><ArrowLeft size={17} aria-hidden="true" /> Back to home</Link>
+          ) : <MainNavigation />}
         </div>
       </header>
       <main id="main-content" tabIndex={-1}>{children}</main>

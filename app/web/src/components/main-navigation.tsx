@@ -46,9 +46,8 @@ export function LandingNavigation() {
  */
 export function MainNavigation() {
   const { data: session, isPending } = authClient.useSession();
-
-  return (
-    <nav aria-label="Main navigation">
+  const links = (
+    <>
       <Link href="/dashboard">Dashboard</Link>
       <Link href="/teams">Teams</Link>
       <Link href="/projects">Projects</Link>
@@ -63,6 +62,16 @@ export function MainNavigation() {
           <Link href="/signup">Sign up</Link>
         </>
       ))}
+    </>
+  );
+
+  return (
+    <nav className="public-nav" aria-label="Main navigation">
+      <div className="public-nav-links">{links}</div>
+      <details className="public-mobile-menu">
+        <summary aria-label="Open navigation"><Menu size={20} aria-hidden="true" /></summary>
+        <div className="public-mobile-links">{links}</div>
+      </details>
     </nav>
   );
 }

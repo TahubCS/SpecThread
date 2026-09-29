@@ -1,5 +1,33 @@
 # Shared handoff
 
+## Current task: Align remaining pages with the shared design (2026-09-26)
+
+- Branch: `scaffolding`; all changes remain uncommitted.
+- Completed: restyled shared placeholder routes, their related-page navigation,
+  the About hub, account and error states, and public/auth layouts to match the
+  dashboard and landing page's charcoal and lavender visual language. Login and
+  signup now show the evidence path while retaining email/password, Google, and
+  GitHub flows. Added responsive public navigation and kept planned routes
+  explicitly labeled as disconnected previews.
+- Changed files: shared web components and styles under `app/web/src/`,
+  `tests/e2e/{home,scaffold}.spec.ts`,
+  `docs/{TESTING,HANDOFF}.md`, and `docs/landing-design/README.md`.
+- Decisions and assumptions: use the existing dashboard and landing page as the
+  visual reference (ADR-020). Keep the saved login/signup images as concepts;
+  ADR-016's additional sign-in methods take precedence over their GitHub-only
+  depiction. No product data, backend contract, or auth behavior changed.
+- Verification: `npm run lint`, `npm run typecheck`, and `git diff --check`
+  passed. The focused 19-test Chromium suite and the full `npm test` suite
+  passed (83 tests); the test setup built the web app and API. Inspected desktop
+  screenshots for Teams and login and mobile screenshots for login, signup, and
+  password reset. The full test run logged expected Better Auth rejection
+  messages for negative tests.
+- Known limits: placeholder routes still have no connected data or actions;
+  live OAuth and email delivery remain outside this visual task.
+- Exact next step: review the uncommitted diff and screenshots, then commit and
+  push to the existing PR only after explicit user approval. Merge into `main`
+  through the pull request.
+
 ## Current task: Resolve PR #7 conflicts with main (2026-09-26)
 
 - Branch: `scaffolding`; merge of `origin/main` (`077b80d`) is resolved locally

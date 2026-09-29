@@ -15,12 +15,29 @@ const routes = [
   ["/projects/project-1/matrix", "Traceability matrix"],
 ] as const;
 
-test("scaffold navigation reaches the main product areas", async ({ page }) => {
+test("scaffold navigation reaches the main product areas", async ({ page }, testInfo) => {
   await page.goto("/dashboard");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams" }).click();
   await expect(page).toHaveURL(/\/teams$/);
   await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();
   await expect(page.getByText("Product data and actions are not connected yet.")).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("teams-desktop.png"), fullPage: true });
+});
+
+test("planned pages keep their navigation and fit a narrow workspace", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/projects");
+  await expect(page.getByRole("status").getByText("Product data and actions are not connected yet.")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Create project" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("public mobile navigation reaches the product preview", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/about");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByLabel("Open navigation").click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Dashboard" }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
 });
 
 test("representative scaffold routes render without product data", async ({ page }) => {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, Circle, FileText, GitPullRequest, Tag, UserRoundCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
 type Provider = "google" | "github";
@@ -10,6 +11,34 @@ const providerLabels: Record<Provider, string> = { google: "Google", github: "Gi
 const MIN_PASSWORD_LENGTH = 12;
 const TOO_MANY = "Too many attempts. Please wait a moment before trying again.";
 const UNREACHABLE = "Unable to reach the sign-in service. Please try again.";
+
+const evidenceSteps = [
+  { label: "Requirement", icon: FileText },
+  { label: "Issue", icon: Circle },
+  { label: "PR", icon: GitPullRequest },
+  { label: "Checks", icon: Check },
+  { label: "Release", icon: Tag },
+  { label: "Review", icon: UserRoundCheck },
+] as const;
+
+function AuthLayout({ children, signup }: { children: ReactNode; signup: boolean }) {
+  return (
+    <div className="auth-layout">
+      {children}
+      <aside className="auth-evidence" aria-label="SpecThread evidence path">
+        <ol className="auth-evidence-steps">
+          {evidenceSteps.map(({ label, icon: Icon }, index) => (
+            <li key={label} className={index < 4 ? "is-linked" : "is-pending"}>
+              <span className="auth-evidence-node"><Icon size={19} strokeWidth={1.7} aria-hidden="true" /></span>
+              <span>{label}</span>
+            </li>
+          ))}
+        </ol>
+        <p>{signup ? "Keep decisions tied to evidence." : "Evidence stays inspectable."}</p>
+      </aside>
+    </div>
+  );
+}
 
 export function AuthForm({ signup = false }: { signup?: boolean }) {
   const router = useRouter();
@@ -103,7 +132,8 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
 
   if (pendingEmail) {
     return (
-      <section className="panel auth-panel stack">
+      <AuthLayout signup={signup}>
+      <section className="auth-panel stack">
         <h1>Check your email</h1>
         <p>
           {signup ? "We sent a verification link to " : "Verify your email before logging in. We can send a new link to "}
@@ -118,11 +148,14 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
           Use a different email
         </button>
       </section>
+      </AuthLayout>
     );
   }
 
   return (
-    <section className="panel auth-panel stack">
+    <AuthLayout signup={signup}>
+    <section className="auth-panel stack">
+      <p className="auth-kicker">{signup ? "Start with your team" : "Your workspace"}</p>
       <h1>{signup ? "Create your account" : "Welcome back"}</h1>
       <p>{signup ? "Join your team to track requirements and their evidence." : "Log in to return to your team's workspace."}</p>
       {alert}
@@ -169,5 +202,6 @@ export function AuthForm({ signup = false }: { signup?: boolean }) {
       </p>
       <p><Link href="/dashboard">Explore the dashboard preview</Link></p>
     </section>
+    </AuthLayout>
   );
 }

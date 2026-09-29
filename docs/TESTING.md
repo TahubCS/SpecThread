@@ -58,8 +58,9 @@ currently require network access during the web build.
 
 - Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
   GitHub buttons, labeled dashboard preview tabs and evidence expansion, shared
-  sidebar route transitions, and the original four routes at mobile width.
-  Desktop/mobile screenshots are saved inside the ignored test-results directory.
+  sidebar route transitions, responsive public navigation, and scaffold/auth pages
+  at mobile width. Desktop/mobile screenshots are saved inside the ignored
+  test-results directory.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
   placeholder pages, a useful 404 for an unknown URL, the About hub and its
   three child pages, the personal/team project descriptions, and a route walk

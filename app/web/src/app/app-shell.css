@@ -116,6 +116,25 @@
 .evidence-open { display: inline-flex; align-items: center; gap: 5px; color: #c9bffe; font-size: 12px; white-space: nowrap; }
 .evidence-note { margin: 5px 0 0; color: #85858c; font-size: 11px; text-align: center; }
 
+.scaffold-page { width: 100%; max-width: 1120px; margin: 0 auto; padding: clamp(28px, 4vw, 52px); }
+.scaffold-heading { padding-bottom: 28px; border-bottom: 1px solid #343438; }
+.scaffold-kicker { margin: 0 0 16px; color: #aaa0e5; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.scaffold-heading h1 { max-width: 800px; margin: 0; color: #f2f2f4; font-size: clamp(28px, 3vw, 38px); font-weight: 600; letter-spacing: -.035em; }
+.scaffold-heading > p:last-child { max-width: 720px; margin: 13px 0 0; color: #b5b5bd; font-size: 16px; line-height: 1.55; }
+.scaffold-status { display: flex; align-items: flex-start; gap: 15px; margin-top: 30px; padding: 20px 22px; border: 1px solid #343438; border-radius: 9px; background: #1d1d20; }
+.scaffold-status-mark { flex: none; width: 11px; height: 11px; margin-top: 5px; border: 2px solid #b5a9f5; border-radius: 50%; }
+.scaffold-status strong { color: #ebe9f3; font-size: 14px; font-weight: 600; }
+.scaffold-status p { margin: 6px 0 0; color: #aaaab2; line-height: 1.5; }
+.scaffold-navigation { display: block; margin-top: 44px; }
+.scaffold-navigation-heading h2 { margin: 0; color: #efeff1; font-size: 16px; font-weight: 600; }
+.scaffold-navigation-heading p { margin: 6px 0 0; color: #96969f; }
+.scaffold-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; margin-top: 18px; }
+.scaffold-links a { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 13px 15px; border: 1px solid #343438; border-radius: 7px; background: #1d1d20; color: #dedee3; font-weight: 500; text-decoration: none; }
+.scaffold-links a:hover { border-color: #71689d; background: #26252b; color: #f5f3ff; }
+.scaffold-links a svg { flex: none; color: #b5a9f5; }
+.scaffold-link span { flex: 1; }
+.scaffold-parent-link { grid-column: 1 / -1; }
+
 @media (max-width: 1140px) {
   .dashboard-row { grid-template-columns: 24px 64px minmax(150px, 1fr) 150px 190px; }
   .dashboard-date { display: none; }
@@ -152,4 +171,7 @@
   .evidence-step::after { top: 13px; left: calc(50% + 16px); width: calc(100% - 32px); }
   .dashboard-group + .dashboard-group { margin-top: 20px; }
   .app-main > .stack { padding: 18px; }
+  .scaffold-page { padding: 28px 18px 48px; }
+  .scaffold-status { padding: 17px; }
+  .scaffold-navigation { margin-top: 34px; }
 }
