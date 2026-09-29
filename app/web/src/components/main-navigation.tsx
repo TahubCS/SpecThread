@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
@@ -36,44 +35,6 @@ export function LandingNavigation() {
           <Link href="/about">About</Link>
           {accountLinks}
         </div>
-      </details>
-    </nav>
-  );
-}
-
-/**
- * Renders product navigation, hiding account links while the client session loads.
- * A session shows Account; otherwise Log in and Sign up are shown.
- * The mobile menu is keyed by pathname so it closes after each route change.
- */
-export function MainNavigation() {
-  const pathname = usePathname();
-  const { data: session, isPending } = authClient.useSession();
-  const links = (
-    <>
-      <Link href="/dashboard">Dashboard</Link>
-      <Link href="/teams">Teams</Link>
-      <Link href="/projects">Projects</Link>
-      <Link href="/reviews">Reviews</Link>
-      <Link href="/notifications">Notifications</Link>
-      <Link href="/settings">Settings</Link>
-      {!isPending && (session ? (
-        <Link href="/account">Account</Link>
-      ) : (
-        <>
-          <Link href="/login">Log in</Link>
-          <Link href="/signup">Sign up</Link>
-        </>
-      ))}
-    </>
-  );
-
-  return (
-    <nav className="public-nav" aria-label="Main navigation">
-      <div className="public-nav-links">{links}</div>
-      <details key={pathname} className="public-mobile-menu">
-        <summary aria-label="Open navigation"><Menu size={20} aria-hidden="true" /></summary>
-        <div className="public-mobile-links">{links}</div>
       </details>
     </nav>
   );

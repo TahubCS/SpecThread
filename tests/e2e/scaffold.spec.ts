@@ -11,7 +11,6 @@ const routes = [
   ["/projects/project-1/requirements/requirement-1/evidence", "Evidence thread"],
   ["/projects/project-1/requirements/requirement-1/review", "Review requirement"],
   ["/invites/example-token", "Invitation"],
-  ["/settings/account", "Account settings"],
   ["/projects/project-1/matrix", "Traceability matrix"],
 ] as const;
 
@@ -30,14 +29,6 @@ test("planned pages keep their navigation and fit a narrow workspace", async ({ 
   await expect(page.getByRole("status").getByText("Product data and actions are not connected yet.")).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Create project" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-});
-
-test("public mobile navigation reaches the product preview", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/about");
-  await page.getByRole("navigation", { name: "Main navigation" }).getByLabel("Open navigation").click();
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Dashboard" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
 });
 
 test("representative scaffold routes render without product data", async ({ page }) => {
@@ -65,7 +56,7 @@ test("about groups the informational pages", async ({ page }) => {
     ["Privacy", "/about/privacy"],
     ["Terms of use", "/about/terms"],
   ] as const) {
-    await page.getByRole("link", { name }).click();
+    await page.getByRole("main").getByRole("link", { name }).click();
     await expect(page).toHaveURL(new RegExp(`${route}$`));
     await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
     await page.goto("/about");
@@ -108,7 +99,8 @@ test("every reserved page participates in navigation", async () => {
       if (entry.name !== "page.tsx") return [];
       const contents = await readFile(fullPath, "utf8");
       if (!contents.includes("ScaffoldPage") && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
-          !fullPath.endsWith(`${path.sep}about${path.sep}page.tsx`)) return [];
+          !fullPath.endsWith(`${path.sep}about${path.sep}page.tsx`) &&
+          !fullPath.endsWith(`${path.sep}settings${path.sep}account${path.sep}page.tsx`)) return [];
       return [`/${path.relative(root, directory).split(path.sep).join("/")}`];
     }));
     return nested.flat();

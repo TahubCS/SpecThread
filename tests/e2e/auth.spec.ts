@@ -32,20 +32,26 @@ test("an active session skips login and signup", async ({ page }) => {
       await page.goto(route);
       await expect(page).toHaveURL(/\/dashboard$/);
     }
-    const accountLink = page.getByRole("link", { name: "Account" });
-    await expect(accountLink).toHaveAttribute("href", "/account");
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Log in" })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Sign up" })).toHaveCount(0);
-    await accountLink.click();
-    await expect(page).toHaveURL(/\/account$/);
+    const profile = page.getByLabel("Profile menu, Navigation test");
+    await expect(profile).toContainText("NT");
+    await profile.click();
+    const menu = page.locator(".app-profile-options");
+    await expect(menu.getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
+    await expect(menu.getByRole("link", { name: "Log in" })).toHaveCount(0);
+    await expect(menu.getByRole("link", { name: "Sign up" })).toHaveCount(0);
+    await menu.getByRole("link", { name: "Account" }).click();
+    await expect(page).toHaveURL(/\/settings\/account$/);
+    await expect(page.getByRole("heading", { name: "Account", level: 1 })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Settings navigation" })
+      .getByRole("link", { name: "Account" })).toHaveAttribute("aria-current", "page");
+    await page.goto("/account");
+    await expect(page).toHaveURL(/\/settings\/account$/);
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/about");
-    const publicNavigation = page.getByRole("navigation", { name: "Main navigation" });
-    await publicNavigation.getByLabel("Open navigation").click();
-    await publicNavigation.getByRole("link", { name: "Account" }).click();
-    await expect(page).toHaveURL(/\/account$/);
-    await expect(publicNavigation.getByRole("link", { name: "Account" })).toBeHidden();
+    await page.goto("/dashboard");
+    await page.getByLabel("Profile menu, Navigation test").click();
+    await page.locator(".app-profile-options").getByRole("button", { name: "Log out" }).click();
+    await expect(page).toHaveURL(/:\d+\/$/);
+    expect(await (await page.request.get("/api/auth/get-session")).json()).toBeNull();
   } finally {
     runSql(`DELETE FROM public."user" WHERE id = '${userId}'`);
   }
@@ -208,9 +214,11 @@ test("reset password checks confirmation and handles expired links", async ({ pa
   await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
 });
 
-test("account page requires sign-in", async ({ page }) => {
-  await page.goto("/account");
-  await expect(page).toHaveURL(/\/login$/);
+test("account page requires sign-in at its new and former addresses", async ({ page }) => {
+  for (const route of ["/settings/account", "/account"]) {
+    await page.goto(route);
+    await expect(page, route).toHaveURL(/\/login$/);
+  }
 });
 
 test("linking errors show fixed guidance", async ({ page }) => {

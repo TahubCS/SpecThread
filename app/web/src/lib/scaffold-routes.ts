@@ -11,7 +11,7 @@ export const scaffoldRoutes = [
   ["/onboarding/repository", "Repository setup"],
   ["/reviews", "My reviews"],
   ["/notifications", "Notifications"],
-  ["/settings", "Settings"],
+  ["/settings", "Preferences"],
   ["/settings/account", "Account"],
   ["/settings/sessions", "Sessions"],
   ["/settings/notifications", "Notification settings"],

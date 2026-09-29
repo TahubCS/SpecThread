@@ -1,6 +1,61 @@
 # Shared handoff
 
-## Current task: Design review fixes for remaining auth pages (2026-09-29)
+## Current task: Workspace and settings sidebars (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `5fd9389`. Changes are uncommitted.
+- Completed:
+  - Routes pick one of three frames through `frameFor` in
+    `lib/app-navigation.ts`, following ADR-021.
+  - Landing and sign-in pages keep the top header.
+  - Settings, account, help, about, welcome, onboarding, and invite pages use a
+    grouped settings sidebar. Its top link is "Back to app" (`/dashboard`) for
+    signed-in users and "Back to home" (`/`) for signed-out visitors.
+  - Every other route uses the workspace sidebar, including the 404 page.
+  - A profile menu at the top of the workspace sidebar offers Settings, Account,
+    and Log out, or Settings, Log in, and Sign up when signed out.
+  - The account page moved to `/settings/account`, and `/account` redirects
+    there. `/settings` is now titled "Preferences".
+  - Removed the public `MainNavigation`, its CSS, and the bottom sidebar links.
+- Changed files:
+  - `app/web/src/components/{app-frame,workspace-sidebar,settings-sidebar,app-nav-link,profile-menu,main-navigation,account-panel}.tsx`
+  - `app/web/src/lib/{app-navigation,scaffold-routes}.ts`
+  - `app/web/src/app/{account,settings,settings/account}/page.tsx`
+  - `app/web/src/app/{app-shell,public-pages}.css`
+  - `tests/e2e/{shell,auth,scaffold}.spec.ts`
+  - `README.md` and `docs/{DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - The design spec and plan are in
+    `docs/superpowers/{specs,plans}/2026-09-29-settings-sidebar*`. The user's
+    uncommitted `.gitignore` entry ignores them.
+  - Onboarding is grouped under settings as "Getting started".
+  - Invitation pages use the settings frame without a sidebar link.
+- Verification:
+  - `npm run typecheck` and `git diff --check` passed.
+  - `npm test` passed, 92 tests.
+  - A fresh reviewer checked the whole change and found no correctness bugs.
+    The fixes it prompted are in: a way home for signed-out visitors, the
+    README, and the profile button's accessible name.
+  - Inspected desktop and mobile screenshots of the dashboard, profile menu,
+    settings, help, privacy, 404, and the settings drawer.
+  - `npm run lint` exits 1, but only because of 4 errors in the untracked
+    `app/web/src/app/LandingPage.tsx`. Three are `react-hooks/set-state-in-effect`
+    and one is `no-html-link-for-pages`. That file is a user-added design export
+    outside this task and was left untouched. Every file this task changed lints
+    cleanly.
+- Known issues:
+  - `LandingPage.tsx` and `RequirementsSidebar.tsx` are untracked and unused.
+    `LandingPage.tsx` blocks lint until it is fixed or removed.
+  - Deferred review minors:
+    - The profile menu does not close on Escape or an outside click.
+    - The profile menu says "Log out" but the account page says "Sign out".
+    - The settings breadcrumb always reads "Settings".
+    - Stale `/account` callback in `tests/schema/auth-email.spec.ts`.
+    - Leftover `.account-page` CSS.
+- Exact next step: review the diff, resolve `LandingPage.tsx` lint errors, then
+  commit and push to the existing PR only after explicit user approval. Merge
+  into `main` through the pull request.
+
+## Previous task: Design review fixes for remaining auth pages (2026-09-29)
 
 - Branch: `scaffolding`; builds on commit `765b3d1`. Changes are uncommitted.
 - Completed: forgot-password, all reset-password states, and the sign-in error

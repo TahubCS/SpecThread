@@ -317,6 +317,31 @@ repository evidence has been collected. Replace sample rows and example team lin
 when authorized project APIs are available, and protect product routes before
 showing private data. This supersedes the empty-preview state in ADR-019.
 
+ADR-021: Separate workspace and settings sidebars joined by a profile menu
+
+Status: Accepted
+
+Context: The user adopted Linear as a design reference. Settings shared the product
+sidebar, and informational, onboarding, and account pages still used the public top
+navbar. The user asked for work-related pages and everything else to use separate
+sidebars, with a profile menu linking them and no navbar outside landing and sign-in.
+
+Decision: Choose the frame from the pathname. `/`, `/login`, `/signup`,
+`/forgot-password`, `/reset-password`, and `/auth/error` keep the public header.
+`/settings`, `/account`, `/help`, `/about`, `/welcome`, `/onboarding`, and `/invites`
+use a settings sidebar grouped as Personal, Security & data, Getting started, and
+Help & about. Its top link returns signed-in users to the workspace and signed-out
+visitors to the landing page. All other routes, including unknown routes, use the workspace sidebar.
+A profile menu at the top of the workspace sidebar offers Settings, Account, and Log
+out, or Settings, Log in, and Sign up when signed out. The account page moves to
+`/settings/account`; `/account` redirects there. This supersedes ADR-020's statement
+that public pages retain the existing header.
+
+Consequences: New routes use the workspace sidebar unless deliberately listed as
+public or settings routes. Linear is a reference, not a specification, so visual
+details can change without a new decision. Workspace switching and member
+management remain unimplemented.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

@@ -44,9 +44,22 @@
 .app-nav-link.is-nested { margin-left: 16px; padding-left: 14px; }
 .app-team-name { display: flex; align-items: center; gap: 7px; min-height: 35px; padding: 0 12px; border-radius: 6px; color: #e0e0e2; }
 .app-team-name svg { color: var(--app-muted); }
-.app-sidebar-bottom { display: grid; gap: 2px; padding-top: 12px; border-top: 1px solid #252527; }
-.app-account-link { display: flex; align-items: center; gap: 8px; padding: 8px 11px; color: var(--app-muted); font-size: 12px; }
-.app-account-link:hover { color: var(--app-text); }
+.app-profile-menu { position: relative; min-width: 0; }
+.app-profile-menu summary { padding: 4px 6px; border-radius: 7px; cursor: pointer; list-style: none; }
+.app-profile-menu summary::-webkit-details-marker { display: none; }
+.app-profile-menu summary:hover { background: #202023; }
+.app-profile-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.app-avatar { display: grid; flex: none; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: #5b5230; color: #f4f1dc; font-size: 11px; font-weight: 700; }
+.app-profile-options { position: absolute; z-index: 20; top: 40px; left: 0; display: grid; min-width: 220px; padding: 5px; border: 1px solid #343438; border-radius: 8px; background: #222225; box-shadow: 0 16px 40px #0008; }
+.app-profile-options :is(a, button) { padding: 8px 10px; border: 0; border-radius: 5px; background: none; color: var(--app-text); font: inherit; text-align: left; }
+.app-profile-options :is(a, button):hover { background: #303034; }
+.app-profile-options button:disabled { opacity: .6; cursor: progress; }
+.app-profile-options hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid #343438; }
+.app-profile-error { margin: 4px 10px; color: #ffc9cc; font-size: 12px; }
+.app-back-link { display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px; color: var(--app-muted); font-weight: 500; }
+.app-back-link:hover { background: #202023; color: var(--app-text); }
+.app-main .notice-error { border: 1px solid #7a3a42; background: #2c1c1f; color: #ffc9cc; }
+.app-main .method-list > li { border-bottom-color: var(--app-line); }
 .app-content { flex: 1; min-width: 0; }
 .app-topbar { display: flex; align-items: center; justify-content: space-between; height: 55px; padding: 0 25px; border-bottom: 1px solid var(--app-line); }
 .app-breadcrumb { display: inline-flex; align-items: center; gap: 9px; font-weight: 500; }

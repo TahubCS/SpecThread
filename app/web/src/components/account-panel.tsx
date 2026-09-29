@@ -36,9 +36,9 @@ export function AccountPanel({ user, linked, available }: {
     }
   }
 
-  // Redirects to the provider; the callback returns to /account or /auth/error.
+  // Redirects to the provider; the callback returns to /settings/account or /auth/error.
   const link = (provider: Provider) => run(`link-${provider}`,
-    () => authClient.linkSocial({ provider, callbackURL: "/account", errorCallbackURL: "/auth/error" }),
+    () => authClient.linkSocial({ provider, callbackURL: "/settings/account", errorCallbackURL: "/auth/error" }),
     `Unable to start linking ${labels[provider]}. Please try again.`);
 
   async function unlink(account: { id: string; providerId: string; usable: boolean }) {
