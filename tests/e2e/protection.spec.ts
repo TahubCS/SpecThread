@@ -39,7 +39,7 @@ test.describe("signed out", () => {
       const url = new URL(page.url());
       expect(url.pathname, path).toBe("/login");
       expect(url.searchParams.get("next"), path).toBe(path);
-      await expect(page.getByRole("heading", { name: "Welcome back" }), path).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Log in to SpecThread" }), path).toBeVisible();
       await expect(page.locator(".app-sidebar"), path).toHaveCount(0);
     }
   });

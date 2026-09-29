@@ -1,6 +1,47 @@
 # Shared handoff
 
-## Current task: Route protection (2026-09-29)
+## Current task: Login and signup design (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `51432b0`. Changes are uncommitted.
+- Completed:
+  - Login and signup use the user-supplied Claude Design layout: the form
+    column with its own logo and footer, and an animated evidence-thread panel.
+    The panel loops scattered → gathered → accepted and holds on "accepted" when
+    reduced motion is preferred.
+  - Existing behavior is kept:
+    - email, Google, and GitHub sign-in (ADR-016);
+    - error and verification states;
+    - `next` return.
+  - On narrow screens the panel is hidden and the form stacks.
+  - The three design files (`AuthPage.tsx`, `LandingPage.tsx`,
+    `RequirementsSidebar.tsx`) were deleted after integration.
+- Changed files:
+  - `app/web/src/components/{auth-form,sign-in-thread,app-frame,landing-page}.tsx`
+  - `app/web/src/app/landing.css`
+  - `tests/e2e/{auth,home,protection}.spec.ts`
+- Decisions and assumptions:
+  - The design's graphite palette matches the landing tokens, so the sign-in
+    styles live in `landing.css` under the `.landing` class.
+  - The design's theme, motion-speed, and atmosphere options were not carried
+    over, since only the defaults are used.
+  - Google sign-in was added beside GitHub, per ADR-016.
+  - The broken `/docs` footer link was dropped.
+  - The email label stays "Email", not "Work email".
+  - The signup password keeps its visible hint instead of a placeholder.
+  - The forgot-password, reset, and sign-in error pages keep the previous
+    layout.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 114 tests.
+  - Inspected desktop screenshots of the login page in the scattered and
+    accepted phases, the signup page, and a mobile screenshot of signup. There
+    were no console errors and no horizontal scroll.
+  - Removed a timing-dependent dashboard logo assertion from `home.spec.ts`. A
+    signed-in user sees initials there, not the logo.
+- Known issues: none new.
+- Exact next step: the user reviews, then commit after explicit approval.
+
+## Previous task: Route protection (2026-09-29)
 
 - Branch: `scaffolding`; builds on commit `58ea223`. Changes are uncommitted.
 - Completed:

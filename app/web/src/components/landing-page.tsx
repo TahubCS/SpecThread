@@ -88,7 +88,7 @@ function subscribeToReducedMotion(onChange: () => void) {
 }
 
 /** Tracks the visitor's reduced-motion preference; the server render assumes motion is allowed. */
-function usePrefersReducedMotion() {
+export function usePrefersReducedMotion() {
   return useSyncExternalStore(subscribeToReducedMotion,
     () => window.matchMedia(reducedMotionQuery).matches, () => false);
 }

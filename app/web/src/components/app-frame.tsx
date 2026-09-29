@@ -49,8 +49,8 @@ function AppShell({ sidebar, title, icon: Icon, children }: {
 }
 
 /**
- * Selects the frame for the current route. The landing page brings its own header and footer;
- * sign-in and policy pages get a minimal public header; personal, help, and onboarding pages
+ * Selects the frame for the current route. The landing, login, and signup pages bring their own
+ * header and footer; password, sign-in error, and policy pages get a minimal public header; personal, help, and onboarding pages
  * get the settings sidebar; everything else gets the workspace sidebar.
  * This does not enforce access control.
  */
@@ -63,7 +63,7 @@ export function AppFrame({ children }: { children: ReactNode }) {
   if (frame === "workspace") {
     return <AppShell sidebar={<WorkspaceSidebar />} title={workspaceTitleFor(pathname)} icon={House}>{children}</AppShell>;
   }
-  if (pathname === "/") return <>{children}</>;
+  if (["/", "/login", "/signup"].includes(pathname)) return <>{children}</>;
   return (
     <div className="public-frame auth-frame">
       <header className="site-header">

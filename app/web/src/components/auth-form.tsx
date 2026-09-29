@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DEFAULT_AFTER_SIGN_IN } from "@/lib/app-navigation";
 import { authClient } from "@/lib/auth-client";
-import { AuthLayout } from "./auth-layout";
+import { SignInThread } from "./sign-in-thread";
 
 type Provider = "google" | "github";
 const providerLabels: Record<Provider, string> = { google: "Google", github: "GitHub" };
@@ -102,81 +103,110 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
     setBusy(null);
   }
 
-  const alert = error && <p role="alert" className="notice notice-error">{error}</p>;
+  const alert = error && <p role="alert" className="signin-alert">{error}</p>;
 
   if (pendingEmail) {
     return (
-      <AuthLayout caption={signup ? "Keep decisions tied to evidence." : undefined}>
-      <section className="auth-panel stack">
-        <h1>Check your email</h1>
-        <p>
+      <SignInShell>
+        <h1 className="signin-title">Check your email</h1>
+        <p className="signin-lead">
           {signup ? "We sent a verification link to " : "Verify your email before logging in. We can send a new link to "}
           <strong>{pendingEmail}</strong>. The link signs you in once your email is confirmed.
         </p>
         {alert}
-        {status && <p role="status" className="notice">{status}</p>}
-        <button className="button secondary" type="button" disabled={busy !== null} onClick={handleResend}>
-          {busy === "resend" ? "Sending..." : "Resend verification email"}
-        </button>
-        <button className="link-button" type="button" onClick={() => { setPendingEmail(null); setError(null); setStatus(null); }}>
-          Use a different email
-        </button>
-      </section>
-      </AuthLayout>
+        {status && <p role="status" className="signin-status">{status}</p>}
+        <div className="signin-stack">
+          <button className="signin-secondary" type="button" disabled={busy !== null} onClick={handleResend}>
+            {busy === "resend" ? "Sending..." : "Resend verification email"}
+          </button>
+          <button className="signin-text-button" type="button" onClick={() => { setPendingEmail(null); setError(null); setStatus(null); }}>
+            Use a different email
+          </button>
+        </div>
+      </SignInShell>
     );
   }
 
   return (
-    <AuthLayout caption={signup ? "Keep decisions tied to evidence." : undefined}>
-    <section className="auth-panel stack">
-      <p className="auth-kicker">{signup ? "Start with your team" : "Your workspace"}</p>
-      <h1>{signup ? "Create your account" : "Welcome back"}</h1>
-      <p>{signup ? "Join your team to track requirements and their evidence." : "Log in to return to your team's workspace."}</p>
+    <SignInShell>
+      <h1 className="signin-title">{signup ? "Create your account" : "Log in to SpecThread"}</h1>
+      {signup && <p className="signin-lead">Connect one GitHub repository. Free for small teams.</p>}
       {alert}
-      <form className="auth-form" onSubmit={handleEmail} aria-label={signup ? "Sign up with email" : "Log in with email"}>
+      <div className="signin-stack">
+        {(["github", "google"] as const).map(provider => (
+          <button key={provider} className="signin-secondary" type="button" disabled={busy !== null} onClick={() => handleSocial(provider)}>
+            {busy === provider ? `Connecting to ${providerLabels[provider]}...` : `Continue with ${providerLabels[provider]}`}
+          </button>
+        ))}
+      </div>
+      <div className="signin-divider" aria-hidden="true"><span />OR<span /></div>
+      <form className="signin-stack" onSubmit={handleEmail} aria-label={signup ? "Sign up with email" : "Log in with email"}>
         {signup && (
-          <div className="field">
+          <div className="signin-field">
             <label htmlFor="name">Name</label>
-            <input id="name" name="name" type="text" autoComplete="name" required maxLength={100} />
+            <input id="name" name="name" type="text" autoComplete="name" placeholder="Maya Ruiz" required maxLength={100} />
           </div>
         )}
-        <div className="field">
+        <div className="signin-field">
           <label htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" autoComplete="email" required />
+          <input id="email" name="email" type="email" autoComplete="email" placeholder="you@company.com" required />
         </div>
-        <div className="field">
-          <label htmlFor="password">Password</label>
+        <div className="signin-field">
+          <div className="signin-label-row">
+            <label htmlFor="password">Password</label>
+            {!signup && <Link href="/forgot-password">Forgot password?</Link>}
+          </div>
           <input
             id="password"
             name="password"
             type="password"
             autoComplete={signup ? "new-password" : "current-password"}
+            placeholder={signup ? undefined : "••••••••••••"}
             required
             minLength={signup ? MIN_PASSWORD_LENGTH : undefined}
             aria-describedby={signup ? "password-hint" : undefined}
           />
-          {signup && <p id="password-hint" className="muted">At least {MIN_PASSWORD_LENGTH} characters.</p>}
+          {signup && <span id="password-hint" className="signin-hint">At least {MIN_PASSWORD_LENGTH} characters.</span>}
         </div>
-        <button className="button" type="submit" disabled={busy !== null}>
-          {busy === "email" ? (signup ? "Creating account..." : "Logging in...") : signup ? "Sign up" : "Log in"}
+        <button className="landing-primary signin-submit" type="submit" disabled={busy !== null}>
+          {busy === "email" ? (signup ? "Creating account..." : "Logging in...") : signup ? "Create account" : "Log in"}
         </button>
+        {signup && (
+          <p className="signin-terms">
+            By signing up you agree to the <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>.
+          </p>
+        )}
       </form>
-      {!signup && <p><Link href="/forgot-password">Forgot your password?</Link></p>}
-      <p className="divider">or</p>
-      <div className="social-buttons">
-        {(["google", "github"] as const).map(provider => (
-          <button key={provider} className="button secondary" type="button" disabled={busy !== null} onClick={() => handleSocial(provider)}>
-            {busy === provider ? `Connecting to ${providerLabels[provider]}...` : `Continue with ${providerLabels[provider]}`}
-          </button>
-        ))}
-      </div>
-      <p>
+      <p className="signin-switch">
         {signup ? "Already have an account? " : "New to SpecThread? "}
         <Link href={`${signup ? "/login" : "/signup"}${next === DEFAULT_AFTER_SIGN_IN ? "" : `?next=${encodeURIComponent(next)}`}`}>
           {signup ? "Log in" : "Sign up"}
         </Link>
       </p>
-    </section>
-    </AuthLayout>
+    </SignInShell>
+  );
+}
+
+/** Sign-in page shell from the design: brand, the form column, and the animated evidence thread. */
+function SignInShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="landing signin">
+      <div className="signin-side">
+        <div className="signin-top">
+          <Link className="landing-brand" href="/">
+            <Image src="/thread-mark.png" alt="" width={34} height={20} unoptimized />SpecThread
+          </Link>
+        </div>
+        <main id="main-content" tabIndex={-1} className="signin-main">
+          <section>{children}</section>
+        </main>
+        <footer className="signin-footer">
+          <span>© 2026 SpecThread</span>
+          <Link href="/privacy">Privacy</Link>
+          <Link href="/terms">Terms</Link>
+        </footer>
+      </div>
+      <SignInThread />
+    </div>
   );
 }

@@ -44,7 +44,7 @@ test("an invalid session cookie does not skip login", async ({ page }) => {
     url: "http://127.0.0.1:3100",
   }]);
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Log in to SpecThread" })).toBeVisible();
 });
 
 for (const path of ["/login", "/signup"]) {
@@ -58,7 +58,7 @@ for (const path of ["/login", "/signup"]) {
     });
     await page.goto(path);
     const button = page.getByRole("button", { name: /with GitHub/ });
-    const alert = page.locator(".auth-panel [role='alert']");
+    const alert = page.getByRole("main").getByRole("alert");
     await button.click();
     await expect(alert).toHaveText("Unable to start GitHub sign-in. Please try again.");
     await expect(button).toBeEnabled();
@@ -73,7 +73,7 @@ test("network failure makes sign-in retryable", async ({ page }) => {
   await page.route("**/api/auth/sign-in/social", route => route.abort("failed"));
   await page.goto("/login");
   await page.getByRole("button", { name: /with GitHub/ }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toContainText("Please try again.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("Please try again.");
   await expect(page.getByRole("button", { name: /with GitHub/ })).toBeEnabled();
 });
 
@@ -117,7 +117,7 @@ test("Google sign-in requests the Google provider", async ({ page }) => {
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  const alert = page.locator(".auth-panel [role='alert']");
+  const alert = page.getByRole("main").getByRole("alert");
   await expect(alert).toHaveText("Unable to start Google sign-in. Please try again.");
   // Errors use a distinct color from neutral status notices.
   await expect(alert).toHaveCSS("color", "rgb(255, 201, 204)");
@@ -139,7 +139,7 @@ test("email login handles wrong passwords, throttling and unverified email by ke
   await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("a long enough password");
   await page.keyboard.press("Enter");
-  const alert = page.locator(".auth-panel [role='alert']");
+  const alert = page.getByRole("main").getByRole("alert");
   await expect(alert).toHaveText("Incorrect email or password.");
   await page.keyboard.press("Enter");
   await expect(alert).toContainText("Too many attempts");
@@ -161,10 +161,10 @@ test("sign-up validates the password and then asks the user to check their email
   await page.getByLabel("Name", { exact: true }).fill("Person");
   await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("short");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
   expect(await page.getByLabel("Password", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
   await page.getByLabel("Password", { exact: true }).fill("a long enough password");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   expect(body).toMatchObject({ name: "Person", email: "person@example.invalid", callbackURL: "/dashboard" });
 });
@@ -172,7 +172,7 @@ test("sign-up validates the password and then asks the user to check their email
 test("forgot password never reveals whether an account exists", async ({ page }) => {
   await page.route("**/api/auth/request-password-reset", route => route.fulfill({ json: { status: true } }));
   await page.goto("/login");
-  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await page.getByRole("link", { name: "Forgot password?" }).click();
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
   await page.getByLabel("Email", { exact: true }).fill("anyone@example.invalid");
@@ -186,7 +186,7 @@ test("reset password checks confirmation and handles expired links", async ({ pa
   await page.getByLabel("New password", { exact: true }).fill("a long enough password");
   await page.getByLabel("Confirm new password", { exact: true }).fill("a different long password");
   await page.getByRole("button", { name: "Update password" }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("The passwords do not match.");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("The passwords do not match.");
   await page.getByLabel("Confirm new password", { exact: true }).fill("a long enough password");
   await page.getByRole("button", { name: "Update password" }).click();
   await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();

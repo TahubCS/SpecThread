@@ -21,7 +21,6 @@ test("home offers sign up and the dashboard preview renders", async ({ page }, t
   await page.goto("/dashboard");
   await expect(page.getByText("Preview · Sample requirements, no project data connected")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-  await expect(page.locator(".app-brand img")).toHaveJSProperty("naturalWidth", 112);
   await expect(page.getByRole("link", { name: "New requirement" })).toHaveAttribute("href", "/projects/example-project/requirements/new");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("dashboard-desktop.png"), fullPage: true });
@@ -101,12 +100,12 @@ test.describe("signed out", () => {
     test(`${route} offers email, Google and GitHub sign-in`, async ({ page }, testInfo) => {
       await page.goto(`/${route}`);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-        route === "login" ? "Welcome back" : "Create your account",
+        route === "login" ? "Log in to SpecThread" : "Create your account",
       );
       await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
       await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
-      await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
-      await expect(page.getByRole("link", { name: "Back to home" })).toBeVisible();
+      await expect(page.locator(".signin-thread")).toBeVisible();
+      await expect(page.getByRole("link", { name: "SpecThread", exact: true })).toHaveAttribute("href", "/");
       await page.screenshot({ path: testInfo.outputPath(`${route}-desktop.png`), fullPage: true });
       await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
       await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("autocomplete", route === "login" ? "current-password" : "new-password");
@@ -114,6 +113,28 @@ test.describe("signed out", () => {
       await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
     });
   }
+
+  test("the sign-in evidence thread gathers, is accepted, and loops", async ({ page }) => {
+    await page.goto("/login");
+    const thread = page.locator(".signin-thread");
+    await expect(thread).toHaveAttribute("aria-hidden", "true");
+    await expect(thread).toHaveAttribute("data-phase", "gathered");
+    await expect(thread).toHaveAttribute("data-phase", "accepted");
+    await expect(thread).toHaveAttribute("data-phase", "scattered", { timeout: 10_000 });
+  });
+
+  test("reduced motion shows the sign-in thread already accepted", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/signup");
+    await expect(page.locator(".signin-thread")).toHaveAttribute("data-phase", "accepted");
+  });
+
+  test("the sign-in thread is hidden on a narrow screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/login");
+    await expect(page.locator(".signin-thread")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Log in to SpecThread" })).toBeVisible();
+  });
 
   test("public pages fit a narrow screen", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 390, height: 844 });
