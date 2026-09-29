@@ -1,9 +1,5 @@
 export const scaffoldRoutes = [
   ["/dashboard", "Dashboard"],
-  ["/about", "About"],
-  ["/about/how-it-works", "How SpecThread works"],
-  ["/about/privacy", "Privacy"],
-  ["/about/terms", "Terms of use"],
   ["/help", "Help"],
   ["/help/[article]", "Help article"],
   ["/welcome", "Welcome"],

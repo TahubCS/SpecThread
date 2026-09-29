@@ -1,8 +1,55 @@
 # Shared handoff
 
-## Current task: Workspace and settings sidebars (2026-09-29)
+## Current task: Landing page redesign and public About sections (2026-09-29)
 
-- Branch: `scaffolding`; builds on commit `5fd9389`. Changes are uncommitted.
+- Branch: `scaffolding`; builds on commit `c173d61`, the sidebar task below.
+  Changes are uncommitted.
+- Completed:
+  - The landing page uses the user-supplied design from Claude Design, moved to
+    `components/landing-page.tsx` with its styles in `landing.css`.
+  - About (new copy drawn from `docs/PROJECT.md`) and How it works are sections
+    below the hero.
+  - The animations work: the hero table (with a pause control), evidence
+    gathering with Replay, and the review decision. All three respect reduced
+    motion.
+  - The page adapts to narrow screens.
+  - `/about` and `/about/how-it-works` redirect to landing sections.
+  - Privacy and Terms are public pages at `/privacy` and `/terms`; the old
+    `/about/*` addresses redirect there.
+  - The settings sidebar dropped its "Help & about" group; Help moved to
+    "Getting started".
+  - Removed `main-navigation.tsx`, the four `/about` pages, and the user's
+    unused `RequirementsSidebar.tsx`, with the user's approval.
+- Changed files:
+  - `app/web/next.config.ts` (redirects)
+  - `app/web/src/app/{page.tsx,landing.css,privacy/page.tsx,terms/page.tsx}`
+  - `app/web/src/components/{landing-page,policy-page,app-frame,settings-sidebar}.tsx`
+  - `app/web/src/lib/{app-navigation,scaffold-routes}.ts`
+  - `tests/e2e/{landing,home,shell,scaffold}.spec.ts`
+  - `README.md` and `docs/{DECISIONS,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - Recorded in ADR-022.
+  - Only the design's dark, left-aligned variant is kept.
+  - The design's broken `/docs` footer link was dropped.
+  - About copy is a draft for the user to edit.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 100 tests.
+  - Inspected desktop and mobile screenshots of the hero, About, the evidence
+    thread, the review decision, the mobile menu, and Privacy. There were no
+    console errors and no horizontal scroll.
+- Known issues:
+  - Application routes such as `/dashboard` and `/settings` are still public by
+    URL. Real route protection is separate work.
+  - Policy pages are placeholders.
+  - The deferred minors listed in the sidebar task below still apply.
+- Exact next step: the user reviews the landing page. Then commit and push to
+  the existing PR, only after explicit user approval. Merge into
+  `main` through the pull request.
+
+## Previous task: Workspace and settings sidebars (2026-09-29)
+
+- Branch: `scaffolding`; committed as `c173d61`.
 - Completed:
   - Routes pick one of three frames through `frameFor` in
     `lib/app-navigation.ts`, following ADR-021.

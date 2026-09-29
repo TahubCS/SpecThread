@@ -47,22 +47,6 @@ test("unknown routes show a useful not-found page", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
 });
 
-test("about groups the informational pages", async ({ page }) => {
-  await page.goto("/about");
-  await expect(page.getByRole("heading", { name: "About SpecThread" })).toBeVisible();
-
-  for (const [name, route] of [
-    ["How SpecThread works", "/about/how-it-works"],
-    ["Privacy", "/about/privacy"],
-    ["Terms of use", "/about/terms"],
-  ] as const) {
-    await page.getByRole("main").getByRole("link", { name }).click();
-    await expect(page).toHaveURL(new RegExp(`${route}$`));
-    await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
-    await page.goto("/about");
-  }
-});
-
 test("projects includes personal and team-owned projects in its routing scope", async ({ page }) => {
   await page.goto("/projects");
   await expect(page.getByText("Browse your personal projects and projects shared through teams.")).toBeVisible();
@@ -99,7 +83,6 @@ test("every reserved page participates in navigation", async () => {
       if (entry.name !== "page.tsx") return [];
       const contents = await readFile(fullPath, "utf8");
       if (!contents.includes("ScaffoldPage") && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
-          !fullPath.endsWith(`${path.sep}about${path.sep}page.tsx`) &&
           !fullPath.endsWith(`${path.sep}settings${path.sep}account${path.sep}page.tsx`)) return [];
       return [`/${path.relative(root, directory).split(path.sep).join("/")}`];
     }));

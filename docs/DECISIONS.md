@@ -342,6 +342,31 @@ public or settings routes. Linear is a reference, not a specification, so visual
 details can change without a new decision. Workspace switching and member
 management remain unimplemented.
 
+ADR-022: Landing sections replace the About pages; policy pages stay public
+
+Status: Accepted
+
+Context: With ADR-021, the About and How it works links on the landing page opened
+pages inside the settings sidebar, so visitors who had not signed in were taken into
+the application shell. The user treated this as a security concern and supplied a new
+landing page design with animated product previews.
+
+Decision: The landing page uses the supplied design, rendering its own header and
+footer, and adds About and How it works as sections below the hero. `/about` and
+`/about/how-it-works` redirect to `/#about` and `/#how`. Privacy and Terms move to
+public pages at `/privacy` and `/terms` that show only the minimal public header;
+`/about/privacy` and `/about/terms` redirect there. The settings sidebar no longer
+lists About, How it works, Privacy, or Terms, and Help moves into its Getting started
+group. Landing animations pause on request and show their finished state when the
+visitor prefers reduced motion. On narrow screens the page stacks and the wide
+product previews scroll inside their own containers. This supersedes ADR-018's About
+hub and the About entries in ADR-021.
+
+Consequences: Visitors can explore everything public without entering the app
+shell. Application routes such as `/dashboard` and `/settings` remain reachable by
+URL until route protection is implemented; this decision does not add access
+control. Policy text is still a placeholder.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

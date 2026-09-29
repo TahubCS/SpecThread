@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Accessibility, Bell, BookOpen, ChevronLeft, Database, FolderGit2, FolderPlus, Hand, Info,
-  LifeBuoy, MonitorSmartphone, Plug, Scale, Shield, SlidersHorizontal, UserRound,
+  Accessibility, Bell, ChevronLeft, Database, FolderGit2, FolderPlus, Hand, LifeBuoy,
+  MonitorSmartphone, Plug, SlidersHorizontal, UserRound,
 } from "lucide-react";
 import { isCurrentLink } from "@/lib/app-navigation";
 import { authClient } from "@/lib/auth-client";
@@ -26,18 +26,12 @@ const groups = [
     { label: "Welcome", href: "/welcome", icon: Hand },
     { label: "Project setup", href: "/onboarding/project", icon: FolderPlus },
     { label: "Repository setup", href: "/onboarding/repository", icon: FolderGit2 },
-  ] },
-  { heading: "Help & about", links: [
     { label: "Help", href: "/help", icon: LifeBuoy },
-    { label: "How it works", href: "/about/how-it-works", icon: BookOpen },
-    { label: "About", href: "/about", icon: Info },
-    { label: "Privacy", href: "/about/privacy", icon: Shield },
-    { label: "Terms", href: "/about/terms", icon: Scale },
   ] },
 ] as const;
 
 /**
- * Renders the sidebar for personal settings, onboarding, help, and policy pages.
+ * Renders the sidebar for personal settings, onboarding, and help pages.
  * Invitation pages share this frame without a link because users reach them from invite URLs.
  * Signed-out visitors, who often arrive from the landing page, get a link back home instead
  * of back to the workspace.

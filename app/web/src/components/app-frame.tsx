@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeft, Bell, House, Menu, Settings, type LucideIcon } from "lucide-react";
 import { frameFor } from "@/lib/app-navigation";
-import { LandingNavigation } from "./main-navigation";
 import { SettingsSidebar } from "./settings-sidebar";
 import { WorkspaceSidebar, workspaceTitleFor } from "./workspace-sidebar";
 
@@ -50,9 +49,10 @@ function AppShell({ sidebar, title, icon: Icon, children }: {
 }
 
 /**
- * Selects the frame for the current route: the public header for landing and sign-in pages,
- * the settings sidebar for personal, help, and onboarding pages, and the workspace sidebar
- * for everything else. This does not enforce access control.
+ * Selects the frame for the current route. The landing page brings its own header and footer;
+ * sign-in and policy pages get a minimal public header; personal, help, and onboarding pages
+ * get the settings sidebar; everything else gets the workspace sidebar.
+ * This does not enforce access control.
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -63,26 +63,20 @@ export function AppFrame({ children }: { children: ReactNode }) {
   if (frame === "workspace") {
     return <AppShell sidebar={<WorkspaceSidebar />} title={workspaceTitleFor(pathname)} icon={House}>{children}</AppShell>;
   }
-  const landing = pathname === "/";
+  if (pathname === "/") return <>{children}</>;
   return (
-    <div className={`public-frame ${landing ? "landing-frame" : "auth-frame"}`}>
+    <div className="public-frame auth-frame">
       <header className="site-header">
         <div className="header-inner">
           <Link className="brand" href="/">
             <Image src="/thread-mark.png" alt="" width={39} height={22} unoptimized />
             <span>SpecThread</span>
           </Link>
-          {landing ? <LandingNavigation /> : (
-            <Link className="auth-back" href="/"><ArrowLeft size={17} aria-hidden="true" /> Back to home</Link>
-          )}
+          <Link className="auth-back" href="/"><ArrowLeft size={17} aria-hidden="true" /> Back to home</Link>
         </div>
       </header>
       <main id="main-content" tabIndex={-1}>{children}</main>
-      {landing ? (
-        <footer className="landing-footer">See the evidence. Make the decision.</footer>
-      ) : (
-        <footer>SpecThread · Requirements, evidence, and human review. <Link href="/about">About</Link></footer>
-      )}
+      <footer>SpecThread · Requirements, evidence, and human review. <Link href="/#about">About</Link></footer>
     </div>
   );
 }

@@ -1,10 +1,10 @@
 export type Frame = "public" | "settings" | "workspace";
 
-/** Routes that keep the public top header: the landing page and the sign-in flow. */
-const publicRoutes = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error"];
+/** Routes shown without an app sidebar: the landing page, the sign-in flow, and policy pages. */
+const publicRoutes = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms"];
 
-/** Prefixes for personal, informational, and onboarding pages that use the settings sidebar. */
-const settingsPrefixes = ["/settings", "/account", "/help", "/about", "/welcome", "/onboarding", "/invites"];
+/** Prefixes for personal, help, and onboarding pages that use the settings sidebar. */
+const settingsPrefixes = ["/settings", "/account", "/help", "/welcome", "/onboarding", "/invites"];
 
 /**
  * Chooses the page frame for a pathname without a query string. Public routes match exactly.
@@ -18,7 +18,7 @@ export function frameFor(pathname: string): Frame {
 }
 
 /** Links whose descendants have their own sidebar entries, so they highlight only on an exact match. */
-const exactLinks = new Set(["/settings", "/about"]);
+const exactLinks = new Set(["/settings"]);
 
 /** Reports whether a settings sidebar link represents the current pathname. */
 export function isCurrentLink(href: string, pathname: string) {

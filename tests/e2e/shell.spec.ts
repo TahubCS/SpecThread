@@ -9,11 +9,11 @@ const fakeSession = {
 };
 
 test("frame selection keeps the top header for landing and sign-in only", () => {
-  for (const path of ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error"]) {
+  for (const path of ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms"]) {
     expect(frameFor(path), path).toBe("public");
   }
   for (const path of ["/settings", "/settings/account", "/account", "/help", "/help/example-article",
-    "/about", "/about/privacy", "/welcome", "/onboarding/project", "/invites/example-token/expired"]) {
+    "/welcome", "/onboarding/project", "/invites/example-token/expired"]) {
     expect(frameFor(path), path).toBe("settings");
   }
   for (const path of ["/dashboard", "/notifications", "/reviews", "/projects/p/settings/repository",
@@ -25,8 +25,7 @@ test("frame selection keeps the top header for landing and sign-in only", () => 
 test("settings links highlight the current page and only the right descendants", () => {
   expect(isCurrentLink("/settings", "/settings")).toBe(true);
   expect(isCurrentLink("/settings", "/settings/account")).toBe(false);
-  expect(isCurrentLink("/about", "/about/privacy")).toBe(false);
-  expect(isCurrentLink("/about/privacy", "/about/privacy")).toBe(true);
+  expect(isCurrentLink("/settings/data", "/settings/data")).toBe(true);
   expect(isCurrentLink("/help", "/help/example-article")).toBe(true);
   expect(isCurrentLink("/help", "/helpful")).toBe(false);
 });
@@ -42,23 +41,23 @@ test("profile initials use the name, then the email", () => {
 test("settings pages use the settings sidebar instead of the workspace sidebar", async ({ page }) => {
   await page.goto("/help/example-article");
   const settingsNav = page.getByRole("navigation", { name: "Settings navigation" });
-  for (const heading of ["Personal", "Security & data", "Getting started", "Help & about"]) {
+  for (const heading of ["Personal", "Security & data", "Getting started"]) {
     await expect(settingsNav.getByText(heading, { exact: true })).toBeVisible();
   }
   await expect(settingsNav.getByRole("link", { name: "Help", exact: true })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
-  await expect(page.locator(".site-header")).toHaveCount(0);
-  await settingsNav.getByRole("link", { name: "Privacy", exact: true }).click();
-  await expect(page).toHaveURL(/\/about\/privacy$/);
-  await expect(page.getByRole("heading", { name: "Privacy", level: 1 })).toBeVisible();
+  await expect(page.locator(".site-header, .landing-header")).toHaveCount(0);
+  await expect(settingsNav.getByRole("link", { name: /About|Privacy|Terms|How it works/ })).toHaveCount(0);
+  await settingsNav.getByRole("link", { name: "Welcome" }).click();
+  await expect(page).toHaveURL(/\/welcome$/);
   await page.getByRole("link", { name: "Back to home" }).click();
   await expect(page).toHaveURL(/:\d+\/$/);
-  await expect(page.locator(".site-header")).toBeVisible();
+  await expect(page.locator(".site-header, .landing-header")).toBeVisible();
 });
 
 test("signed-in users return from settings to the workspace", async ({ page }) => {
   await page.route("**/api/auth/get-session*", route => route.fulfill({ json: fakeSession }));
-  await page.goto("/about/how-it-works");
+  await page.goto("/help");
   await expect(page.getByRole("link", { name: "Back to home" })).toHaveCount(0);
   await page.getByRole("link", { name: "Back to app" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -71,11 +70,11 @@ test("work pages and unknown routes use the workspace sidebar without a top head
     await page.goto(route);
     await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Inbox" }), route).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Settings navigation" }), route).toHaveCount(0);
-    await expect(page.locator(".site-header"), route).toHaveCount(0);
+    await expect(page.locator(".site-header, .landing-header"), route).toHaveCount(0);
   }
   for (const route of ["/", "/login", "/signup"]) {
     await page.goto(route);
-    await expect(page.locator(".site-header"), route).toBeVisible();
+    await expect(page.locator(".site-header, .landing-header"), route).toBeVisible();
     await expect(page.locator(".app-sidebar"), route).toHaveCount(0);
   }
 });

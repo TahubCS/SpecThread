@@ -62,9 +62,14 @@ currently require network access during the web build.
   menu (signed out, loading, signed in, and failed log out), and scaffold/auth
   pages at mobile width. Desktop/mobile screenshots are saved inside the ignored
   test-results directory.
+- Landing page: navbar links to the About and How it works sections, redirects
+  from the former About pages, public Privacy and Terms pages without the app
+  sidebar, the hero animation with its pause control, evidence gathering and
+  replay, the review decision on scroll, finished states under reduced motion,
+  the signed-in Dashboard link, and narrow-screen layout and menu.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
-  placeholder pages, a useful 404 for an unknown URL, the About hub and its
-  three child pages, the personal/team project descriptions, and a route walk
+  placeholder pages, a useful 404 for an unknown URL, the personal/team project
+  descriptions, and a route walk
   from Dashboard through a team, project, requirement, evidence, and review.
   These checks do not imply that product data or authorization are implemented.
 - API: health response without database credentials, development OpenAPI, and

@@ -46,7 +46,7 @@ migrations exist, and the API validates Better Auth JWTs. Project membership che
 and product endpoints remain unimplemented.
 
 The web app has `/`, `/login`, `/signup`, `/forgot-password`, `/reset-password`,
-`/settings/account`, and `/dashboard`. Login and signup offer email/password,
+`/privacy`, `/terms`, `/settings/account`, and `/dashboard`. Login and signup offer email/password,
 Google, and GitHub; `/settings/account` links sign-in methods, and `/account`
 redirects there. The dashboard is an explicitly public,
 empty preview. For local development without Resend, set `EMAIL_DELIVERY=log` in
