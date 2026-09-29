@@ -1,12 +1,25 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
+import { AuthLayout } from "./auth-layout";
 
 const MIN_PASSWORD_LENGTH = 12;
 const TOO_MANY = "Too many attempts. Please wait a moment before trying again.";
 const UNREACHABLE = "Unable to reach the sign-in service. Please try again.";
+
+/** Renders a password-recovery state in the shared auth layout. */
+function RecoveryPanel({ children }: { children: ReactNode }) {
+  return (
+    <AuthLayout>
+      <section className="auth-panel stack">
+        <p className="auth-kicker">Account recovery</p>
+        {children}
+      </section>
+    </AuthLayout>
+  );
+}
 
 export function ForgotPasswordForm() {
   const [busy, setBusy] = useState(false);
@@ -29,7 +42,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <section className="panel auth-panel stack">
+    <RecoveryPanel>
       <h1>Reset your password</h1>
       {sent ? (
         // The same message is shown whether or not the email has an account.
@@ -37,7 +50,7 @@ export function ForgotPasswordForm() {
       ) : (
         <>
           <p>Enter your account email and we will send you a link to choose a new password.</p>
-          {error && <p role="alert" className="notice text-red-600">{error}</p>}
+          {error && <p role="alert" className="notice notice-error">{error}</p>}
           <form className="auth-form" onSubmit={handleSubmit} aria-label="Request a password reset">
             <div className="field">
               <label htmlFor="email">Email</label>
@@ -48,7 +61,7 @@ export function ForgotPasswordForm() {
         </>
       )}
       <p><Link href="/login">Back to log in</Link></p>
-    </section>
+    </RecoveryPanel>
   );
 }
 
@@ -83,28 +96,28 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
 
   if (expired) {
     return (
-      <section className="panel auth-panel stack">
+      <RecoveryPanel>
         <h1>Reset link expired</h1>
         <p>This password reset link is invalid or has already been used. Request a new one to continue.</p>
         <Link className="button" href="/forgot-password">Request a new link</Link>
-      </section>
+      </RecoveryPanel>
     );
   }
 
   if (done) {
     return (
-      <section className="panel auth-panel stack">
+      <RecoveryPanel>
         <h1>Password updated</h1>
         <p role="status">Your password was changed and other sessions were signed out.</p>
         <Link className="button" href="/login">Log in</Link>
-      </section>
+      </RecoveryPanel>
     );
   }
 
   return (
-    <section className="panel auth-panel stack">
+    <RecoveryPanel>
       <h1>Choose a new password</h1>
-      {error && <p role="alert" className="notice text-red-600">{error}</p>}
+      {error && <p role="alert" className="notice notice-error">{error}</p>}
       <form className="auth-form" onSubmit={handleSubmit} aria-label="Choose a new password">
         <div className="field">
           <label htmlFor="password">New password</label>
@@ -118,6 +131,6 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         </div>
         <button className="button" type="submit" disabled={busy}>{busy ? "Saving..." : "Update password"}</button>
       </form>
-    </section>
+    </RecoveryPanel>
   );
 }

@@ -38,6 +38,14 @@ test("an active session skips login and signup", async ({ page }) => {
     await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Sign up" })).toHaveCount(0);
     await accountLink.click();
     await expect(page).toHaveURL(/\/account$/);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/about");
+    const publicNavigation = page.getByRole("navigation", { name: "Main navigation" });
+    await publicNavigation.getByLabel("Open navigation").click();
+    await publicNavigation.getByRole("link", { name: "Account" }).click();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(publicNavigation.getByRole("link", { name: "Account" })).toBeHidden();
   } finally {
     runSql(`DELETE FROM public."user" WHERE id = '${userId}'`);
   }
@@ -99,6 +107,7 @@ test("OAuth callback failures use the public error page", async ({ page }) => {
 test("error page handles cancellation and untrusted input accessibly", async ({ page }, testInfo) => {
   await page.goto("/auth/error?error=access_denied");
   await expect(page.getByRole("heading", { name: "Sign-in cancelled" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("auth-error-desktop.png"), fullPage: true });
   const retry = page.getByRole("link", { name: "Try signing in again" });
   await retry.focus();
@@ -121,7 +130,10 @@ test("Google sign-in requests the Google provider", async ({ page }) => {
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("Unable to start Google sign-in. Please try again.");
+  const alert = page.locator(".auth-panel [role='alert']");
+  await expect(alert).toHaveText("Unable to start Google sign-in. Please try again.");
+  // Errors use a distinct color from neutral status notices.
+  await expect(alert).toHaveCSS("color", "rgb(255, 201, 204)");
   expect(body).toMatchObject({ provider: "google", callbackURL: "/dashboard", errorCallbackURL: "/auth/error" });
 });
 
@@ -175,6 +187,7 @@ test("forgot password never reveals whether an account exists", async ({ page })
   await page.goto("/login");
   await page.getByRole("link", { name: "Forgot your password?" }).click();
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
   await page.getByLabel("Email", { exact: true }).fill("anyone@example.invalid");
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByRole("status")).toHaveText("If an account uses that email, we sent a link to reset its password.");
@@ -192,6 +205,7 @@ test("reset password checks confirmation and handles expired links", async ({ pa
   await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
   await page.goto("/reset-password?error=INVALID_TOKEN");
   await expect(page.getByRole("link", { name: "Request a new link" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
 });
 
 test("account page requires sign-in", async ({ page }) => {

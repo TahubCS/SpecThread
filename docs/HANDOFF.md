@@ -1,8 +1,31 @@
 # Shared handoff
 
-## Current task: Align remaining pages with the shared design (2026-09-26)
+## Current task: Design review fixes for remaining auth pages (2026-09-29)
 
-- Branch: `scaffolding`; all changes remain uncommitted.
+- Branch: `scaffolding`; builds on commit `765b3d1`. Changes are uncommitted.
+- Completed: forgot-password, all reset-password states, and the sign-in error
+  page now use the same evidence-path layout and eyebrow label as login and
+  signup. The layout moved to `components/auth-layout.tsx`. Error alerts use a
+  new `notice-error` style. Previously `text-red-600` was overridden by `.notice`,
+  so errors looked like status messages. Related-page link cards keep their
+  neutral text color on public pages, and the public mobile menu closes after
+  each route change.
+- Changed files: `app/web/src/components/{auth-layout,auth-form,password-forms,account-panel,main-navigation}.tsx`,
+  `app/web/src/app/auth/error/page.tsx`, `app/web/src/app/public-pages.css`,
+  `tests/e2e/auth.spec.ts`, and this file.
+- Decisions and assumptions: recovery pages use the "Account recovery" label and
+  the sign-in error page uses "Sign-in". No auth behavior changed.
+- Verification: `npm run lint`, `npm run typecheck`, `git diff --check`, and the
+  full `npm test` suite (83 passed) ran. Inspected the auth error desktop and
+  forgot-password mobile screenshots.
+- Known limits: the landing page's mobile menu uses the same `<details>` pattern
+  and still stays open after its in-page "Product" link.
+- Exact next step: review the diff, then commit and push to the existing PR only
+  after explicit user approval. Merge into `main` through the pull request.
+
+## Previous task: Align remaining pages with the shared design (2026-09-26)
+
+- Branch: `scaffolding`; committed as `765b3d1`.
 - Completed: restyled shared placeholder routes, their related-page navigation,
   the About hub, account and error states, and public/auth layouts to match the
   dashboard and landing page's charcoal and lavender visual language. Login and

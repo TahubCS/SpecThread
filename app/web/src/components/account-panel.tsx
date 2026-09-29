@@ -66,7 +66,7 @@ export function AccountPanel({ user, linked, available }: {
         <h1>Account</h1>
         <p>Review your profile and sign-in methods.</p>
       </header>
-      {error && <p role="alert" className="notice text-red-600">{error}</p>}
+      {error && <p role="alert" className="notice notice-error">{error}</p>}
       <section className="panel stack" aria-labelledby="profile-heading">
         <h2 id="profile-heading">Profile</h2>
         <dl className="details">

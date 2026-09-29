@@ -21,6 +21,9 @@
 .public-frame:not(.landing-frame) .eyebrow { color: #aaaab2; }
 .public-frame:not(.landing-frame) .panel { border-color: #343438; background: #1d1d20; }
 .public-frame:not(.landing-frame) .notice { border: 1px solid #3a3846; background: #242329; color: #c7c3d7; }
+.public-frame:not(.landing-frame) .notice-error { border-color: #7a3a42; background: #2c1c1f; color: #ffc9cc; }
+.public-frame:not(.landing-frame) .scaffold-links a { color: #dedee3; }
+.public-frame:not(.landing-frame) .scaffold-links a:hover { color: #f5f3ff; }
 .public-frame:not(.landing-frame) .button { border-color: #b5a9f5; background: #b5a9f5; color: #17141f; }
 .public-frame:not(.landing-frame) .button:hover { border-color: #c9c0ff; background: #c9c0ff; color: #17141f; text-decoration: none; }
 .public-frame:not(.landing-frame) .button.secondary { border-color: #53505f; background: #242329; color: #eceaf6; }
@@ -69,7 +72,6 @@
 .auth-evidence-node { position: relative; z-index: 1; display: grid; place-items: center; width: 43px; height: 43px; border: 1px solid #b5a9f5; border-radius: 50%; background: #151516; color: #e0d9ff; }
 .auth-evidence-steps .is-pending .auth-evidence-node { border-color: #777780; color: #9999a3; }
 .auth-evidence > p { margin: 34px 0 0; color: #aaaab3; text-align: center; }
-.auth-frame > main > .auth-panel { width: min(100%, 520px); }
 
 @media (max-width: 1060px) {
   .public-nav-links { display: none; }
