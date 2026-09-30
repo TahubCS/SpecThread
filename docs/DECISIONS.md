@@ -317,6 +317,81 @@ repository evidence has been collected. Replace sample rows and example team lin
 when authorized project APIs are available, and protect product routes before
 showing private data. This supersedes the empty-preview state in ADR-019.
 
+ADR-021: Separate workspace and settings sidebars joined by a profile menu
+
+Status: Accepted
+
+Context: The user adopted Linear as a design reference. Settings shared the product
+sidebar, and informational, onboarding, and account pages still used the public top
+navbar. The user asked for work-related pages and everything else to use separate
+sidebars, with a profile menu linking them and no navbar outside landing and sign-in.
+
+Decision: Choose the frame from the pathname. `/`, `/login`, `/signup`,
+`/forgot-password`, `/reset-password`, and `/auth/error` keep the public header.
+`/settings`, `/account`, `/help`, `/about`, `/welcome`, `/onboarding`, and `/invites`
+use a settings sidebar grouped as Personal, Security & data, Getting started, and
+Help & about. Its top link returns signed-in users to the workspace and signed-out
+visitors to the landing page. All other routes, including unknown routes, use the workspace sidebar.
+A profile menu at the top of the workspace sidebar offers Settings, Account, and Log
+out, or Settings, Log in, and Sign up when signed out. The account page moves to
+`/settings/account`; `/account` redirects there. This supersedes ADR-020's statement
+that public pages retain the existing header.
+
+Consequences: New routes use the workspace sidebar unless deliberately listed as
+public or settings routes. Linear is a reference, not a specification, so visual
+details can change without a new decision. Workspace switching and member
+management remain unimplemented.
+
+ADR-022: Landing sections replace the About pages; policy pages stay public
+
+Status: Accepted
+
+Context: With ADR-021, the About and How it works links on the landing page opened
+pages inside the settings sidebar, so visitors who had not signed in were taken into
+the application shell. The user treated this as a security concern and supplied a new
+landing page design with animated product previews.
+
+Decision: The landing page uses the supplied design, rendering its own header and
+footer, and adds About and How it works as sections below the hero. `/about` and
+`/about/how-it-works` redirect to `/#about` and `/#how`. Privacy and Terms move to
+public pages at `/privacy` and `/terms` that show only the minimal public header;
+`/about/privacy` and `/about/terms` redirect there. The settings sidebar no longer
+lists About, How it works, Privacy, or Terms, and Help moves into its Getting started
+group. Landing animations pause on request and show their finished state when the
+visitor prefers reduced motion. On narrow screens the page stacks and the wide
+product previews scroll inside their own containers. This supersedes ADR-018's About
+hub and the About entries in ADR-021.
+
+Consequences: Visitors can explore everything public without entering the app
+shell. Application routes such as `/dashboard` and `/settings` remain reachable by
+URL until route protection is implemented; this decision does not add access
+control. Policy text is still a placeholder.
+
+ADR-023: Deny-by-default page access through a Next.js proxy
+
+Status: Accepted
+
+Context: Every application page, including the dashboard preview, settings, and
+invitations, rendered for visitors without a session. The user treated this as a
+security issue and chose to require sign-in everywhere except the landing, sign-in,
+and policy pages.
+
+Decision: `app/web/src/proxy.ts` validates the Better Auth session with
+`auth.api.getSession` for every page request except `/`, `/login`, `/signup`,
+`/forgot-password`, `/reset-password`, `/auth/error`, `/privacy`, and `/terms`, which
+`isPublicPath` in `lib/app-navigation.ts` lists once. The matcher skips `/api/*`,
+Next.js internals, and the public image files. Without a valid session the visitor is
+redirected to `/login?next=<requested path and query>`; `safeNextPath` accepts only
+same-site paths other than login and signup, defaulting to `/dashboard`, and every
+sign-in method returns there. Session lookup errors propagate so a failed lookup never
+renders a page. Pages that load data keep their own session checks. This supersedes
+the public dashboard preview in ADR-019 and ADR-020, and ADR-021's signed-out "Back to
+home" link in the settings sidebar, which only signed-in users now reach.
+
+Consequences: New pages are protected unless deliberately added to the public list.
+Each protected page request performs one session lookup. API authorization (project
+and team membership) remains separate work in the C# API.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

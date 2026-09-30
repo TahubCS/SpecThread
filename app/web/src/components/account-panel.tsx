@@ -36,9 +36,9 @@ export function AccountPanel({ user, linked, available }: {
     }
   }
 
-  // Redirects to the provider; the callback returns to /account or /auth/error.
+  // Redirects to the provider; the callback returns to /settings/account or /auth/error.
   const link = (provider: Provider) => run(`link-${provider}`,
-    () => authClient.linkSocial({ provider, callbackURL: "/account", errorCallbackURL: "/auth/error" }),
+    () => authClient.linkSocial({ provider, callbackURL: "/settings/account", errorCallbackURL: "/auth/error" }),
     `Unable to start linking ${labels[provider]}. Please try again.`);
 
   async function unlink(account: { id: string; providerId: string; usable: boolean }) {
@@ -60,9 +60,13 @@ export function AccountPanel({ user, linked, available }: {
   }
 
   return (
-    <div className="stack">
-      <h1>Account</h1>
-      {error && <p role="alert" className="notice text-red-600">{error}</p>}
+    <div className="scaffold-page account-page">
+      <header className="scaffold-heading">
+        <p className="scaffold-kicker">SpecThread / Account</p>
+        <h1>Account</h1>
+        <p>Review your profile and sign-in methods.</p>
+      </header>
+      {error && <p role="alert" className="notice notice-error">{error}</p>}
       <section className="panel stack" aria-labelledby="profile-heading">
         <h2 id="profile-heading">Profile</h2>
         <dl className="details">

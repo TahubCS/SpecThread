@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
-test("home links to the public dashboard preview", async ({ page }, testInfo) => {
+test("home offers sign up and the dashboard preview renders", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
@@ -8,35 +8,23 @@ test("home links to the public dashboard preview", async ({ page }, testInfo) =>
   await page.goto("/");
   await expect(page).toHaveTitle("SpecThread");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /\/icon\.png\?/);
-  await expect(page.locator(".site-header .brand img")).toHaveJSProperty("naturalWidth", 112);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Follow the work behind every requirement.");
-  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Product" })).toHaveAttribute("href", "#product");
-  await expect(page.locator(".landing-actions").getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/signup");
-  await expect(page.getByRole("list", { name: "Example evidence path for Invite teammates" })).toBeVisible();
+  await expect(page.locator(".landing-brand img")).toHaveJSProperty("naturalWidth", 112);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Every requirement, traced to the evidence behind it.");
+  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "About" })).toHaveAttribute("href", "#about");
+  await expect(page.getByRole("link", { name: "Sign up free" })).toHaveAttribute("href", "/signup");
+  await expect(page.getByRole("img", { name: /Example requirements table/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("home-desktop.png"), fullPage: true });
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
-  await page.getByRole("link", { name: "Explore the dashboard", exact: true }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await page.goto("/dashboard");
   await expect(page.getByText("Preview · Sample requirements, no project data connected")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-  await expect(page.locator(".app-brand img")).toHaveJSProperty("naturalWidth", 112);
   await expect(page.getByRole("link", { name: "New requirement" })).toHaveAttribute("href", "/projects/example-project/requirements/new");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("dashboard-desktop.png"), fullPage: true });
   expect(errors).toEqual([]);
-});
-
-test("landing page stays navigable on a narrow screen", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.locator(".landing-mobile-menu summary").click();
-  await expect(page.getByRole("link", { name: "How it works" })).toBeVisible();
-  await page.locator(".landing-actions").getByRole("link", { name: "Get started" }).click();
-  await expect(page).toHaveURL(/\/signup$/);
 });
 
 test("dashboard preview switches views and expands an evidence thread", async ({ page }) => {
@@ -66,23 +54,6 @@ test("app navigation keeps the sidebar while routes change", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
 });
 
-for (const route of ["login", "signup"] as const) {
-  test(`${route} offers email, Google and GitHub sign-in`, async ({ page }) => {
-    await page.goto(`/${route}`);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      route === "login" ? "Welcome back" : "Create your account",
-    );
-    await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
-    await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("autocomplete", route === "login" ? "current-password" : "new-password");
-    await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
-    await page.getByRole("link", { name: "Explore the dashboard preview" }).click();
-    await expect(page.getByRole("heading", { name: "Your work", exact: true })).toBeVisible();
-  });
-}
-
 test("Better Auth endpoint responds to session queries", async ({ request }) => {
   const response = await request.get("/api/auth/get-session");
   expect(response.status()).toBe(200);
@@ -104,13 +75,75 @@ test("Better Auth rejects other Vercel and tunnel origins", async ({ request }) 
   expect(allowed.status()).toBe(200);
 });
 
-test("all skeleton pages fit a narrow screen", async ({ page }, testInfo) => {
+test("dashboard fits a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const route of ["/", "/login", "/signup", "/dashboard", "/forgot-password", "/reset-password?token=t"]) {
-    const response = await page.goto(route);
-    expect(response?.status()).toBe(200);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test.describe("signed out", () => {
+  test.use({ signedIn: false });
+
+  test("landing page stays navigable on a narrow screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath(`${route.slice(1).split("?")[0] || "home"}-mobile.png`), fullPage: true });
+    const nav = page.getByRole("navigation", { name: "Main navigation" });
+    await nav.getByLabel("Open navigation").click();
+    await expect(nav.getByRole("link", { name: "How it works" })).toBeVisible();
+    await nav.getByRole("link", { name: "Sign up" }).click();
+    await expect(page).toHaveURL(/\/signup$/);
+  });
+
+  for (const route of ["login", "signup"] as const) {
+    test(`${route} offers email, Google and GitHub sign-in`, async ({ page }, testInfo) => {
+      await page.goto(`/${route}`);
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+        route === "login" ? "Log in to SpecThread" : "Create your account",
+      );
+      await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
+      await expect(page.locator(".signin-thread")).toBeVisible();
+      await expect(page.getByRole("link", { name: "SpecThread", exact: true })).toHaveAttribute("href", "/");
+      await page.screenshot({ path: testInfo.outputPath(`${route}-desktop.png`), fullPage: true });
+      await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("autocomplete", route === "login" ? "current-password" : "new-password");
+      await page.getByRole("main").getByRole("link", { name: route === "login" ? "Sign up" : "Log in", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/${route === "login" ? "signup" : "login"}$`));
+    });
   }
+
+  test("the sign-in evidence thread gathers, is accepted, and loops", async ({ page }) => {
+    await page.goto("/login");
+    const thread = page.locator(".signin-thread");
+    await expect(thread).toHaveAttribute("aria-hidden", "true");
+    await expect(thread).toHaveAttribute("data-phase", "gathered");
+    await expect(thread).toHaveAttribute("data-phase", "accepted");
+    await expect(thread).toHaveAttribute("data-phase", "scattered", { timeout: 10_000 });
+  });
+
+  test("reduced motion shows the sign-in thread already accepted", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/signup");
+    await expect(page.locator(".signin-thread")).toHaveAttribute("data-phase", "accepted");
+  });
+
+  test("the sign-in thread is hidden on a narrow screen", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/login");
+    await expect(page.locator(".signin-thread")).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Log in to SpecThread" })).toBeVisible();
+  });
+
+  test("public pages fit a narrow screen", async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const route of ["/", "/login", "/signup", "/forgot-password", "/reset-password?token=t"]) {
+      const response = await page.goto(route);
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`${route.slice(1).split("?")[0] || "home"}-mobile.png`), fullPage: true });
+    }
+  });
 });

@@ -106,7 +106,7 @@ Consider separate development and production clients.
    for any other `BETTER_AUTH_URL` because it prints one-time links.
 4. After deploying, verify: sign up, receive the verification email, follow it,
    log in, request a password reset, follow it, and confirm other sessions were
-   signed out. Link and unlink Google and GitHub from `/account`.
+   signed out. Link and unlink Google and GitHub from `/settings/account`.
 
 ### Client IP headers and rate limiting
 

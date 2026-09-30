@@ -1,5 +1,279 @@
 # Shared handoff
 
+## Current task: PR #8 docstring coverage (2026-09-29)
+
+- Branch: `coderabbit/improve-docstring-coverage/84e64e39`; uncommitted changes
+  based on verified PR head `4702b29280c0b0cbac524873197247c66d0d2855`.
+- Added 14 JSDoc comments in `app/web/src/components/landing-page.tsx` and
+  `app/web/src/components/auth-form.tsx`; no executable changes or new dependencies.
+- Local TypeScript AST audit of named functions intersecting PR hunks: 54/64
+  documented (84.38%). This approximates the hosted check, which counted 62
+  functions; its result must be confirmed after publication.
+- Comment-stripped TypeScript compilation matched the PR head for all 37 changed
+  TypeScript files. Behavior tests were skipped for this documentation-only patch.
+- Validation: `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  `npm run build` passed with temporary loopback auth configuration (random secret,
+  offline placeholder database URL, email logging, and disabled OAuth providers).
+  Restored missing sandbox dependencies with `npm ci --no-audit --no-fund`.
+- CodeRabbit review could not run because it is disabled for this coding task.
+- Next step: publish the documentation changes with approval and rerun PR #8's hosted
+  Docstring Coverage check. No application behavior or architectural decisions changed.
+
+## Previous task: Login and signup design (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `51432b0`. Changes are uncommitted.
+- Completed:
+  - Login and signup use the user-supplied Claude Design layout: the form
+    column with its own logo and footer, and an animated evidence-thread panel.
+    The panel loops scattered → gathered → accepted and holds on "accepted" when
+    reduced motion is preferred.
+  - Existing behavior is kept:
+    - email, Google, and GitHub sign-in (ADR-016);
+    - error and verification states;
+    - `next` return.
+  - On narrow screens the panel is hidden and the form stacks.
+  - The three design files (`AuthPage.tsx`, `LandingPage.tsx`,
+    `RequirementsSidebar.tsx`) were deleted after integration.
+- Changed files:
+  - `app/web/src/components/{auth-form,sign-in-thread,app-frame,landing-page}.tsx`
+  - `app/web/src/app/landing.css`
+  - `tests/e2e/{auth,home,protection}.spec.ts`
+- Decisions and assumptions:
+  - The design's graphite palette matches the landing tokens, so the sign-in
+    styles live in `landing.css` under the `.landing` class.
+  - The design's theme, motion-speed, and atmosphere options were not carried
+    over, since only the defaults are used.
+  - Google sign-in was added beside GitHub, per ADR-016.
+  - The broken `/docs` footer link was dropped.
+  - The email label stays "Email", not "Work email".
+  - The signup password keeps its visible hint instead of a placeholder.
+  - The forgot-password, reset, and sign-in error pages keep the previous
+    layout.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 114 tests.
+  - Inspected desktop screenshots of the login page in the scattered and
+    accepted phases, the signup page, and a mobile screenshot of signup. There
+    were no console errors and no horizontal scroll.
+  - Removed a timing-dependent dashboard logo assertion from `home.spec.ts`. A
+    signed-in user sees initials there, not the logo.
+- Known issues: none new.
+- Exact next step: the user reviews, then commit after explicit approval.
+
+## Previous task: Route protection (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `58ea223`. Changes are uncommitted.
+- Completed:
+  - The deny-by-default `app/web/src/proxy.ts` validates the Better Auth session
+    for every page except `/`, `/login`, `/signup`, `/forgot-password`,
+    `/reset-password`, `/auth/error`, `/privacy`, and `/terms`.
+  - Signed-out visitors are redirected to `/login?next=<path and query>`.
+  - `safeNextPath` accepts only same-site paths. Email, social, and
+    verification sign-in all return to `next`.
+  - Signed-in visitors to login and signup go straight to `next`.
+  - The dashboard-preview link on the sign-in pages is removed.
+  - The settings sidebar always links "Back to app".
+  - Browser tests run signed in by default through `tests/e2e/fixtures.ts`,
+    using a real seeded session.
+- Changed files:
+  - `app/web/src/proxy.ts`
+  - `app/web/src/lib/app-navigation.ts`
+  - `app/web/src/app/{login,signup}/page.tsx`
+  - `app/web/src/components/{auth-form,settings-sidebar}.tsx`
+  - `tests/e2e/{fixtures,protection,auth,home,landing,scaffold,shell}.spec.ts`
+    (`fixtures.ts` is not a spec)
+  - `README.md` and `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - Recorded in ADR-023, which supersedes the public dashboard in ADR-019 and
+    ADR-020.
+  - The spec and plan are in
+    `docs/superpowers/{specs,plans}/2026-09-29-route-protection*`, which
+    `.gitignore` ignores.
+  - The C# API is unchanged. It already requires a JWT on every endpoint except
+    `/health` and development OpenAPI.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 111 tests.
+  - A signed-out probe of the dev server returned 307 to
+    `/login?next=%2Fdashboard` for `/dashboard`. It returned 307 to
+    `/login?next=%2Fteams%3Ftab%3Dmembers` for `/teams?tab=members`.
+    `/icon.png/x` was also redirected to login.
+  - `/`, `/privacy`, `/terms`, `/login`, `/thread-mark.png`, and `/icon.png`
+    returned 200, and `/about` still redirected to `/#about`.
+  - A fresh reviewer checked the whole change and found no bypass or open
+    redirect. The fixes it prompted are in:
+    - the proxy now forwards Better Auth's refreshed session cookie, so active
+      users are not logged out after 7 days;
+    - `safeNextPath` is at least as strict as Better Auth's `callbackURL` check;
+    - the matcher's image exclusions are anchored;
+    - ARCHITECTURE.md is updated.
+- Known issues:
+  - API authorization (project and team membership checks) is still
+    unimplemented. It belongs with the data features.
+  - Deferred review minors:
+    - The profile menu's "Log in" link and `/settings/account`'s fallback
+      redirect omit `next`.
+    - `auth-form` shows "verify your email" for any 403.
+    - The return-to test does not include a query string.
+  - At teardown the web server logs pool errors when the test database stops.
+    This does not affect any test.
+  - Each protected page request performs one session lookup.
+- Exact next step: the user reviews, then commit and push to the existing PR only
+  after explicit user approval. Merge into `main` through the pull request.
+
+## Previous task: Landing page redesign and public About sections (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `c173d61`, the sidebar task below.
+  Changes are uncommitted.
+- Completed:
+  - The landing page uses the user-supplied design from Claude Design, moved to
+    `components/landing-page.tsx` with its styles in `landing.css`.
+  - About (new copy drawn from `docs/PROJECT.md`) and How it works are sections
+    below the hero.
+  - The animations work: the hero table (with a pause control), evidence
+    gathering with Replay, and the review decision. All three respect reduced
+    motion.
+  - The page adapts to narrow screens.
+  - `/about` and `/about/how-it-works` redirect to landing sections.
+  - Privacy and Terms are public pages at `/privacy` and `/terms`; the old
+    `/about/*` addresses redirect there.
+  - The settings sidebar dropped its "Help & about" group; Help moved to
+    "Getting started".
+  - Removed `main-navigation.tsx`, the four `/about` pages, and the user's
+    unused `RequirementsSidebar.tsx`, with the user's approval.
+- Changed files:
+  - `app/web/next.config.ts` (redirects)
+  - `app/web/src/app/{page.tsx,landing.css,privacy/page.tsx,terms/page.tsx}`
+  - `app/web/src/components/{landing-page,policy-page,app-frame,settings-sidebar}.tsx`
+  - `app/web/src/lib/{app-navigation,scaffold-routes}.ts`
+  - `tests/e2e/{landing,home,shell,scaffold}.spec.ts`
+  - `README.md` and `docs/{DECISIONS,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - Recorded in ADR-022.
+  - Only the design's dark, left-aligned variant is kept.
+  - The design's broken `/docs` footer link was dropped.
+  - About copy is a draft for the user to edit.
+- Verification:
+  - `npm run lint`, `npm run typecheck`, and `git diff --check` passed.
+  - `npm test` passed, 100 tests.
+  - Inspected desktop and mobile screenshots of the hero, About, the evidence
+    thread, the review decision, the mobile menu, and Privacy. There were no
+    console errors and no horizontal scroll.
+- Known issues:
+  - Application routes such as `/dashboard` and `/settings` are still public by
+    URL. Real route protection is separate work.
+  - Policy pages are placeholders.
+  - The deferred minors listed in the sidebar task below still apply.
+- Exact next step: the user reviews the landing page. Then commit and push to
+  the existing PR, only after explicit user approval. Merge into
+  `main` through the pull request.
+
+## Previous task: Workspace and settings sidebars (2026-09-29)
+
+- Branch: `scaffolding`; committed as `c173d61`.
+- Completed:
+  - Routes pick one of three frames through `frameFor` in
+    `lib/app-navigation.ts`, following ADR-021.
+  - Landing and sign-in pages keep the top header.
+  - Settings, account, help, about, welcome, onboarding, and invite pages use a
+    grouped settings sidebar. Its top link is "Back to app" (`/dashboard`) for
+    signed-in users and "Back to home" (`/`) for signed-out visitors.
+  - Every other route uses the workspace sidebar, including the 404 page.
+  - A profile menu at the top of the workspace sidebar offers Settings, Account,
+    and Log out, or Settings, Log in, and Sign up when signed out.
+  - The account page moved to `/settings/account`, and `/account` redirects
+    there. `/settings` is now titled "Preferences".
+  - Removed the public `MainNavigation`, its CSS, and the bottom sidebar links.
+- Changed files:
+  - `app/web/src/components/{app-frame,workspace-sidebar,settings-sidebar,app-nav-link,profile-menu,main-navigation,account-panel}.tsx`
+  - `app/web/src/lib/{app-navigation,scaffold-routes}.ts`
+  - `app/web/src/app/{account,settings,settings/account}/page.tsx`
+  - `app/web/src/app/{app-shell,public-pages}.css`
+  - `tests/e2e/{shell,auth,scaffold}.spec.ts`
+  - `README.md` and `docs/{DECISIONS,DEPLOYMENT,TESTING,HANDOFF}.md`
+- Decisions and assumptions:
+  - The design spec and plan are in
+    `docs/superpowers/{specs,plans}/2026-09-29-settings-sidebar*`. The user's
+    uncommitted `.gitignore` entry ignores them.
+  - Onboarding is grouped under settings as "Getting started".
+  - Invitation pages use the settings frame without a sidebar link.
+- Verification:
+  - `npm run typecheck` and `git diff --check` passed.
+  - `npm test` passed, 92 tests.
+  - A fresh reviewer checked the whole change and found no correctness bugs.
+    The fixes it prompted are in: a way home for signed-out visitors, the
+    README, and the profile button's accessible name.
+  - Inspected desktop and mobile screenshots of the dashboard, profile menu,
+    settings, help, privacy, 404, and the settings drawer.
+  - `npm run lint` exits 1, but only because of 4 errors in the untracked
+    `app/web/src/app/LandingPage.tsx`. Three are `react-hooks/set-state-in-effect`
+    and one is `no-html-link-for-pages`. That file is a user-added design export
+    outside this task and was left untouched. Every file this task changed lints
+    cleanly.
+- Known issues:
+  - `LandingPage.tsx` and `RequirementsSidebar.tsx` are untracked and unused.
+    `LandingPage.tsx` blocks lint until it is fixed or removed.
+  - Deferred review minors:
+    - The profile menu does not close on Escape or an outside click.
+    - The profile menu says "Log out" but the account page says "Sign out".
+    - The settings breadcrumb always reads "Settings".
+    - Stale `/account` callback in `tests/schema/auth-email.spec.ts`.
+    - Leftover `.account-page` CSS.
+- Exact next step: review the diff, resolve `LandingPage.tsx` lint errors, then
+  commit and push to the existing PR only after explicit user approval. Merge
+  into `main` through the pull request.
+
+## Previous task: Design review fixes for remaining auth pages (2026-09-29)
+
+- Branch: `scaffolding`; builds on commit `765b3d1`. Changes are uncommitted.
+- Completed: forgot-password, all reset-password states, and the sign-in error
+  page now use the same evidence-path layout and eyebrow label as login and
+  signup. The layout moved to `components/auth-layout.tsx`. Error alerts use a
+  new `notice-error` style. Previously `text-red-600` was overridden by `.notice`,
+  so errors looked like status messages. Related-page link cards keep their
+  neutral text color on public pages, and the public mobile menu closes after
+  each route change.
+- Changed files: `app/web/src/components/{auth-layout,auth-form,password-forms,account-panel,main-navigation}.tsx`,
+  `app/web/src/app/auth/error/page.tsx`, `app/web/src/app/public-pages.css`,
+  `tests/e2e/auth.spec.ts`, and this file.
+- Decisions and assumptions: recovery pages use the "Account recovery" label and
+  the sign-in error page uses "Sign-in". No auth behavior changed.
+- Verification: `npm run lint`, `npm run typecheck`, `git diff --check`, and the
+  full `npm test` suite (83 passed) ran. Inspected the auth error desktop and
+  forgot-password mobile screenshots.
+- Known limits: the landing page's mobile menu uses the same `<details>` pattern
+  and still stays open after its in-page "Product" link.
+- Exact next step: review the diff, then commit and push to the existing PR only
+  after explicit user approval. Merge into `main` through the pull request.
+
+## Previous task: Align remaining pages with the shared design (2026-09-26)
+
+- Branch: `scaffolding`; committed as `765b3d1`.
+- Completed: restyled shared placeholder routes, their related-page navigation,
+  the About hub, account and error states, and public/auth layouts to match the
+  dashboard and landing page's charcoal and lavender visual language. Login and
+  signup now show the evidence path while retaining email/password, Google, and
+  GitHub flows. Added responsive public navigation and kept planned routes
+  explicitly labeled as disconnected previews.
+- Changed files: shared web components and styles under `app/web/src/`,
+  `tests/e2e/{home,scaffold}.spec.ts`,
+  `docs/{TESTING,HANDOFF}.md`, and `docs/landing-design/README.md`.
+- Decisions and assumptions: use the existing dashboard and landing page as the
+  visual reference (ADR-020). Keep the saved login/signup images as concepts;
+  ADR-016's additional sign-in methods take precedence over their GitHub-only
+  depiction. No product data, backend contract, or auth behavior changed.
+- Verification: `npm run lint`, `npm run typecheck`, and `git diff --check`
+  passed. The focused 19-test Chromium suite and the full `npm test` suite
+  passed (83 tests); the test setup built the web app and API. Inspected desktop
+  screenshots for Teams and login and mobile screenshots for login, signup, and
+  password reset. The full test run logged expected Better Auth rejection
+  messages for negative tests.
+- Known limits: placeholder routes still have no connected data or actions;
+  live OAuth and email delivery remain outside this visual task.
+- Exact next step: review the uncommitted diff and screenshots, then commit and
+  push to the existing PR only after explicit user approval. Merge into `main`
+  through the pull request.
+
 ## Current task: Resolve PR #7 conflicts with main (2026-09-26)
 
 - Branch: `scaffolding`; merge of `origin/main` (`077b80d`) is resolved locally

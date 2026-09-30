@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AuthLayout } from "@/components/auth-layout";
 
 export const metadata: Metadata = {
   title: "Sign-in unsuccessful",
@@ -27,13 +28,16 @@ export default async function AuthErrorPage({ searchParams }: {
             : "We could not complete sign-in. Please try again.";
 
   return (
-    <section className="panel auth-panel stack">
-      <h1>{cancelled ? "Sign-in cancelled" : "Sign-in unsuccessful"}</h1>
-      <p>{message}</p>
-      <div className="actions">
-        <Link className="button" href="/login">Try signing in again</Link>
-        <Link href="/">Return home</Link>
-      </div>
-    </section>
+    <AuthLayout>
+      <section className="auth-panel stack">
+        <p className="auth-kicker">Sign-in</p>
+        <h1>{cancelled ? "Sign-in cancelled" : "Sign-in unsuccessful"}</h1>
+        <p>{message}</p>
+        <div className="actions">
+          <Link className="button" href="/login">Try signing in again</Link>
+          <Link href="/">Return home</Link>
+        </div>
+      </section>
+    </AuthLayout>
   );
 }

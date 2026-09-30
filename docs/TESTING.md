@@ -58,11 +58,23 @@ currently require network access during the web build.
 
 - Chromium: home/dashboard navigation, keyboard skip link, login/signup navigation,
   GitHub buttons, labeled dashboard preview tabs and evidence expansion, shared
-  sidebar route transitions, and the original four routes at mobile width.
-  Desktop/mobile screenshots are saved inside the ignored test-results directory.
+  sidebar route transitions, workspace and settings sidebar selection, the profile
+  menu (signed out, loading, signed in, and failed log out), and scaffold/auth
+  pages at mobile width. Desktop/mobile screenshots are saved inside the ignored
+  test-results directory.
+- Landing page: navbar links to the About and How it works sections, redirects
+  from the former About pages, public Privacy and Terms pages without the app
+  sidebar, the hero animation with its pause control, evidence gathering and
+  replay, the review decision on scroll, finished states under reduced motion,
+  the signed-in Dashboard link, and narrow-screen layout and menu.
+- Route protection: signed-out redirects to login with the requested path for each
+  route family and unknown URLs, forged and revoked sessions, public pages and their
+  images, return to the requested page after email and social sign-in, and
+  `safeNextPath` rejection of other origins, control characters, over-long values,
+  and login/signup loops.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
-  placeholder pages, a useful 404 for an unknown URL, the About hub and its
-  three child pages, the personal/team project descriptions, and a route walk
+  placeholder pages, a useful 404 for an unknown URL, the personal/team project
+  descriptions, and a route walk
   from Dashboard through a team, project, requirement, evidence, and review.
   These checks do not imply that product data or authorization are implemented.
 - API: health response without database credentials, development OpenAPI, and
@@ -111,7 +123,11 @@ that live database credentials work.
 
 ## Conventions
 
-Use browser fixtures in tests/e2e and request fixtures in tests/api. Use accessible
+Use browser fixtures in tests/e2e and request fixtures in tests/api. Browser tests
+import `test` from `tests/e2e/fixtures.ts`, which signs each test in with a real seeded
+session by default. Signed-out tests set `test.use({ signedIn: false })`. Tests that
+log out must create their own session with `createTestSession`, because the default
+session is shared per worker. Use accessible
 locators and retrying assertions, not arbitrary sleeps. Browser-free TypeScript
 logic tests can get a separate Playwright project when such logic exists.
 Playwright cannot directly run C# unit tests; a different runner requires an

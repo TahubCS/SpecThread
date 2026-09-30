@@ -1,45 +1,40 @@
-import { expect, test } from "@playwright/test";
-import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { makeSignature } from "better-auth/crypto";
+import { createTestSession, expect, test } from "./fixtures";
+
+test.use({ signedIn: false });
 
 test("an active session skips login and signup", async ({ page }) => {
-  const { name } = JSON.parse(await readFile("playwright/.cache/test-web-database.json", "utf8"));
-  const secret = process.env.SPECTHREAD_TEST_AUTH_SECRET;
-  if (!secret) throw new Error("Test auth secret is missing");
-  const userId = randomUUID();
-  const sessionId = randomUUID();
-  const token = randomUUID();
-  const runSql = (sql: string) => execFileSync("docker", [
-    "exec", "-u", "postgres", name, "psql", "-U", "postgres", "-d", "postgres",
-    "-v", "ON_ERROR_STOP=1", "-c", sql,
-  ], { stdio: "ignore" });
-
-  runSql(`INSERT INTO public."user" (id,name,email,"emailVerified","createdAt","updatedAt")
-    VALUES ('${userId}','Navigation test','${userId}@example.invalid',true,now(),now());
-    INSERT INTO public.session (id,"userId",token,"expiresAt","createdAt","updatedAt")
-    VALUES ('${sessionId}','${userId}','${token}',now() + interval '1 hour',now(),now());`);
+  const seeded = await createTestSession("Navigation test");
+  const userId = seeded.userId;
   try {
-    await page.context().addCookies([{
-      name: "better-auth.session_token",
-      value: `${token}.${await makeSignature(token, secret)}`,
-      url: "http://127.0.0.1:3100",
-    }]);
+    await page.context().addCookies([seeded.cookie]);
     const sessionResponse = await page.request.get("/api/auth/get-session");
     expect((await sessionResponse.json())?.user?.id).toBe(userId);
     for (const route of ["/login", "/signup"]) {
       await page.goto(route);
       await expect(page).toHaveURL(/\/dashboard$/);
     }
-    const accountLink = page.getByRole("link", { name: "Account" });
-    await expect(accountLink).toHaveAttribute("href", "/account");
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Log in" })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Sign up" })).toHaveCount(0);
-    await accountLink.click();
-    await expect(page).toHaveURL(/\/account$/);
+    const profile = page.getByLabel("Profile menu, Navigation test");
+    await expect(profile).toContainText("NT");
+    await profile.click();
+    const menu = page.locator(".app-profile-options");
+    await expect(menu.getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
+    await expect(menu.getByRole("link", { name: "Log in" })).toHaveCount(0);
+    await expect(menu.getByRole("link", { name: "Sign up" })).toHaveCount(0);
+    await menu.getByRole("link", { name: "Account" }).click();
+    await expect(page).toHaveURL(/\/settings\/account$/);
+    await expect(page.getByRole("heading", { name: "Account", level: 1 })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Settings navigation" })
+      .getByRole("link", { name: "Account" })).toHaveAttribute("aria-current", "page");
+    await page.goto("/account");
+    await expect(page).toHaveURL(/\/settings\/account$/);
+
+    await page.goto("/dashboard");
+    await page.getByLabel("Profile menu, Navigation test").click();
+    await page.locator(".app-profile-options").getByRole("button", { name: "Log out" }).click();
+    await expect(page).toHaveURL(/:\d+\/$/);
+    expect(await (await page.request.get("/api/auth/get-session")).json()).toBeNull();
   } finally {
-    runSql(`DELETE FROM public."user" WHERE id = '${userId}'`);
+    seeded.remove();
   }
 });
 
@@ -49,7 +44,7 @@ test("an invalid session cookie does not skip login", async ({ page }) => {
     url: "http://127.0.0.1:3100",
   }]);
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Log in to SpecThread" })).toBeVisible();
 });
 
 for (const path of ["/login", "/signup"]) {
@@ -63,7 +58,7 @@ for (const path of ["/login", "/signup"]) {
     });
     await page.goto(path);
     const button = page.getByRole("button", { name: /with GitHub/ });
-    const alert = page.locator(".auth-panel [role='alert']");
+    const alert = page.getByRole("main").getByRole("alert");
     await button.click();
     await expect(alert).toHaveText("Unable to start GitHub sign-in. Please try again.");
     await expect(button).toBeEnabled();
@@ -78,7 +73,7 @@ test("network failure makes sign-in retryable", async ({ page }) => {
   await page.route("**/api/auth/sign-in/social", route => route.abort("failed"));
   await page.goto("/login");
   await page.getByRole("button", { name: /with GitHub/ }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toContainText("Please try again.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("Please try again.");
   await expect(page.getByRole("button", { name: /with GitHub/ })).toBeEnabled();
 });
 
@@ -99,6 +94,7 @@ test("OAuth callback failures use the public error page", async ({ page }) => {
 test("error page handles cancellation and untrusted input accessibly", async ({ page }, testInfo) => {
   await page.goto("/auth/error?error=access_denied");
   await expect(page.getByRole("heading", { name: "Sign-in cancelled" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("auth-error-desktop.png"), fullPage: true });
   const retry = page.getByRole("link", { name: "Try signing in again" });
   await retry.focus();
@@ -121,7 +117,10 @@ test("Google sign-in requests the Google provider", async ({ page }) => {
   });
   await page.goto("/login");
   await page.getByRole("button", { name: "Continue with Google" }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("Unable to start Google sign-in. Please try again.");
+  const alert = page.getByRole("main").getByRole("alert");
+  await expect(alert).toHaveText("Unable to start Google sign-in. Please try again.");
+  // Errors use a distinct color from neutral status notices.
+  await expect(alert).toHaveCSS("color", "rgb(255, 201, 204)");
   expect(body).toMatchObject({ provider: "google", callbackURL: "/dashboard", errorCallbackURL: "/auth/error" });
 });
 
@@ -140,7 +139,7 @@ test("email login handles wrong passwords, throttling and unverified email by ke
   await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("a long enough password");
   await page.keyboard.press("Enter");
-  const alert = page.locator(".auth-panel [role='alert']");
+  const alert = page.getByRole("main").getByRole("alert");
   await expect(alert).toHaveText("Incorrect email or password.");
   await page.keyboard.press("Enter");
   await expect(alert).toContainText("Too many attempts");
@@ -162,10 +161,10 @@ test("sign-up validates the password and then asks the user to check their email
   await page.getByLabel("Name", { exact: true }).fill("Person");
   await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
   await page.getByLabel("Password", { exact: true }).fill("short");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
   expect(await page.getByLabel("Password", { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valid)).toBe(false);
   await page.getByLabel("Password", { exact: true }).fill("a long enough password");
-  await page.getByRole("button", { name: "Sign up" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   expect(body).toMatchObject({ name: "Person", email: "person@example.invalid", callbackURL: "/dashboard" });
 });
@@ -173,8 +172,9 @@ test("sign-up validates the password and then asks the user to check their email
 test("forgot password never reveals whether an account exists", async ({ page }) => {
   await page.route("**/api/auth/request-password-reset", route => route.fulfill({ json: { status: true } }));
   await page.goto("/login");
-  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await page.getByRole("link", { name: "Forgot password?" }).click();
   await expect(page.getByRole("heading", { name: "Reset your password" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
   await page.getByLabel("Email", { exact: true }).fill("anyone@example.invalid");
   await page.getByRole("button", { name: "Send reset link" }).click();
   await expect(page.getByRole("status")).toHaveText("If an account uses that email, we sent a link to reset its password.");
@@ -186,17 +186,22 @@ test("reset password checks confirmation and handles expired links", async ({ pa
   await page.getByLabel("New password", { exact: true }).fill("a long enough password");
   await page.getByLabel("Confirm new password", { exact: true }).fill("a different long password");
   await page.getByRole("button", { name: "Update password" }).click();
-  await expect(page.locator(".auth-panel [role='alert']")).toHaveText("The passwords do not match.");
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("The passwords do not match.");
   await page.getByLabel("Confirm new password", { exact: true }).fill("a long enough password");
   await page.getByRole("button", { name: "Update password" }).click();
   await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
   await page.goto("/reset-password?error=INVALID_TOKEN");
   await expect(page.getByRole("link", { name: "Request a new link" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "SpecThread evidence path" })).toBeVisible();
 });
 
-test("account page requires sign-in", async ({ page }) => {
-  await page.goto("/account");
-  await expect(page).toHaveURL(/\/login$/);
+test("account page requires sign-in at its new and former addresses", async ({ page }) => {
+  for (const route of ["/settings/account", "/account"]) {
+    await page.goto(route);
+    const url = new URL(page.url());
+    expect(url.pathname, route).toBe("/login");
+    expect(url.searchParams.get("next"), route).toBe(route);
+  }
 });
 
 test("linking errors show fixed guidance", async ({ page }) => {

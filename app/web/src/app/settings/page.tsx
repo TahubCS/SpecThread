@@ -1,6 +1,6 @@
 import { ScaffoldPage } from "@/components/scaffold-page";
 
-/** Renders the "Settings" placeholder with scaffold navigation and no connected product data or actions. */
+/** Renders the "Preferences" placeholder with scaffold navigation and no connected product data or actions. */
 export default function SettingsPage() {
-  return <ScaffoldPage title="Settings" description="Open account, notification, session, and integration settings." />;
+  return <ScaffoldPage title="Preferences" description="Choose how SpecThread looks and behaves for you." />;
 }
