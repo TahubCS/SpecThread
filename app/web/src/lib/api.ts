@@ -11,11 +11,13 @@ import { auth } from "./auth";
  */
 export async function apiFetch(path: `/${string}`, init: RequestInit = {}): Promise<Response> {
   const base = apiBaseUrl(process.env.SPECTHREAD_API_URL);
+  const url = new URL(path, base);
+  if (url.origin !== base.origin) throw new Error("apiFetch path must stay on the API origin.");
   const { token } = await auth.api.getToken({ headers: await headers() });
   const requestHeaders = new Headers(init.headers);
   requestHeaders.set("authorization", `Bearer ${token}`);
   if (init.body !== undefined && !requestHeaders.has("content-type")) {
     requestHeaders.set("content-type", "application/json");
   }
-  return fetch(new URL(path, base), { ...init, headers: requestHeaders, cache: "no-store" });
+  return fetch(url, { ...init, headers: requestHeaders, cache: "no-store" });
 }
