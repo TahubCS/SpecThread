@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
+using SpecThread.Api.Projects;
+using SpecThread.Api.Requirements;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +42,10 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
         TypedResults.Ok(new CurrentUserResponse(user.FindFirstValue(JwtRegisteredClaimNames.Sub)!)))
     .WithName("GetCurrentUser")
     .Produces(StatusCodes.Status401Unauthorized);
+
+app.MapProjectEndpoints();
+app.MapMemberEndpoints();
+app.MapRequirementEndpoints();
 
 app.Run();
 

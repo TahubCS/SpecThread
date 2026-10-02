@@ -392,6 +392,66 @@ Consequences: New pages are protected unless deliberately added to the public li
 Each protected page request performs one session lookup. API authorization (project
 and team membership) remains separate work in the C# API.
 
+ADR-024: Projects and requirements API with member authorization
+
+Status: Accepted
+
+Context: Frontend developers need to read and change product data. The API exposed
+only /health and /me, although EF Core already mapped projects, project_members,
+requirements, and acceptance_criteria. The user chose the scope (projects,
+requirements, acceptance criteria) and the authorization model below.
+
+Decision: The API exposes /projects (list, create, get, rename, archive),
+/projects/{id}/requirements (list, create), and /requirements/{id} (get, replace,
+archive); docs/API.md is the contract summary and the Development OpenAPI document
+is authoritative. Creating a project adds the creator as owner and member in one
+transaction. Any member reads and edits the project's requirements; only the owner
+renames or archives the project. Non-members receive 404, not 403, so the API does not
+reveal that a project exists. A token whose subject has no user row cannot create
+projects (403). Writes to archived projects or requirements return 409; archiving is
+idempotent and keeps the first timestamp. Requirement updates send the whole
+acceptance-criteria list and the loaded version; criteria are replaced in one
+transaction with positions taken from list order, the version increments, and a stale
+version returns 409. Text is trimmed. Limits: project names and requirement titles
+1-200 characters, descriptions up to 10,000, up to 50 criteria of 1-2,000 characters.
+Failures return RFC 9457 problem details; validation errors list fields. Next.js server
+code calls the API through `apiFetch` in app/web/src/lib/api.ts, which exchanges the
+session for a Better Auth JWT and reads the API origin from server-only
+SPECTHREAD_API_URL; browsers do not call the API directly, so no CORS is configured.
+
+Consequences: No schema change or migration was needed. Member management is
+covered by ADR-025. Invitations, ownership transfer, teams, unarchiving, and audit
+events are not yet implemented. Each
+API call from Next.js performs a token exchange. Criteria IDs change on every update,
+so later evidence links must not reference criterion IDs without revisiting this.
+
+ADR-025: Owners add existing accounts to projects by email
+
+Status: Accepted
+
+Context: ADR-024 enforced project membership, but members could only be added in
+the database. The user chose immediate adds of existing accounts instead of
+invitations. Only the owner manages members, any member may leave, and the owner
+cannot be removed.
+
+Decision: GET /projects/{id}/members lists members to any member. It returns name,
+email, join time, and isOwner, with the owner first. POST /projects/{id}/members
+takes `{ email }` (owner only). The address is trimmed, at most 254 characters, and
+matched without regard to case. It must belong to an account with a verified
+address, so registering someone else's address without verifying it grants
+nothing. An unknown or unverified address returns 400 on `email`. A duplicate
+returns 409, including when concurrent adds hit the primary key.
+DELETE /projects/{id}/members/{userId} returns 204. It is allowed for the owner, or
+for a member removing themselves. Anyone else gets 403. Removing the owner returns
+409, and so does a change to an archived project. Non-members get 404, as in ADR-024.
+
+Consequences: Owners can tell whether an email has a verified SpecThread account.
+This trade-off is accepted because only an authenticated project owner can ask.
+Members see each other's email addresses. Requirements created by a removed member
+keep their created_by. Invitations for people without accounts (the /invites
+scaffold), ownership transfer, and rate limiting of member lookups remain future
+work. No schema change was needed.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

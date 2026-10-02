@@ -1,6 +1,73 @@
 # Shared handoff
 
-## Current task: PR #8 docstring coverage (2026-09-29)
+## Current task: Projects and requirements API with member management (2026-10-01)
+
+- Branch: `feature/requirements-api`, created from `origin/main` at `f41acc2`. Changes are
+  uncommitted. The pre-existing uncommitted deletion of `app/api/.env.example` is unrelated
+  to this task and was left untouched.
+- Completed:
+  - API endpoints for projects, requirements, and acceptance criteria. Members read
+    and edit requirements. Only the owner renames or archives a project. Non-members
+    get 404. A stale version or an archived item returns 409. Validation returns 400
+    with the failing fields (ADR-024).
+  - The server-only web helper `apiFetch` sends the user's Better Auth JWT to the API
+    at `SPECTHREAD_API_URL`.
+  - docs/API.md is the contract summary for frontend developers.
+  - Member management (ADR-025): GET, POST, and DELETE `/projects/{id}/members`. The owner
+    adds an existing account by its verified email; members can leave; the owner
+    can't be removed.
+- Changed files:
+  - API: `app/api/Program.cs`, `app/api/Projects/ProjectAccess.cs`,
+    `app/api/Projects/ProjectEndpoints.cs`, `app/api/Projects/MemberEndpoints.cs`,
+    `app/api/Requirements/RequirementEndpoints.cs`.
+  - Web: `app/web/src/lib/api.ts`, `app/web/src/lib/api-config.ts`, `app/web/.env.example`.
+  - Tests: `tests/schema/product-api.spec.ts`, `tests/api/products.spec.ts`,
+    `tests/api/api-config.spec.ts`.
+  - Docs: docs/API.md (new), DECISIONS (ADR-024, ADR-025), ARCHITECTURE, TESTING, DEPLOYMENT.
+- Decisions and assumptions (ADR-024):
+  - Validation limits are new.
+  - Updates replace the whole criteria list, so criterion IDs change on every save.
+  - Browsers never call the API directly, so CORS is not configured.
+  - No schema change, migration, or new package.
+- Checks:
+  - Passed: `dotnet build app/api --configuration Release`,
+    `dotnet format app/api --verify-no-changes --no-restore`, `npm run lint`,
+    `npm run typecheck`, and `git diff --check`.
+  - `npm test`: 125 passed, including the 10 new product API and member tests against Docker Postgres.
+  - `npm ci` was needed because the merged `main` added `lucide-react`.
+- Known issues and risks:
+  - Invitations for people without accounts, ownership transfer, teams, unarchiving, and audit
+    events do not exist yet.
+  - Add-by-email reveals to owners whether an address has a verified account. The trade-off
+    is accepted in ADR-025. Member lookups are not rate limited.
+  - The concurrent-save race path (`DbUpdateConcurrencyException`) is not exercised.
+  - No UI uses the API yet.
+  - No live Supabase writes were performed.
+- Deployment: none of this blocks the Vercel build. `apiFetch` is not imported by
+  any page, and `SPECTHREAD_API_URL` is read only when `apiFetch` is called. Before
+  pages call the API:
+  - Vercel: set `SPECTHREAD_API_URL=https://specthread-api.onrender.com` for Production.
+  - Preview deployments: tokens carry the preview's origin as issuer and audience
+    (Better Auth uses `BETTER_AUTH_URL`). The Render API trusts only its single
+    `Auth__Issuer`, so API calls from previews return 401. Either run a separate
+    preview API with a matching issuer, or accept that API-backed pages work only in
+    production.
+  - Render: `Auth__Issuer` must equal Vercel's `BETTER_AUTH_URL` exactly, and
+    `ConnectionStrings__Database` must be set. Otherwise requests return 500. The new
+    endpoints exist only after Render redeploys from the merged `main`.
+  - Database role: product tables have RLS enabled with no policies. The API must
+    connect as the table-owning role (`postgres` through the session pooler, as in the
+    verified probe). Another role would get empty lists and failing writes.
+  - Render free-plan cold starts can take most of a minute. `apiFetch` has no timeout,
+    so pages need a loading state, or move the API to a paid plan.
+  - GitHub sign-ins whose email GitHub has not verified are stored unverified, so
+    they cannot be added as project members (ADR-025).
+  - The ADR-015 EdDSA key expiry is complete, as confirmed by the user on 2026-10-01.
+- Next step: review the diff and commit with approval, then open a PR to `main`.
+  After merging, set `SPECTHREAD_API_URL` in Vercel. Follow-up tasks: wire the projects
+  and requirement pages to `apiFetch`, and build invitations for people without accounts.
+
+## Previous task: PR #8 docstring coverage (2026-09-29)
 
 - Branch: `coderabbit/improve-docstring-coverage/84e64e39`; uncommitted changes
   based on verified PR head `4702b29280c0b0cbac524873197247c66d0d2855`.

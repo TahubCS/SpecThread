@@ -31,6 +31,7 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 | `RESEND_API_KEY` | Resend API key for verification and password reset emails | `re_...` |
 | `EMAIL_FROM` | Sender on a Resend-verified domain | `SpecThread <no-reply@yourdomain>` |
 | `BETTER_AUTH_API_KEY` | (Optional) Better Auth Dashboard API key | `ba_...` |
+| `SPECTHREAD_API_URL` | Origin of the deployed API, used only by server code calling it (ADR-024); never a `NEXT_PUBLIC_` variable | `https://specthread-api.onrender.com` |
 
 5. Click **Deploy**.
 
