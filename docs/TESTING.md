@@ -49,7 +49,7 @@ npm run build:api          # Standalone Release API build
 `npm test` builds the web app and the Release API before tests. It starts the
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
-issuer. Auth tests also start extra API instances on 5102-5104. Keep these
+issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
 or development processes in this checkout: they share app/web/.next. Google Fonts
 currently require network access during the web build.
@@ -85,6 +85,16 @@ currently require network access during the web build.
   Auth:Issuer fails explicitly. The test issuer generates keys per run.
   The schema suite validates a real Better Auth ES256 token against the API after
   expiring a legacy EdDSA key.
+- Product API (schema suite, real API on port 5105 against Docker Postgres, tokens from
+  the test issuer): project create/list/rename/archive, owner membership, member versus
+  owner rights, 404 for non-members, ordered criteria replacement, stale-version 409,
+  archived-item 409s, validation errors, anonymous 401, and accounts without a user row.
+  Member management covers these cases: adds by email that ignore case, duplicate and
+  unverified or unknown emails, owner-only adds and removals, members leaving and
+  losing access, and refusing to remove the owner.
+  The api project checks the OpenAPI paths and anonymous 401s without a database, and
+  `apiBaseUrl` validation for SPECTHREAD_API_URL. A concurrent-save race (as opposed to a
+  stale version sent by the client) is not exercised.
 - EF: PostgreSQL provider initialization using dummy credentials at an unreachable
   local address, and explicit rejection when connection configuration is missing.
   These invoke the local dotnet-ef tool and never connect to Supabase.
@@ -117,7 +127,7 @@ currently require network access during the web build.
   in PostgreSQL, usable token retrieval, prefixed legacy plaintext compatibility,
   and rejection of corrupt ciphertext. No real provider credentials are used.
 
-Live OAuth, deployed TLS connectivity, and product flows are not tested. The health
+Live OAuth, deployed TLS connectivity, and browser product flows are not tested. The health
 endpoint is liveness, not database readiness. EF initialization is not proof
 that live database credentials work.
 
