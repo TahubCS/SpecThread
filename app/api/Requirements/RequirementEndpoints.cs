@@ -50,7 +50,7 @@ internal static class RequirementEndpoints
         if (project is null) return TypedResults.NotFound();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
-        var now = DateTime.UtcNow;
+        var now = Clock.UtcNow();
         var requirement = new Requirement
         {
             Id = Guid.NewGuid(),
@@ -101,7 +101,7 @@ internal static class RequirementEndpoints
         await db.AcceptanceCriteria.Where(c => c.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
         requirement.Title = input.Title;
         requirement.Description = input.Description;
-        requirement.UpdatedAt = DateTime.UtcNow;
+        requirement.UpdatedAt = Clock.UtcNow();
         requirement.Version++;
         var criteria = AddCriteria(db, requirementId, input.Criteria);
         try
@@ -125,7 +125,7 @@ internal static class RequirementEndpoints
         if (found.ProjectArchived) return ProjectEndpoints.Archived();
 
         // Idempotent: archiving again keeps the original timestamp.
-        found.Requirement.ArchivedAt ??= DateTime.UtcNow;
+        found.Requirement.ArchivedAt ??= Clock.UtcNow();
         try
         {
             await db.SaveChangesAsync(cancel);

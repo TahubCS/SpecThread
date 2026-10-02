@@ -54,7 +54,7 @@ internal static class MemberEndpoints
             return TypedResults.ValidationProblem(errors.ToDictionary());
         }
 
-        var member = new ProjectMember { ProjectId = projectId, UserId = account.Id, JoinedAt = DateTime.UtcNow };
+        var member = new ProjectMember { ProjectId = projectId, UserId = account.Id, JoinedAt = Clock.UtcNow() };
         db.ProjectMembers.Add(member);
         try
         {

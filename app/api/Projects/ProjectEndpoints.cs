@@ -50,7 +50,7 @@ internal static class ProjectEndpoints
             return TypedResults.Problem("The signed-in user has no account record.", statusCode: StatusCodes.Status403Forbidden);
         }
 
-        var project = new Project { Id = Guid.NewGuid(), Name = name!, OwnerUserId = userId, CreatedAt = DateTime.UtcNow };
+        var project = new Project { Id = Guid.NewGuid(), Name = name!, OwnerUserId = userId, CreatedAt = Clock.UtcNow() };
         db.Projects.Add(project);
         db.ProjectMembers.Add(new ProjectMember { ProjectId = project.Id, UserId = userId, JoinedAt = project.CreatedAt });
         await db.SaveChangesAsync(cancel); // One transaction: project and owner membership.
@@ -93,7 +93,7 @@ internal static class ProjectEndpoints
         if (project.OwnerUserId != userId) return OwnerOnly();
 
         // Idempotent: archiving again keeps the original timestamp.
-        project.ArchivedAt ??= DateTime.UtcNow;
+        project.ArchivedAt ??= Clock.UtcNow();
         await db.SaveChangesAsync(cancel);
         return TypedResults.Ok(ToResponse(project));
     }
