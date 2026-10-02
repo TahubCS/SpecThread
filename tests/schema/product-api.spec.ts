@@ -58,6 +58,8 @@ test("owners create, list, rename, and archive projects", async ({ request }) =>
   const project = await created.json();
   expect(project).toMatchObject({ name: "Billing", ownerUserId: "owner", archivedAt: null });
   expect(created.headers().location).toBe(`/projects/${project.id}`);
+  // Write responses carry the stored timestamp, not a higher-precision in-memory one.
+  expect((await (await owner.get(`/projects/${project.id}`)).json()).createdAt).toBe(project.createdAt);
 
   const { rows } = await database.pool.query("SELECT user_id FROM public.project_members WHERE project_id = $1", [project.id]);
   expect(rows).toEqual([{ user_id: "owner" }]);
@@ -122,6 +124,8 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   expect(updated.status()).toBe(200);
   const fetched = await (await owner.get(`/requirements/${requirement.id}`)).json();
   expect(fetched.version).toBe(2);
+  expect(fetched.createdAt).toBe(requirement.createdAt);
+  expect(fetched.updatedAt).toBe((await updated.json()).updatedAt);
   expect(fetched.acceptanceCriteria.map((c: { text: string; position: number }) => [c.position, c.text])).toEqual([
     [0, "Card is charged once"], [1, "Receipt is emailed"], [2, "Email is required"],
   ]);
@@ -133,7 +137,9 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   const list = await (await owner.get(`/projects/${project.id}/requirements`)).json();
   expect(list).toEqual([expect.objectContaining({ id: requirement.id, version: 2 })]);
   const archived = await owner.post(`/requirements/${requirement.id}/archive`);
-  expect((await archived.json()).archivedAt).not.toBeNull();
+  const archivedAt = (await archived.json()).archivedAt;
+  expect(archivedAt).not.toBeNull();
+  expect((await (await owner.get(`/requirements/${requirement.id}`)).json()).archivedAt).toBe(archivedAt);
   expect(await (await owner.get(`/projects/${project.id}/requirements`)).json()).toEqual([]);
   expect((await owner.put(`/requirements/${requirement.id}`, { title: "Revive", version: 2 })).status()).toBe(409);
 });
