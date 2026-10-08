@@ -5,7 +5,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeft, Bell, House, Menu, Settings, type LucideIcon } from "lucide-react";
-import { frameFor } from "@/lib/app-navigation";
+import { frameFor, isInvitationPath } from "@/lib/app-navigation";
 import { SettingsSidebar } from "./settings-sidebar";
 import { WorkspaceSidebar, workspaceTitleFor } from "./workspace-sidebar";
 import teamStyles from "./teams/teams.module.css";
@@ -58,7 +58,7 @@ function AppShell({ sidebar, title, icon: Icon, children, hideTopbar = false }: 
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (pathname === "/onboarding") return <main id="main-content" tabIndex={-1} className={teamStyles.onboardingMain}>{children}</main>;
+  if (pathname === "/onboarding" || isInvitationPath(pathname)) return <main id="main-content" tabIndex={-1} className={teamStyles.onboardingMain}>{children}</main>;
   const frame = frameFor(pathname);
   if (frame === "settings") {
     return <AppShell sidebar={<SettingsSidebar />} title="Settings" icon={Settings}>{children}</AppShell>;

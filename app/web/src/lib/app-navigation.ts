@@ -3,9 +3,14 @@ export type Frame = "public" | "settings" | "workspace";
 /** Routes shown without an app sidebar: the landing page, the sign-in flow, and policy pages. */
 const publicRoutes = ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms"];
 
+/** Only the token preview and its legacy expiry URL bypass first-team setup. */
+export function isInvitationPath(pathname: string) {
+  return /^\/invites\/[\da-f]{64}(?:\/expired)?$/i.test(pathname);
+}
+
 /** Reports whether a page renders without a session; every other page requires sign-in (ADR-023). */
 export function isPublicPath(pathname: string) {
-  return publicRoutes.includes(pathname);
+  return publicRoutes.includes(pathname) || isInvitationPath(pathname);
 }
 
 export const DEFAULT_AFTER_SIGN_IN = "/dashboard";

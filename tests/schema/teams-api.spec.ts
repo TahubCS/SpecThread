@@ -135,6 +135,7 @@ test("Teams migration locks down browser roles and rolls back without touching e
     expect((await client.query("SELECT count(*)::int AS count FROM teams")).rows[0].count).toBe(0);
   } finally { await client.query("ROLLBACK"); client.release(); }
   // Remove the newer project FK before exercising earlier migration rollbacks.
+  await database.pool.query(await readFile("docs/schema/team-invitations-rollback.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/team-projects-rollback.sql", "utf8"));
   await database.pool.query(`INSERT INTO projects (name,owner_user_id) VALUES ('Preserved project','owner')`);
   const security = await database.pool.query("SELECT rowsecurity FROM pg_tables WHERE schemaname='public' AND tablename='user_onboarding'");
@@ -155,4 +156,5 @@ test("Teams migration locks down browser roles and rolls back without touching e
   await database.pool.query(await readFile("docs/schema/teams.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/team-navigation.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/team-projects.sql", "utf8"));
+  await database.pool.query(await readFile("docs/schema/team-invitations.sql", "utf8"));
 });

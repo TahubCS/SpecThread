@@ -7,6 +7,13 @@ test("OpenAPI describes Teams and anonymous requests require authentication with
   expect(paths["/teams/{teamId}"].patch.responses["403"]).toBeDefined();
   expect(paths["/teams/{teamId}/members/{userId}"].delete.responses["409"]).toBeDefined();
   expect(paths["/teams/{teamId}/ownership"].post.responses["403"]).toBeDefined();
+  expect(paths["/teams/{teamId}/invitations"].post.responses["409"]).toBeDefined();
+  expect(paths["/invites/{token}"].get.responses["200"]).toBeDefined();
+  expect(paths["/invites/{token}/accept"].post.responses["410"]).toBeDefined();
   for (const response of [await request.get("/teams"), await request.post("/teams", { data: { name: "Private" } }),
-    await request.get("/teams/00000000-0000-0000-0000-000000000000")]) expect(response.status()).toBe(401);
+    await request.get("/teams/00000000-0000-0000-0000-000000000000"),
+    await request.delete("/teams/00000000-0000-0000-0000-000000000000/members/owner"),
+    await request.post("/teams/00000000-0000-0000-0000-000000000000/ownership", { data: { userId: "member" } }),
+    await request.get("/teams/00000000-0000-0000-0000-000000000000/invitations"),
+    await request.post(`/invites/${"a".repeat(64)}/accept`)]) expect(response.status()).toBe(401);
 });

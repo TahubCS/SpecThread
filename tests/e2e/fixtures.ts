@@ -32,6 +32,7 @@ export async function createTestSession(displayName: string, onboarded = true) {
     url: "http://127.0.0.1:3100",
   };
   return { userId, cookie, remove: () => runSql(`
+    DELETE FROM public.team_invitations WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR invited_by = '${userId}' OR accepted_by = '${userId}';
     DELETE FROM public.team_members WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR user_id = '${userId}';
     DELETE FROM public.teams WHERE owner_user_id = '${userId}';
     DELETE FROM public."user" WHERE id = '${userId}';`) };
