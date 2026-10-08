@@ -62,7 +62,6 @@ export function AccountPanel({ user, linked, available }: {
   return (
     <div className="scaffold-page account-page">
       <header className="scaffold-heading">
-        <p className="scaffold-kicker">SpecThread / Account</p>
         <h1>Account</h1>
         <p>Review your profile and sign-in methods.</p>
       </header>

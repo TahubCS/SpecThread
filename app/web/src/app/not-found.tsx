@@ -5,7 +5,6 @@ export default function NotFound() {
   return (
     <section className="scaffold-page" aria-labelledby="not-found-title">
       <header className="scaffold-heading">
-        <p className="scaffold-kicker">SpecThread / 404</p>
         <h1 id="not-found-title">Page not found</h1>
         <p>This address does not match a SpecThread page.</p>
       </header>

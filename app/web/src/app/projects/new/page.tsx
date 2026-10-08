@@ -8,7 +8,6 @@ export default function Page() {
   return (
     <section className="scaffold-page" aria-labelledby="page-title">
       <header className="scaffold-heading">
-        <p className="scaffold-kicker">SpecThread / Projects</p>
         <h1 id="page-title">Create a project</h1>
         <p>A project holds the requirements you want to trace. You will be its owner.</p>
       </header>

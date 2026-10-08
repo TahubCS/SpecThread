@@ -474,6 +474,27 @@ Consequences: Product pages render on every request and need the API to be reach
 Session expiry during a form submit shows the general failure message, not a sign-in
 prompt. Browser tests need a real API, so the test web server starts one (docs/TESTING.md).
 
+ADR-027: One set of visual tokens for the signed-in app
+
+Status: Accepted
+
+Context: The signed-in pages used dozens of one-off grays, three corner shapes (pills,
+circles, and rectangles), gray primary buttons, and uppercase labels above headings. The
+user asked for a sharper look without changing how the pages work.
+
+Decision: `.app-shell` in app/web/src/app/app-shell.css defines the colors, lines, and
+text levels for every signed-in page, and rules there use those variables instead of
+literal colors. Controls use a 6px radius and containers 8px. The lavender accent marks
+the one primary action on a page, the current navigation item, and linked evidence.
+Amber and coral mark "needs review" and "missing evidence", always next to a text
+label. Requirement IDs use Geist Mono. Pages share a left edge and a 32px gutter. Each
+dashboard row shows a six-segment summary of its evidence thread. The uppercase label
+above page headings is removed from signed-in pages.
+
+Consequences: The landing, sign-in, and policy pages keep their own styles; the
+unscoped `.scaffold-*` rules remain for the policy pages. New signed-in UI should use
+the variables. This refines the visual reference in ADR-020 without changing its layout.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

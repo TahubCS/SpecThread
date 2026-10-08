@@ -70,24 +70,24 @@ const threadIcons = [FileText, Circle, GitPullRequest, Check, Tag, UserRoundChec
 function EvidencePreview({ requirement }: { requirement: PreviewRequirement }) {
   return (
     <div className="evidence-preview" id={`thread-${requirement.id}`}>
-      <div className="evidence-preview-heading">Evidence thread</div>
-      <div className="evidence-preview-content">
-        <ol className="evidence-steps" aria-label={`Evidence path for ${requirement.id}`}>
-          {requirement.steps.map((step, index) => {
-            const Icon = threadIcons[index];
-            return (
-              <li key={`${step.label}-${index}`} className={`evidence-step ${step.state}`}>
-                <span className="evidence-node"><Icon size={15} strokeWidth={1.65} aria-hidden="true" /></span>
-                <span>{step.label}</span>
-              </li>
-            );
-          })}
-        </ol>
+      <div className="evidence-preview-header">
+        <span className="evidence-preview-heading">Evidence thread</span>
+        <p className="evidence-note">{requirement.note}</p>
         <Link className="evidence-open" href={`/projects/example-project/requirements/${requirement.id.toLowerCase()}/evidence`}>
-          Open example thread <ArrowRight size={15} aria-hidden="true" />
+          Open example thread <ArrowRight size={14} aria-hidden="true" />
         </Link>
       </div>
-      <p className="evidence-note">{requirement.note}</p>
+      <ol className="evidence-steps" aria-label={`Evidence path for ${requirement.id}`}>
+        {requirement.steps.map((step, index) => {
+          const Icon = threadIcons[index];
+          return (
+            <li key={`${step.label}-${index}`} className={`evidence-step ${step.state}`}>
+              <span className="evidence-node"><Icon size={14} strokeWidth={1.75} aria-hidden="true" /></span>
+              <span>{step.label}</span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -112,11 +112,11 @@ export function DashboardPreview() {
     <section className="dashboard-preview" aria-labelledby="dashboard-heading">
       <header className="dashboard-header">
         <div>
-          <p className="dashboard-preview-label">Preview · Sample requirements, no project data connected</p>
           <h1 id="dashboard-heading">Your work</h1>
+          <p className="dashboard-preview-label">Preview · Sample requirements, no project data connected</p>
         </div>
-        <Link className="dashboard-create" href="/projects/example-project/requirements/new"
-          title="Open the example requirement route"><Plus size={17} aria-hidden="true" /> New requirement</Link>
+        <Link className="button" href="/projects/example-project/requirements/new"
+          title="Open the example requirement route"><Plus size={16} aria-hidden="true" /> New requirement</Link>
       </header>
       <div className="dashboard-toolbar">
         <div className="dashboard-tabs" role="tablist" aria-label="Dashboard view">
@@ -164,8 +164,14 @@ export function DashboardPreview() {
                     <span className={`dashboard-status-dot ${item.group}`} aria-hidden="true" />
                     <span className="dashboard-id">{item.id}</span>
                     <span className="dashboard-title">{item.title}</span>
-                    <span className="dashboard-project">{item.project}</span>
+                    <span className="dashboard-thread" aria-hidden="true">
+                      {item.steps.map((step, index) => <i key={index} className={step.state} />)}
+                    </span>
+                    <span className="sr-only">
+                      {item.steps.filter(step => step.state === "linked").length} of {item.steps.length} evidence steps linked.
+                    </span>
                     <span className="dashboard-summary">{item.summary}</span>
+                    <span className="dashboard-project">{item.project}</span>
                     <span className="dashboard-date">{item.updated}</span>
                   </button>
                   {selected === item.id && <EvidencePreview requirement={item} />}

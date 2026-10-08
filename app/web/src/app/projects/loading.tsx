@@ -2,7 +2,7 @@
 export default function Loading() {
   return (
     <section className="scaffold-page">
-      <p className="notice" role="status">Loading...</p>
+      <p className="page-loading" role="status">Loading...</p>
     </section>
   );
 }

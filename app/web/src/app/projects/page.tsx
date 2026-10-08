@@ -15,28 +15,29 @@ export default async function Page() {
 
   return (
     <section className="scaffold-page" aria-labelledby="page-title">
-      <header className="scaffold-heading">
-        <p className="scaffold-kicker">SpecThread / Workspace</p>
-        <h1 id="page-title">Projects</h1>
-        <p>Projects you own or belong to.</p>
-      </header>
-      <div className="project-toolbar">
-        <p className="muted">{projects.length === 1 ? "1 project" : `${projects.length} projects`}</p>
+      <header className="scaffold-heading has-action">
+        <div>
+          <h1 id="page-title">Projects</h1>
+          <p>Projects you own or belong to.</p>
+        </div>
         <Link className="button" href="/projects/new">New project</Link>
-      </div>
+      </header>
       {projects.length === 0 ? (
         <p className="notice">You have no projects yet. Create one to start adding requirements.</p>
       ) : (
-        <ul className="project-list" aria-label="Your projects">
-          {projects.map(project => (
-            <li key={project.id}>
-              <Link href={`/projects/${project.id}`}>
-                <span>{project.name}</span>
-                <time dateTime={project.createdAt}>Created {createdDate.format(new Date(project.createdAt))}</time>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="project-count">{projects.length === 1 ? "1 project" : `${projects.length} projects`}</p>
+          <ul className="project-list" aria-label="Your projects">
+            {projects.map(project => (
+              <li key={project.id}>
+                <Link href={`/projects/${project.id}`}>
+                  <span>{project.name}</span>
+                  <time dateTime={project.createdAt}>Created {createdDate.format(new Date(project.createdAt))}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   );

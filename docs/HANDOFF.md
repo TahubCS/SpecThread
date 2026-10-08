@@ -1,5 +1,38 @@
 # Shared handoff
 
+## Current task: Visual polish of the signed-in app (2026-10-08)
+
+- Branch: `feature/visual-polish`, created from `feature/project-ui` at `b47ce88`.
+  Changes are uncommitted. It should merge after `feature/project-ui`.
+- Scope agreed with the user: sharper visuals for everything behind sign-in (sidebar, top
+  bar, dashboard, projects pages, placeholder and settings pages). No behavior change.
+  Landing, sign-in, and policy pages are untouched.
+- Completed:
+  - `app-shell.css` rewritten around shared color, line, and text variables (ADR-027).
+  - Dashboard: grouped lists in bordered containers, a segmented view switch, status dots
+    colored by group, a six-segment evidence summary in each row, and a left-aligned
+    evidence thread that turns vertical on narrow screens.
+  - Lavender primary buttons, dark form fields with an inline error, and a quieter
+    loading message.
+  - The uppercase label above page headings is removed from signed-in pages.
+- Changed files: `app/web/src/app/app-shell.css`,
+  `app/web/src/components/{dashboard-preview,scaffold-page,account-panel}.tsx`,
+  `app/web/src/app/{error,not-found}.tsx`,
+  `app/web/src/app/projects/{page,loading}.tsx`, `app/web/src/app/projects/new/page.tsx`,
+  and docs/{DECISIONS,HANDOFF}.md.
+- Decisions and assumptions: ADR-027. The dashboard still shows labeled sample data.
+- Checks: all 68 browser tests passed, run with a temporary config that started only the
+  test web server, because the user's dev API held port 5100. `npm run lint`,
+  `npm run typecheck`, and `git diff --check` passed. Inspected desktop and 390px
+  screenshots of the dashboard, projects list and form, a placeholder page, the account
+  page, and the profile menu.
+- Known issues and risks:
+  - The api and schema test projects were not re-run. No file they cover changed.
+  - The top bar shows the home icon on every workspace page, as before.
+  - Hover and focus states were not captured in screenshots.
+- Next step: the user reviews the look. Then continue `feature/project-ui` work: the
+  project overview at `/projects/{id}` with rename and archive.
+
 ## Current task: Projects list and create-project pages (2026-10-07)
 
 - Branch: `feature/project-ui`, created from `main` at `11285c2`. Changes are uncommitted.
