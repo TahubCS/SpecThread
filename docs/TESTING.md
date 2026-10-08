@@ -158,7 +158,17 @@ currently require network access during the web build.
   saved; refresh updating results for pull requests and commits; and the results in
   words in the browser. Source (ADR-036): the link endpoint ignoring a `source` sent
   by the caller, a suggested link naming who confirmed it, and the migration's
-  default, constraint, and rollback. Not exercised: the real GitHub, a pull request
+  default, constraint, and rollback. Releases (ADR-037): linking by tag and by
+  address, including tags with slashes, encoded characters, and only digits; the
+  pre-release badge; which linked changes a release contains, using a squash-merged
+  pull request's merge commit, with unmerged pull requests not compared and vanished
+  commits not included; a change linked after a release; refresh recomputing contents
+  and forgetting unlinked changes; a release deleted on GitHub keeping its snapshot;
+  duplicates, unknown tags, other repositories, and malformed references; failures on
+  each of the three GitHub calls saving nothing; and the migration's constraints and
+  a rollback that removes release links only. The migration tests at the end of
+  tests/schema/evidence.spec.ts roll back newest first and leave each migration
+  rolled back, so their order matters. Not exercised: the real GitHub, a pull request
   with more than 100 commits, and the installation token being reused within one
   request.
 - API: health response without database credentials, development OpenAPI, and

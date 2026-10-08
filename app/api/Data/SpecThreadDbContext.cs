@@ -118,12 +118,15 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         var evidence = model.Entity<RequirementEvidence>();
         evidence.ToTable("requirement_evidence", table =>
         {
-            table.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit')");
+            table.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
             table.HasCheckConstraint("ck_requirement_evidence_state", "state IS NULL OR state IN ('open', 'closed', 'merged')");
             table.HasCheckConstraint("ck_requirement_evidence_repository", "repository_id > 0");
-            // A commit is identified by its SHA; an issue or pull request by its number, and it has a state.
+            // A commit is identified by its SHA; an issue or pull request by its number, and it has a
+            // state; a release by its tag.
             table.HasCheckConstraint("ck_requirement_evidence_identity",
-                "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL) OR (kind <> 'commit' AND number IS NOT NULL AND number > 0 AND state IS NOT NULL)");
+                "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL AND tag IS NULL) OR " +
+                "(kind IN ('issue', 'pull_request') AND number IS NOT NULL AND number > 0 AND state IS NOT NULL AND tag IS NULL) OR " +
+                "(kind = 'release' AND tag IS NOT NULL AND length(btrim(tag)) > 0 AND number IS NULL AND state IS NULL)");
             table.HasCheckConstraint("ck_requirement_evidence_source", "source IN ('manual', 'suggested')");
             table.HasCheckConstraint("ck_requirement_evidence_checks", "COALESCE(check_count, 0) >= 0");
             table.HasCheckConstraint("ck_requirement_evidence_changes",
@@ -138,6 +141,10 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidence.Property(x => x.RepositoryName).HasColumnName("repository_name");
         evidence.Property(x => x.Number).HasColumnName("number");
         evidence.Property(x => x.Sha).HasColumnName("sha");
+        evidence.Property(x => x.MergeSha).HasColumnName("merge_sha");
+        evidence.Property(x => x.Tag).HasColumnName("tag");
+        evidence.Property(x => x.Prerelease).HasColumnName("prerelease");
+        evidence.Property(x => x.Contains).HasColumnName("contains").HasColumnType("jsonb");
         evidence.Property(x => x.Additions).HasColumnName("additions");
         evidence.Property(x => x.Deletions).HasColumnName("deletions");
         evidence.Property(x => x.ChangedFiles).HasColumnName("changed_files");
@@ -159,6 +166,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidence.Property(x => x.RefreshedAt).HasColumnName("refreshed_at").HasDefaultValueSql("now()");
         evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Number }).IsUnique();
         evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Sha }).IsUnique().HasFilter("kind = 'commit'");
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Tag }).IsUnique().HasFilter("kind = 'release'");
         evidence.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         evidence.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
     }

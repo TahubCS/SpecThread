@@ -66,7 +66,27 @@ export type FakeItem = {
   created_at: string; updated_at: string; closed_at?: string | null;
   /** For pull requests: totals, and the commits GitHub lists for it. */
   additions?: number; deletions?: number; changed_files?: number; commit_count?: number; commits?: FakeCommit[];
+  /** For a merged pull request: its commit on the target branch, which is what a release contains. */
+  merge_sha?: string;
 };
+
+export type FakeRelease = {
+  tag: string; name?: string; prerelease?: boolean; published_at: string;
+  /** GitHub login; null for a deleted account. */
+  author?: string | null;
+  /** The commit the tag points at. */
+  sha: string;
+  /** Commits in the release's history, besides its own. */
+  contains?: string[];
+  /** Commits GitHub no longer has: comparing with them answers 404. */
+  unknown?: string[];
+};
+
+/** Sets the published releases GitHub has for one repository. */
+export async function setGitHubReleases(repositoryId: number, releases: FakeRelease[]) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/releases`, { method: "PUT", body: JSON.stringify({ releases }) });
+  if (response.status !== 204) throw new Error(`The fake GitHub rejected the releases (${response.status}).`);
+}
 
 /** A 40-digit commit SHA that starts with the given hex digits. */
 export const sha = (start: string) => start.padEnd(40, "0");

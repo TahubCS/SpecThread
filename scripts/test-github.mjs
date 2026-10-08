@@ -15,8 +15,13 @@ import { createVerify } from "node:crypto";
 //                                    { runs?: [{ name, status, conclusion?, html_url?, completed_at? }], total_runs?,
 //                                      statuses?: [{ context, state, target_url?, updated_at? }],
 //                                      deny?: "runs" | "statuses" | "both" }   (403, as without the permission)
+//   PUT    /__github/repositories/<id>/releases
+//                                    { releases: [{ tag, name?, prerelease?, published_at, author?, sha,
+//                                                   contains?: [sha], unknown?: [sha] }] }
 //
-// A commit nobody set checks for has none.
+// A commit nobody set checks for has none. A release's history includes its own commit and the
+// commits in `contains`; comparing with a commit in `unknown` answers 404, as for a commit the
+// repository no longer has. A pull request item may set `merge_sha`, its commit after merging.
 //   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, close?, times? }
 //   DELETE /__github/faults?bearer=<token | app | installation>&path=<the same path>
 //
@@ -52,6 +57,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
   const items = new Map();
   const commits = new Map();
   const checks = new Map();
+  const releases = new Map();
   const commitJson = commit => ({
     sha: commit.sha, html_url: `https://github.com/acme/repo/commit/${commit.sha}`,
     commit: { message: commit.message, author: { name: commit.name ?? "Ada Lovelace", date: commit.date } },
@@ -82,6 +88,8 @@ export function startFakeGitHub({ port, appId, publicKey }) {
           items.set(Number(repositoryItems[1]), JSON.parse(body).items);
         } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/commits$/.test(url.pathname)) {
           commits.set(Number(url.pathname.split("/")[3]), JSON.parse(body).commits);
+        } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/releases$/.test(url.pathname)) {
+          releases.set(Number(url.pathname.split("/")[3]), JSON.parse(body).releases);
         } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/checks\/[0-9a-f]{40}$/.test(url.pathname)) {
           checks.set(`${url.pathname.split("/")[3]}/${url.pathname.split("/")[5]}`, JSON.parse(body));
         } else if (request.method === "POST" && url.pathname === "/__github/faults") {
@@ -114,6 +122,29 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         return installed
           ? send(response, 201, { token: installationToken, expires_at: new Date(Date.now() + 3_600_000).toISOString() })
           : send(response, 404, { message: "Not Found" });
+      }
+
+      const releasePath = /^\/repositories\/(\d+)\/(releases\/tags|commits\/tags)\/(.+)$/.exec(url.pathname);
+      if (releasePath && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const tag = decodeURIComponent(releasePath[3]);
+        const found = (releases.get(Number(releasePath[1])) ?? []).find(entry => entry.tag === tag);
+        if (!found) return send(response, 404, { message: "Not Found" });
+        if (releasePath[2] === "commits/tags") return send(response, 200, commitJson({ sha: found.sha, message: `Release ${tag}`, date: found.published_at }));
+        return send(response, 200, {
+          tag_name: found.tag, name: found.name ?? null, prerelease: found.prerelease ?? false, created_at: found.published_at,
+          published_at: found.published_at, author: found.author === null ? null : { login: found.author ?? "ada" },
+          html_url: `https://github.com/acme/repo/releases/tag/${encodeURIComponent(found.tag)}`,
+        });
+      }
+      const comparePath = /^\/repositories\/(\d+)\/compare\/([0-9a-f]{40})\.\.\.([0-9a-f]{40})$/.exec(url.pathname);
+      if (comparePath && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const [, repository, base, head] = comparePath;
+        const found = (releases.get(Number(repository)) ?? []).find(entry => entry.sha === head);
+        if (!found || (found.unknown ?? []).includes(base)) return send(response, 404, { message: "Not Found" });
+        const status = base === head ? "identical" : (found.contains ?? []).includes(base) ? "ahead" : "diverged";
+        return send(response, 200, { status, ahead_by: status === "identical" ? 0 : 1, behind_by: status === "diverged" ? 1 : 0, commits: [] });
       }
 
       const checkPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]{40})\/(check-runs|status)$/.exec(url.pathname);
@@ -163,6 +194,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
           return send(response, 200, {
             ...base, merged: found.merged ?? false, commits: found.commit_count ?? listed.length, additions: found.additions ?? 0,
             deletions: found.deletions ?? 0, changed_files: found.changed_files ?? 0, head: { sha: listed.at(-1)?.sha ?? "f".repeat(40) },
+            merge_commit_sha: found.merged ? found.merge_sha ?? null : null,
           });
         }
         return send(response, 200, found.pull ? { ...base, pull_request: { url: "https://api.github.test/pull" } } : base);

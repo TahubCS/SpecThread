@@ -311,12 +311,14 @@ a.row:focus-visible { outline-offset: -2px; }
 .evidence-rows .evidence-commits p { margin: 8px 0 0; }
 .evidence-commits .check-name { color: var(--app-text); }
 .check-result { display: inline-flex; flex: none; align-items: center; width: 84px; color: var(--app-text); font-size: 12.5px; }
+.check-result.is-wide { width: 104px; }
 .check-result > span { width: 7px; height: 7px; margin-right: 7px; border: 1.5px solid var(--app-text-3); border-radius: 50%; }
 .check-result.is-passed > span { border-color: var(--app-ok); background: var(--app-ok); }
 .check-result.is-failed > span { border-color: var(--app-danger); background: var(--app-danger); }
 .check-result.is-running > span { border-color: var(--app-warn); }
 .evidence-rows .row { flex-wrap: wrap; row-gap: 2px; }
-.evidence-number { flex: none; color: var(--app-text-3); font-family: var(--app-mono); font-size: 12px; }
+/* A release's tag can be long, so the label may shrink and is cut with an ellipsis. */
+.evidence-number { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; color: var(--app-text-3); font-family: var(--app-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 /* Positioned so the hidden "opens in a new tab" text is clipped with the title instead of widening the page. */
 .evidence-rows a.row-title { position: relative; flex: 1 1 180px; color: var(--app-text); }
 .evidence-rows a.row-title:hover { text-decoration: underline; }

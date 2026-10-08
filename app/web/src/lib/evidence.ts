@@ -12,8 +12,10 @@ export type EvidenceCheck = {
 };
 
 /**
- * An issue, pull request, or commit linked to a requirement, as GitHub reported it when last
- * read (docs/API.md). Issues and pull requests have `number` and `state`; commits have `sha`.
+ * An issue, pull request, commit, or release linked to a requirement, as GitHub reported it when
+ * last read (docs/API.md). Issues and pull requests have `number` and `state`; commits have
+ * `sha`; releases have `tag`, and `contains` maps the ID of each linked commit or pull request
+ * that was compared to whether the release's history includes it.
  * Pull requests and commits carry what changed; pull requests also list their commits. They
  * also carry the check results of the commit (for a pull request, its latest): `checks` is null
  * when GitHub would not let them be read. `source` says whether a person added the link or
@@ -22,9 +24,12 @@ export type EvidenceCheck = {
 export type Evidence = {
   id: string;
   requirementId: string;
-  kind: "issue" | "pull_request" | "commit";
+  kind: "issue" | "pull_request" | "commit" | "release";
   number: number | null;
   sha: string | null;
+  tag: string | null;
+  prerelease: boolean | null;
+  contains: Record<string, boolean> | null;
   title: string;
   state: "open" | "closed" | "merged" | null;
   additions: number | null;
@@ -84,18 +89,25 @@ export function parseEvidence(value: unknown): Evidence {
       !isCount(item.changedFiles) || !isCount(item.commitCount) || (item.commits !== null && !Array.isArray(item.commits)) ||
       (item.sha !== null && !isSha(item.sha)) || (item.checks !== null && !Array.isArray(item.checks)) || !isCount(item.checkCount) ||
       (item.checksReadAt !== null && !isDate(item.checksReadAt)) || (item.source !== "manual" && item.source !== "suggested") ||
+      (item.tag !== null && typeof item.tag !== "string") || (item.prerelease !== null && typeof item.prerelease !== "boolean") ||
+      (item.contains !== null && (typeof item.contains !== "object" || Array.isArray(item.contains) ||
+        Object.values(item.contains as object).some(value => typeof value !== "boolean"))) ||
       typeof item.linkedBy !== "string" || !isDate(item.linkedAt) || !isDate(item.refreshedAt)) {
     throw new Error("The API returned unexpected evidence.");
   }
-  // A commit is identified by its SHA; an issue or pull request by its number, and it has a state.
+  // A commit is identified by its SHA; an issue or pull request by its number, and it has a state;
+  // a release by its tag.
   const identity = item.kind === "commit"
-    ? item.sha !== null && item.number === null && item.state === null
-    : (item.kind === "issue" || item.kind === "pull_request") && typeof item.number === "number" && Number.isInteger(item.number) &&
-      item.number > 0 && (item.state === "open" || item.state === "closed" || item.state === "merged");
+    ? item.sha !== null && item.number === null && item.state === null && item.tag === null
+    : item.kind === "release"
+      ? typeof item.tag === "string" && item.tag.length > 0 && item.number === null && item.state === null
+      : (item.kind === "issue" || item.kind === "pull_request") && typeof item.number === "number" && Number.isInteger(item.number) &&
+        item.number > 0 && (item.state === "open" || item.state === "closed" || item.state === "merged") && item.tag === null;
   if (!identity) throw new Error("The API returned unexpected evidence.");
   return {
     id: item.id, requirementId: item.requirementId, kind: item.kind as Evidence["kind"], number: item.number as number | null,
-    sha: item.sha, title: item.title, state: item.state as Evidence["state"], additions: item.additions, deletions: item.deletions,
+    sha: item.sha, tag: item.tag, prerelease: item.prerelease, contains: item.contains as Record<string, boolean> | null,
+    title: item.title, state: item.state as Evidence["state"], additions: item.additions, deletions: item.deletions,
     changedFiles: item.changedFiles, commitCount: item.commitCount,
     commits: item.commits === null ? null : (item.commits as unknown[]).map(parseCommit),
     checks: item.checks === null ? null : (item.checks as unknown[]).map(parseCheck),
@@ -114,14 +126,42 @@ export function parseEvidenceList(value: unknown): Evidence[] {
 
 /** Returns the message for a trimmed issue or pull request reference, or null when the API should judge it. */
 export function evidenceReferenceError(reference: string): string | null {
-  if (!reference) return "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them.";
+  if (!reference) return "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them.";
   if (reference.length > EVIDENCE_REFERENCE_MAX) return `Use ${EVIDENCE_REFERENCE_MAX} characters or fewer.`;
   return null;
 }
 
-/** How an item is referred to in the list: "#42" for issues and pull requests, a short SHA for commits. */
-export function evidenceLabel(evidence: Pick<Evidence, "number" | "sha">): string {
-  return evidence.number !== null ? `#${evidence.number}` : (evidence.sha ?? "").slice(0, 7);
+/** How an item is referred to in the list: "#42" for issues and pull requests, the tag for releases, a short SHA for commits. */
+export function evidenceLabel(evidence: Pick<Evidence, "number" | "sha" | "tag">): string {
+  if (evidence.number !== null) return `#${evidence.number}`;
+  return evidence.tag ?? (evidence.sha ?? "").slice(0, 7);
+}
+
+export type ReleaseStatus = "included" | "not-included" | "not-merged" | "not-checked";
+
+/**
+ * Lists, for one release, every linked commit and pull request of the same repository with
+ * whether the release's history includes it. "Included" means the commit is in that history; a
+ * change that was later reverted is still in it. A pull request that is not merged cannot be in
+ * a release. `summary` says how many are included, or null when there is nothing to compare.
+ */
+export function releaseContents(release: Evidence, evidence: Evidence[]): { summary: string | null; rows: { item: Evidence; status: ReleaseStatus }[] } {
+  const rows = evidence
+    .filter(item => (item.kind === "commit" || item.kind === "pull_request") && item.repository === release.repository)
+    .map(item => {
+      const checked = release.contains?.[item.id];
+      const status: ReleaseStatus = item.kind === "pull_request" && item.state !== "merged" ? "not-merged"
+        : checked === true ? "included" : checked === false ? "not-included" : "not-checked";
+      return { item, status };
+    });
+  if (rows.length === 0) return { summary: null, rows };
+  const included = rows.filter(row => row.status === "included").length;
+  return { summary: `Contains ${included} of ${rows.length} linked ${rows.length === 1 ? "change" : "changes"}`, rows };
+}
+
+/** The tags of the linked releases whose history includes this commit or pull request, oldest release first. */
+export function releasesContaining(item: Pick<Evidence, "id">, evidence: Evidence[]): string[] {
+  return evidence.filter(other => other.kind === "release" && other.tag !== null && other.contains?.[item.id] === true).map(release => release.tag!);
 }
 
 /** Describes what changed in words, such as "+12 −3 in 2 files", or null when GitHub reported no counts. */
@@ -132,11 +172,11 @@ export function evidenceChanges(evidence: Pick<Evidence, "additions" | "deletion
 
 /**
  * Describes a commit's or pull request's check results in words, such as "5 of 6 checks passed,
- * 1 failed". Returns null for issues, which have no checks. "Passed" means only that a recorded
+ * 1 failed". Returns null for issues and releases, which have no checks. "Passed" means only that a recorded
  * automated check reported success.
  */
 export function checkSummary(evidence: Pick<Evidence, "kind" | "checks" | "checkCount">): string | null {
-  if (evidence.kind === "issue") return null;
+  if (evidence.kind === "issue" || evidence.kind === "release") return null;
   if (evidence.checks === null) return "Check results could not be read";
   const total = Math.max(evidence.checkCount ?? 0, evidence.checks.length);
   if (total === 0) return "No checks ran";

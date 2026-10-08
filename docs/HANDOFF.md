@@ -1,6 +1,47 @@
 # Shared handoff
 
-## Current task: Evidence slice 4, check results and link source (2026-10-08)
+## Current task: Evidence slice 5, releases and what they contain (2026-10-08)
+
+- Branch: `feature/project-ui`. Slice 4 is committed (`088593d`). This entry is
+  uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed (ADR-037): a release can be linked to a requirement by tag or address.
+  Each release shows "Contains N of M linked changes" and lists every linked commit
+  and pull request as Included, Not included, Not merged, or Not checked, from
+  GitHub's history. Commits and merged pull requests show "In release <tag>".
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008090129_EvidenceReleases` and the model snapshot.
+  - Schema: `scripts/generate-evidence-releases.mjs`,
+    `docs/schema/evidence-releases{,-rollback}.sql`.
+  - Web: `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github,test-database}.mjs`, `tests/support/github.ts`,
+    `tests/e2e/evidence.spec.ts`, `tests/schema/{evidence,github-repository}.spec.ts`,
+    `tests/api/project-data.spec.ts`.
+  - Docs: DECISIONS (ADR-037), API, DATABASE, TESTING, and this file.
+- Differences from the plan: the link endpoint's message for an unreadable reference
+  now mentions release tags. `evidence-actions.ts` needed no change, as expected.
+- Checks: the evidence API, unit, and evidence browser tests passed together (46).
+  The full run of all browser tests plus the GitHub API tests then passed (179), and
+  no code changed after it. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed. Run
+  with a temporary config without the test API on port 5100.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub. Two details come from GitHub's documentation only: resolving a tag
+    through `commits/tags/<tag>`, and the compare statuses.
+  - **Setup**: apply the EvidenceReleases migration
+    (`dotnet ef database update --project app/api`) and restart or redeploy the API.
+  - Refresh makes one more GitHub call per release and per release-change pair.
+  - "Included" is ancestry: a reverted change still counts.
+- Next step: the review decision (accept, reject, request more evidence, with a
+  note). Then reordering criteria and the evidence count on lists. The AI slice
+  follows ADR-036.
+
+## Previous task: Evidence slice 4, check results and link source (2026-10-08)
 
 - Branch: `feature/project-ui`. Slices 1 to 3 are committed (`94759df`). This entry is
   uncommitted. The approved plan is in

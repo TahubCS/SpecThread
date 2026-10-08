@@ -1,21 +1,25 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { CircleDot, GitCommitHorizontal, GitPullRequest, RefreshCw, X } from "lucide-react";
+import { CircleDot, GitCommitHorizontal, GitPullRequest, RefreshCw, Tag, X } from "lucide-react";
 import { linkEvidence, refreshEvidence, unlinkEvidence } from "@/app/projects/evidence-actions";
-import { checkSummary, EVIDENCE_REFERENCE_MAX, evidenceChanges, evidenceLabel, type Evidence } from "@/lib/evidence";
+import {
+  checkSummary, EVIDENCE_REFERENCE_MAX, evidenceChanges, evidenceLabel, releaseContents, releasesContaining, type Evidence,
+} from "@/lib/evidence";
 import { formatDate } from "@/lib/projects";
 
 const stateText = { open: "Open", closed: "Closed", merged: "Merged" } as const;
-const kindText = { issue: "issue", pull_request: "pull request", commit: "commit" } as const;
-const icons = { issue: CircleDot, pull_request: GitPullRequest, commit: GitCommitHorizontal } as const;
+const kindText = { issue: "issue", pull_request: "pull request", commit: "commit", release: "release" } as const;
+const icons = { issue: CircleDot, pull_request: GitPullRequest, commit: GitCommitHorizontal, release: Tag } as const;
+const releaseStatusText = { "included": "Included", "not-included": "Not included", "not-merged": "Not merged", "not-checked": "Not checked" } as const;
 const resultText = { passed: "Passed", failed: "Failed", running: "Running", skipped: "Skipped", cancelled: "Cancelled", neutral: "Neutral" } as const;
 const external = { target: "_blank", rel: "noreferrer" } as const;
 
 /**
- * Renders a requirement's linked issues, pull requests, and commits as a timeline, oldest first,
- * with what GitHub reported when they were last read. Pull requests and commits show what
- * changed and the results of their automated checks, and a pull request lists its commits. A
+ * Renders a requirement's linked issues, pull requests, commits, and releases as a timeline,
+ * oldest first, with what GitHub reported when they were last read. Pull requests and commits
+ * show what changed, the results of their automated checks, and the linked releases that
+ * include them; a pull request lists its commits; a release lists which linked changes it contains. A
  * link that began as a suggestion names the person who confirmed it. While the requirement can
  * change, members add a link, remove one, and read everything from GitHub again.
  */
@@ -36,13 +40,14 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
   return (
     <>
       {evidence.length === 0 ? (
-        <p className="muted">No issues, pull requests, or commits are linked yet.</p>
+        <p className="muted">No issues, pull requests, commits, or releases are linked yet.</p>
       ) : (
         <ul className="row-list evidence-rows" aria-label="Linked evidence">
           {evidence.map(item => {
             const Icon = icons[item.kind];
             const label = evidenceLabel(item);
             const changes = evidenceChanges(item);
+            const inReleases = item.kind === "release" ? [] : releasesContaining(item, evidence);
             return (
               <li key={item.id}>
                 <div className="row">
@@ -55,7 +60,7 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
                     <span className={`badge evidence-state is-${item.state}`}>
                       <span aria-hidden="true" />{stateText[item.state]}<span className="sr-only"> {kindText[item.kind]}</span>
                     </span>
-                  ) : <span className="badge">Commit</span>}
+                  ) : <span className="badge">{item.kind === "release" ? (item.prerelease ? "Pre-release" : "Release") : "Commit"}</span>}
                   <span className="row-meta">
                     {item.author ? `${item.author} · ` : ""}<time dateTime={item.githubCreatedAt}>{formatDate(item.githubCreatedAt)}</time>
                   </span>
@@ -71,6 +76,8 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
                 {item.kind === "commit" && changes && <p className="evidence-changes">{changes}</p>}
                 {item.kind === "pull_request" && item.commits && <PullRequestCommits item={item} changes={changes} />}
                 <Checks item={item} />
+                {item.kind === "release" && <ReleaseContents release={item} evidence={evidence} />}
+                {inReleases.length > 0 && <p className="evidence-changes">In {inReleases.length === 1 ? "release" : "releases"} {inReleases.join(", ")}</p>}
                 {item.source === "suggested" && (
                   <p className="evidence-changes">Suggested, confirmed by {people[item.linkedBy] ?? "a former member"}</p>
                 )}
@@ -152,6 +159,30 @@ function Checks({ item }: { item: Evidence }) {
   );
 }
 
+/**
+ * Renders which linked commits and pull requests a release contains: a one-line count, and each
+ * change with the outcome in words on demand. Renders nothing when there is nothing to compare.
+ */
+function ReleaseContents({ release, evidence }: { release: Evidence; evidence: Evidence[] }) {
+  const { summary, rows } = releaseContents(release, evidence);
+  if (!summary) return <p className="evidence-changes">No linked commits or pull requests to compare with this release</p>;
+  return (
+    <details className="evidence-commits">
+      <summary>{summary}</summary>
+      <ul aria-label={`Linked changes in ${release.tag}`}>
+        {rows.map(({ item, status }) => (
+          <li key={item.id}>
+            <span className={`check-result is-wide ${status === "included" ? "is-passed" : ""}`}><span aria-hidden="true" />{releaseStatusText[status]}</span>
+            <span className="evidence-number">{evidenceLabel(item)}</span>
+            <span className="check-name">{item.title}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="muted">Included means the commit is in the history of the release&apos;s tag on GitHub.</p>
+    </details>
+  );
+}
+
 /** Renders the field for adding a link. Remounted after each successful link, which clears it. */
 function LinkForm({ action, pending, state, repository }: {
   action: (formData: FormData) => void;
@@ -163,10 +194,10 @@ function LinkForm({ action, pending, state, repository }: {
   return (
     <form className="evidence-link" action={action} aria-label="Link evidence">
       <div className="field">
-        <label htmlFor="evidence-reference">Link an issue, pull request, or commit from {repository}</label>
+        <label htmlFor="evidence-reference">Link an issue, pull request, commit, or release from {repository}</label>
         <div className="evidence-link-row">
           <input id="evidence-reference" name="reference" type="text" autoComplete="off" required maxLength={EVIDENCE_REFERENCE_MAX}
-            placeholder="42, a commit SHA, or a GitHub link" value={reference} onChange={event => setReference(event.target.value)}
+            placeholder="42, a commit SHA, a release tag, or a GitHub link" value={reference} onChange={event => setReference(event.target.value)}
             aria-invalid={state.error ? true : undefined} aria-describedby={state.error ? "evidence-reference-error" : undefined} />
           <button className="button" type="submit" disabled={pending}>{pending ? "Linking..." : "Link"}</button>
         </div>

@@ -53,7 +53,7 @@ async function as(request: APIRequestContext, sub: string) {
 type Commit = { sha: string; message: string; date: string; login?: string | null; name?: string; additions?: number; deletions?: number; files?: number };
 type Item = {
   number: number; pull?: boolean; merged?: boolean; title: string; state: string; user?: string | null; created_at: string; updated_at: string;
-  closed_at?: string; additions?: number; deletions?: number; changed_files?: number; commit_count?: number; commits?: Commit[];
+  closed_at?: string; additions?: number; deletions?: number; changed_files?: number; commit_count?: number; commits?: Commit[]; merge_sha?: string;
 };
 const sha = (start: string) => start.padEnd(40, "0");
 const item = (number: number, title: string, extra: Partial<Item> = {}): Item =>
@@ -263,11 +263,17 @@ test("commits are linked by SHA or address with their changes, and pull requests
   ]);
   expect((await (await member.get(path)).json()).map((e: { kind: string }) => e.kind)).toEqual(["commit", "pull_request", "commit"]);
 
-  for (const reference of ["abc123", "g123456", "abc1234 ; drop", "f".repeat(41), "https://github.com/acme/web/commit/abc",
+  for (const reference of ["abc1234 ; drop", "https://github.com/acme/web/commit/abc",
     "https://github.com/acme/web/commits/abc1234", "https://github.com/acme/web/pull/9/commits/"]) {
     const response = await member.post(path, { reference });
     expect(response.status(), reference).toBe(400);
     expect((await response.json()).errors.reference[0], reference).toContain("Enter an issue or pull request number");
+  }
+  // Text that is neither a number nor a SHA is looked up as a release tag.
+  for (const reference of ["abc123", "g123456", "f".repeat(41)]) {
+    const response = await member.post(path, { reference });
+    expect(response.status(), reference).toBe(400);
+    expect((await response.json()).errors.reference[0], reference).toBe(`GitHub has no release tagged ${reference} in acme/web.`);
   }
   const unknown = await member.post(path, { reference: "deadbeef" });
   expect(unknown.status()).toBe(400);
@@ -380,6 +386,130 @@ test("check results are read for pull requests and commits, normalized, and neve
   expect(refreshed.find((e: { sha: string | null; kind: string }) => e.kind === "commit" && e.sha === hidden).checks).toBeNull();
 });
 
+test("releases are linked by tag or address, and each records which linked changes its history includes", async ({ request }) => {
+  const [head, squash, early, late, gone, added] = [sha("abc1234"), sha("5ca1ab1e"), sha("0a1b2c3d"), sha("feed123"), sha("dead999"), sha("beef456")];
+  const [one, two] = [sha("1111111"), sha("2222222")];
+  const { path, repositoryId } = await setUp(request, [
+    item(3, "An issue"),
+    item(9, "Add guest checkout", { pull: true, merged: true, state: "closed", merge_sha: squash, commits: [{ sha: head, message: "Add guest path", date: "2026-09-09T09:00:00Z" }] }),
+    item(10, "Remember the cart", { pull: true, commits: [{ sha: late, message: "WIP", date: "2026-09-10T09:00:00Z" }] }),
+  ]);
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/commits`, { data: { commits: [early, late, gone, added].map(value => ({ sha: value, message: "m", date: "2026-09-20T09:00:00Z" })) } });
+  const setReleases = (first: string[]) => request.put(`${gitHub}/__github/repositories/${repositoryId}/releases`, { data: { releases: [
+    { tag: "v1.4.0", name: "  Guest checkout  ", published_at: "2026-09-25T10:00:00Z", sha: one, contains: first, unknown: [gone] },
+    { tag: "release/2.0-rc.1", prerelease: true, published_at: "2026-09-30T10:00:00Z", sha: two, contains: [squash, early, late, added], author: null },
+    { tag: "1234567", published_at: "2026-10-01T10:00:00Z", sha: sha("3333333") },
+    { tag: "v1.0+build", published_at: "2026-10-02T10:00:00Z", sha: sha("4444444") },
+  ] } });
+  // The pull request's branch commit (head) is in no release; its merge commit is.
+  await setReleases([squash, early]);
+  const member = await as(request, "member");
+  const ids: Record<string, string> = {};
+  for (const reference of ["3", "9", "10", early, late, gone]) ids[reference] = (await (await member.post(path, { reference })).json()).id;
+
+  const linked = await member.post(path, { reference: "v1.4.0" });
+  expect(linked.status()).toBe(201);
+  const first = await linked.json();
+  expect(first).toMatchObject({
+    kind: "release", tag: "v1.4.0", title: "Guest checkout", prerelease: false, sha: one, number: null, state: null, author: "ada",
+    url: "https://github.com/acme/repo/releases/tag/v1.4.0", githubCreatedAt: "2026-09-25T10:00:00Z",
+    checks: null, checkCount: null, checksReadAt: null, source: "manual", linkedBy: "member",
+  });
+  // Compared: the merged pull request and the three commits. Not compared: the issue and the open pull request.
+  expect(first.contains).toEqual({ [ids["9"]]: true, [ids[early]]: true, [ids[late]]: false, [ids[gone]]: false });
+
+  const candidate = await (await member.post(path, { reference: "https://github.com/acme/web/releases/tag/release/2.0-rc.1?expanded=true" })).json();
+  expect(candidate).toMatchObject({ kind: "release", tag: "release/2.0-rc.1", title: "release/2.0-rc.1", prerelease: true, sha: two, author: null });
+  expect(candidate.contains).toEqual({ [ids["9"]]: true, [ids[early]]: true, [ids[late]]: true, [ids[gone]]: false });
+
+  for (const reference of ["v1.4.0", "https://github.com/acme/web/releases/tag/v1.4.0", "https://github.com/ACME/Web/releases/tag/release/2.0-rc.1"]) {
+    const duplicate = await member.post(path, { reference });
+    expect(duplicate.status(), reference).toBe(409);
+    expect((await duplicate.json()).detail).toMatch(/^Release (v1\.4\.0|release\/2\.0-rc\.1) is already linked to this requirement\.$/);
+  }
+  // A tag made only of digits reads as an issue number, so it is linked by its address. An encoded tag is decoded.
+  expect((await (await member.post(path, { reference: "1234567" })).json()).errors.reference[0]).toBe("GitHub has no issue or pull request #1234567 in acme/web.");
+  expect((await (await member.post(path, { reference: "https://github.com/acme/web/releases/tag/1234567" })).json()).tag).toBe("1234567");
+  expect((await (await member.post(path, { reference: "https://github.com/acme/web/releases/tag/v1.0%2Bbuild" })).json()).tag).toBe("v1.0+build");
+
+  for (const [reference, message] of [
+    ["v9.9.9", "GitHub has no release tagged v9.9.9 in acme/web."],
+    ["https://github.com/rival/secret/releases/tag/v1.4.0", "That link is not in acme/web, the repository connected to this project."],
+    ["v 1", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["https://github.com/acme/web/releases", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["https://github.com/acme/web/releases/tag/", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["ftp://example.com/v1", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["t".repeat(101), "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+  ] as const) {
+    const response = await member.post(path, { reference });
+    expect(response.status(), reference).toBe(400);
+    expect((await response.json()).errors.reference[0], reference).toBe(message);
+  }
+
+  // A change linked later is compared with every release already linked.
+  ids[added] = (await (await member.post(path, { reference: added })).json()).id;
+  const byTag = async (tag: string) => (await (await member.get(path)).json()).find((e: { tag: string | null }) => e.tag === tag);
+  expect((await byTag("v1.4.0")).contains[ids[added]]).toBe(false);
+  expect((await byTag("release/2.0-rc.1")).contains[ids[added]]).toBe(true);
+  expect((await byTag("1234567")).contains[ids[added]]).toBe(false);
+
+  // Failures while comparing or re-reading a release save nothing.
+  const before = await (await member.get(path)).json();
+  await setReleases([squash, early, late]);
+  const fault = (data: object) => request.post(`${gitHub}/__github/faults`, { data });
+  for (const [where, body, status] of [
+    [`^/repositories/${repositoryId}/compare/${late}\\.\\.\\.${one}$`, undefined, 500],
+    [`^/repositories/${repositoryId}/compare/${late}\\.\\.\\.${one}$`, { status: "sideways" }, 200],
+    [`^/repositories/${repositoryId}/compare/${late}\\.\\.\\.${one}$`, [], 200],
+    [`^/repositories/${repositoryId}/releases/tags/v1\\.4\\.0$`, { tag_name: "", html_url: "https://github.com/a/b", prerelease: false, published_at: "2026-09-25T10:00:00Z" }, 200],
+    [`^/repositories/${repositoryId}/releases/tags/v1\\.4\\.0$`, { tag_name: "v1.4.0", html_url: "https://evil.example/r", prerelease: false, published_at: "2026-09-25T10:00:00Z" }, 200],
+    [`^/repositories/${repositoryId}/releases/tags/v1\\.4\\.0$`, { tag_name: "v1.4.0", html_url: "https://github.com/a/b", prerelease: "no", published_at: "2026-09-25T10:00:00Z" }, 200],
+    [`^/repositories/${repositoryId}/commits/tags/v1\\.4\\.0$`, { sha: "short" }, 200],
+    [`^/repositories/${repositoryId}/commits/tags/v1\\.4\\.0$`, undefined, 429],
+  ] as const) {
+    await fault({ bearer: "installation", path: where, status, body, times: 1 });
+    expect((await member.post(`${path}/refresh`)).status(), `${where} ${JSON.stringify(body)}`).toBe(502);
+    expect(await (await member.get(path)).json(), where).toEqual(before);
+  }
+
+  // Refresh recomputes every release: the late commit is now in v1.4.0, and an unlinked change is forgotten.
+  expect((await member.delete(`${path}/${ids[early]}`)).status()).toBe(204);
+  expect((await member.post(`${path}/refresh`)).status()).toBe(200);
+  expect((await byTag("v1.4.0")).contains).toEqual({ [ids["9"]]: true, [ids[late]]: true, [ids[gone]]: false, [ids[added]]: false });
+
+  // A release deleted on GitHub keeps its snapshot and is still compared through its stored commit.
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/releases`, { data: { releases: [{ tag: "kept-for-compare", published_at: "2026-09-25T10:00:00Z", sha: one, contains: [squash] }] } });
+  expect((await member.post(`${path}/refresh`)).status()).toBe(200);
+  expect(await byTag("v1.4.0")).toMatchObject({ title: "Guest checkout", sha: one, contains: { [ids["9"]]: true, [ids[late]]: false } });
+});
+
+test("the release migration constrains what a release row can be, and its rollback removes release links only", async () => {
+  const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
+  const columns = "SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('tag','prerelease','merge_sha','contains')";
+  const { rows: [requirement] } = await database.pool.query("SELECT id FROM public.requirements LIMIT 1");
+  const insert = (values: Record<string, unknown>) => {
+    const row = { requirement_id: requirement.id, kind: "release", repository_id: 717171, repository_owner: "a", repository_name: "b",
+      title: "t", url: "https://github.com/a/b/releases/tag/v1", github_created_at: new Date(), github_updated_at: new Date(), linked_by: "owner", ...values };
+    const names = Object.keys(row);
+    return database.pool.query(`INSERT INTO public.requirement_evidence (${names.join(",")}) VALUES (${names.map((_, index) => `$${index + 1}`).join(",")})`, Object.values(row));
+  };
+  await insert({ tag: "v1", sha: sha("aaaaaaa"), prerelease: false, contains: JSON.stringify({}) });
+  await insert({ tag: "v2" });
+  await expect(insert({ tag: "v1" })).rejects.toThrow(/duplicate key/);
+  for (const values of [{ tag: null }, { tag: "  " }, { tag: "v3", number: 3 }, { tag: "v3", state: "open" }, { kind: "commit", sha: sha("bbbbbbb"), tag: "v3" },
+    { kind: "issue", number: 8, state: "open", tag: "v3" }, { kind: "deployment", tag: "v3" }]) {
+    await expect(insert(values), JSON.stringify(values)).rejects.toThrow(/check constraint/);
+  }
+  await insert({ kind: "pull_request", number: 8, state: "merged", merge_sha: sha("ccccccc") });
+  const others = await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind <> 'release'");
+
+  await database.pool.query(await readFile("docs/schema/evidence-releases-rollback.sql", "utf8"));
+  expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'release'")).toBe(0);
+  expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(others);
+  expect(await count(columns)).toBe(0);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(6);
+});
+
 test("the check migration defaults every link to manual, constrains the source, and rolls back without losing links", async () => {
   const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
   const columns = "SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('checks','check_count','checks_read_at','source')";
@@ -402,10 +532,6 @@ test("the check migration defaults every link to manual, constrains the source, 
   expect(await count(columns)).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(before);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
-  await database.pool.query(await readFile("docs/schema/evidence-checks.sql", "utf8"));
-  expect(await count(columns)).toBe(4);
-  // Rows that existed before the migration count as added by a person.
-  expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE source <> 'manual'")).toBe(0);
 });
 
 test("the commit migration constrains what a row can be, and its rollback removes commit links only", async () => {
@@ -431,9 +557,7 @@ test("the commit migration constrains what a row can be, and its rollback remove
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'commit'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE repository_id = 515151")).toBe(2);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
-  await database.pool.query(await readFile("docs/schema/evidence-commits.sql", "utf8"));
-  expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(3);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(4);
 });
 
 test("the migration protects the new table and its rollback removes only that table", async () => {
@@ -452,8 +576,6 @@ test("the migration protects the new table and its rollback removes only that ta
   await expect(insert("issue", "open", 0)).rejects.toThrow(/check constraint/);
   await expect(database.pool.query("DELETE FROM public.requirements WHERE id = $1", [requirement.id])).rejects.toThrow(/foreign key/);
 
-  await database.pool.query(await readFile("docs/schema/evidence-checks-rollback.sql", "utf8"));
-  await database.pool.query(await readFile("docs/schema/evidence-commits-rollback.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/requirement-evidence-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_evidence'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('project_repositories','requirements')")).toBe(2);

@@ -60,11 +60,15 @@ to the project; non-members get 404 as if the project did not exist.
 | DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
 
 `reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
-40 hex digits, or the github.com address of any of them, in the project's connected
-repository (ADR-033, ADR-034). Digits alone are read as a number. The API reads the
+40 hex digits, a release tag, or the github.com address of any of them, in the
+project's connected repository (ADR-033, ADR-034, ADR-037). It is read in that order:
+digits alone are a number, 7 to 40 hex digits are a SHA, and any other text without
+spaces is a release tag, so a tag that looks like a number or a SHA must be given as
+its release address. The API reads the
 item from GitHub before saving. Unknown items and links to another repository are 400
-on `reference`. Refresh re-reads issues and pull requests, and the check results of
-pull requests and commits (ADR-035); a commit itself is not re-read. `source` in the
+on `reference`. Refresh re-reads issues, pull requests, and releases, the check
+results of pull requests and commits (ADR-035), and what each release contains; a
+commit itself is not re-read. `source` in the
 request is ignored: links made through this endpoint are always `manual` (ADR-036).
 409 carries the reason in `detail`: already linked, 50 links reached, no repository
 connected, the app uninstalled, or an archived requirement or project. 502 and 503
@@ -110,10 +114,14 @@ type EvidenceCheck = {
   completedAt: string | null; kind: "check" | "status";
 };
 type Evidence = {
-  id: string; requirementId: string; kind: "issue" | "pull_request" | "commit";
+  id: string; requirementId: string; kind: "issue" | "pull_request" | "commit" | "release";
   number: number | null;                        // issues and pull requests
   state: "open" | "closed" | "merged" | null;   // issues and pull requests
-  sha: string | null;                           // a commit, or a pull request's latest commit
+  sha: string | null;                           // a commit, a pull request's latest commit, or a release's tagged commit
+  tag: string | null; prerelease: boolean | null; // releases
+  // Releases: evidence ID of each compared commit or merged pull request -> whether the release's history includes it.
+  // A linked change with no entry was not compared (an unmerged pull request, or one from another repository).
+  contains: Record<string, boolean> | null;
   title: string; author: string | null; url: string; repository: string;
   additions: number | null; deletions: number | null; changedFiles: number | null; // pull requests and commits
   commitCount: number | null; commits: EvidenceCommit[] | null;                    // pull requests (first 100 commits)

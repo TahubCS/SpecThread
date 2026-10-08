@@ -7,6 +7,7 @@ import {
 } from "../../app/web/src/lib/requirements";
 import {
   checkSummary, evidenceChanges, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
+  releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
 
@@ -134,7 +135,8 @@ test("repository connections and choices are accepted only in the documented sha
 test("evidence is accepted only in the documented shape", () => {
   const sha = "a".repeat(40);
   const commit = { sha, message: "Add guest path", author: "ada", date: "2026-09-06T09:00:00Z", url: `https://github.com/acme/web/commit/${sha}` };
-  const evidence = { id: "e1", requirementId: "r1", kind: "pull_request", number: 5, sha, title: "Add guest checkout", state: "merged",
+  const evidence = { id: "e1", requirementId: "r1", kind: "pull_request", number: 5, sha, tag: null, prerelease: null, contains: null,
+    title: "Add guest checkout", state: "merged",
     additions: 40, deletions: 5, changedFiles: 3, commitCount: 1, commits: [commit],
     checks: [{ name: "build", result: "passed", url: "https://github.com/acme/web/runs/1", completedAt: "2026-09-06T10:05:00Z", kind: "check" }],
     checkCount: 1, checksReadAt: "2026-10-08T10:00:00Z", source: "manual",
@@ -152,6 +154,9 @@ test("evidence is accepted only in the documented shape", () => {
     { ...evidence, commitCount: 1.5 }, { ...evidence, commits: {} }, { ...evidence, commits: [{ ...commit, sha: "A".repeat(40) }] },
     { ...evidence, commits: [{ ...commit, url: "https://evil.example/c" }] }, { ...linkedCommit, sha: null },
     { ...linkedCommit, number: 5 }, { ...linkedCommit, state: "open" },
+    { ...evidence, tag: "v1" }, { ...evidence, tag: 5 }, { ...evidence, prerelease: "no" }, { ...evidence, contains: [] },
+    { ...evidence, contains: { e2: "yes" } }, { ...linkedCommit, tag: "v1" }, { ...linkedCommit, kind: "release" },
+    { ...linkedCommit, kind: "release", tag: "" }, { ...linkedCommit, kind: "release", tag: "v1", number: 1 },
     { ...evidence, source: "ai" }, { ...evidence, source: undefined }, { ...evidence, checks: {} }, { ...evidence, checkCount: -1 },
     { ...evidence, checksReadAt: "soon" }, { ...evidence, checks: [{ ...evidence.checks[0], result: "verified" }] },
     { ...evidence, checks: [{ ...evidence.checks[0], url: "https://ci.example/1" }] }, { ...evidence, checks: [{ ...evidence.checks[0], kind: "ai" }] },
@@ -163,10 +168,36 @@ test("evidence is accepted only in the documented shape", () => {
   expect(() => parseEvidenceList({})).toThrow("unexpected evidence list");
 
   expect(evidenceReferenceError("42")).toBeNull();
-  expect(evidenceReferenceError("")).toBe("Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them.");
+  expect(evidenceReferenceError("")).toBe("Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them.");
   expect(evidenceReferenceError("x".repeat(301))).toBe("Use 300 characters or fewer.");
-  expect(evidenceLabel({ number: 5, sha })).toBe("#5");
-  expect(evidenceLabel({ number: null, sha })).toBe("aaaaaaa");
+  expect(evidenceLabel({ number: 5, sha, tag: null })).toBe("#5");
+  expect(evidenceLabel({ number: null, sha, tag: null })).toBe("aaaaaaa");
+  expect(evidenceLabel({ number: null, sha, tag: "v1.4.0" })).toBe("v1.4.0");
+
+  // Releases: what each contains, in words, from the comparison stored on the release.
+  const base = { ...linkedCommit, checks: null, checkCount: null, checksReadAt: null };
+  const first = parseEvidence({ ...base, id: "c1", title: "First" });
+  const second = parseEvidence({ ...base, id: "c2", title: "Second", sha: "b".repeat(40) });
+  const unchecked = parseEvidence({ ...base, id: "c3", title: "Third", sha: "c".repeat(40) });
+  const elsewhere = parseEvidence({ ...base, id: "c4", title: "Other repository", sha: "d".repeat(40), repository: "acme/old" });
+  const merged = parseEvidence({ ...evidence, id: "p1" });
+  const open = parseEvidence({ ...evidence, id: "p2", number: 6, state: "open" });
+  const release = parseEvidence({ ...base, id: "r1", kind: "release", tag: "v1.4.0", prerelease: false, sha,
+    contains: { c1: true, c2: false, p1: true, p2: true, gone: true } });
+  const later = parseEvidence({ ...base, id: "r2", kind: "release", tag: "v2", prerelease: true, sha, contains: { c1: true, c2: true } });
+  const all = [first, second, unchecked, elsewhere, merged, open, parseEvidence(issue), release, later];
+  expect(checkSummary(release)).toBeNull();
+  const contents = releaseContents(release, all);
+  expect(contents.summary).toBe("Contains 2 of 5 linked changes");
+  expect(contents.rows.map(row => [row.item.id, row.status])).toEqual([
+    ["c1", "included"], ["c2", "not-included"], ["c3", "not-checked"], ["p1", "included"], ["p2", "not-merged"],
+  ]);
+  expect(releaseContents(release, [first]).summary).toBe("Contains 1 of 1 linked change");
+  expect(releaseContents(release, [parseEvidence(issue), elsewhere, release])).toEqual({ summary: null, rows: [] });
+  expect(releaseContents(parseEvidence({ ...base, id: "r3", kind: "release", tag: "v0", prerelease: false, contains: null }), [first]).rows[0].status).toBe("not-checked");
+  expect(releasesContaining(first, all)).toEqual(["v1.4.0", "v2"]);
+  expect(releasesContaining(second, all)).toEqual(["v2"]);
+  expect(releasesContaining(unchecked, all)).toEqual([]);
   expect(evidenceChanges({ additions: 12, deletions: 3, changedFiles: 1 })).toBe("+12 −3 in 1 file");
   expect(evidenceChanges({ additions: 0, deletions: 0, changedFiles: 4 })).toBe("+0 −0 in 4 files");
   expect(evidenceChanges({ additions: null, deletions: null, changedFiles: null })).toBeNull();

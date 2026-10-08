@@ -2,7 +2,8 @@ import type { Page } from "@playwright/test";
 import { createTestSession, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 import {
-  clearGitHubFaults, failGitHub, githubId, setGitHubChecks, setGitHubCommits, setGitHubItems, setGitHubUser, sha, type FakeItem,
+  clearGitHubFaults, failGitHub, githubId, setGitHubChecks, setGitHubCommits, setGitHubItems, setGitHubReleases, setGitHubUser, sha,
+  type FakeItem, type FakeRelease,
 } from "../support/github";
 
 // Linking GitHub issues and pull requests to a requirement. GitHub is a local stand-in;
@@ -48,7 +49,7 @@ async function connect(projectId: string, items: FakeItem[], appInstalled = true
 }
 
 const rows = (page: Page) => page.locator('ul[aria-label="Linked evidence"] > li');
-const reference = (page: Page) => page.getByLabel(/Link an issue, pull request, or commit from/);
+const reference = (page: Page) => page.getByLabel(/Link an issue, pull request, commit, or release from/);
 async function link(page: Page, text: string) {
   await reference(page).fill(text);
   await page.getByRole("button", { name: "Link", exact: true }).click();
@@ -59,7 +60,7 @@ async function link(page: Page, text: string) {
 test("without a connected repository the requirement points to project settings", async ({ page }) => {
   const { projectId } = await createRequirement(page);
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
-  await expect(page.getByText("to link issues, pull requests, and commits.")).toBeVisible();
+  await expect(page.getByText("to link issues, pull requests, commits, and releases.")).toBeVisible();
   await expect(page.getByRole("main").getByRole("link", { name: "project settings" })).toHaveAttribute("href", `/projects/${projectId}/settings/repository`);
   await expect(page.getByRole("button", { name: "Link", exact: true })).toHaveCount(0);
 });
@@ -72,7 +73,7 @@ test("a member links an issue and pull requests and reads them as a timeline", a
     issue(3, "Spike: payment provider", { pull: true, merged: true, state: "closed", closed_at: "2026-09-04T10:00:00Z", user: null }),
   ]);
   await page.goto(url);
-  await expect(page.getByText("No issues, pull requests, or commits are linked yet.")).toBeVisible();
+  await expect(page.getByText("No issues, pull requests, commits, or releases are linked yet.")).toBeVisible();
 
   await link(page, "15");
   await expect(rows(page)).toHaveCount(1);
@@ -145,7 +146,7 @@ test("a member links commits by SHA or address and sees what changed, alone and 
     [`https://github.com/acme/web/pull/9/commits/${first}`, "Commit abc1234 is already linked to this requirement."],
     ["deadbeef", "GitHub has no commit deadbeef in acme/web."],
     [`https://github.com/rival/secret/commit/${first}`, "That link is not in acme/web, the repository connected to this project."],
-    ["abc123", "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them."],
+    ["abc123", "GitHub has no release tagged abc123 in acme/web."],
   ] as const) {
     await link(page, text);
     await expect(page.getByRole("alert").filter({ hasText: message }), text).toBeVisible();
@@ -206,6 +207,120 @@ test("check results show in words for a pull request and for commits, and refres
   await expect(unreadable).toContainText("0 of 1 check passed, 1 failed");
 });
 
+test("a release shows which linked commits and pull requests its history contains", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const [head, squash, early, late, newer] = [sha("abc1234"), sha("5ca1ab1e"), sha("0a1b2c3d"), sha("feed123"), sha("beef456")];
+  const { repositoryId } = await connect(projectId, [
+    issue(9, "Add guest checkout", { pull: true, merged: true, state: "closed", closed_at: "2026-09-12T10:00:00Z", merge_sha: squash,
+      commits: [{ sha: head, message: "Add guest path", date: "2026-09-09T09:00:00Z" }] }),
+    issue(10, "Remember the cart", { pull: true }),
+  ]);
+  await setGitHubCommits(repositoryId, [
+    { sha: early, message: "Prepare totals", date: "2026-09-08T09:00:00Z" },
+    { sha: late, message: "Hotfix rounding", date: "2026-09-28T09:00:00Z" },
+    { sha: newer, message: "Polish receipt", date: "2026-09-29T09:00:00Z" },
+  ]);
+  const releases = (first: string[]): FakeRelease[] => [
+    { tag: "v1.4.0", name: "Guest checkout", published_at: "2026-09-25T10:00:00Z", sha: sha("1111111"), contains: first },
+    { tag: "v2.0.0-rc.1", prerelease: true, published_at: "2026-09-30T10:00:00Z", sha: sha("2222222"), contains: [squash, early, late, newer], author: "grace" },
+  ];
+  // The squash-merged pull request is in v1.4.0 through its merge commit, not the commit on its branch.
+  await setGitHubReleases(repositoryId, releases([squash, early]));
+  await page.goto(url);
+  for (const text of ["9", "10", "0a1b2c3d", "feed123", "v1.4.0", "https://github.com/acme/web/releases/tag/v2.0.0-rc.1"]) await link(page, text);
+  await expect(rows(page)).toHaveCount(6);
+
+  // Oldest first: the early commit, both pull requests, the first release, the late commit, the release candidate.
+  const [earlyRow, merged, open, first, lateRow, candidate] = [0, 1, 2, 3, 4, 5].map(index => rows(page).nth(index));
+  await expect(first).toContainText("v1.4.0");
+  await expect(first).toContainText("Guest checkout");
+  await expect(first).toContainText("Release");
+  await expect(first).not.toContainText("Pre-release");
+  await expect(first).not.toContainText("checks");
+  await expect(first.getByRole("link", { name: /Guest checkout/ })).toHaveAttribute("href", "https://github.com/acme/repo/releases/tag/v1.4.0");
+  await expect(first).toContainText("Contains 2 of 4 linked changes");
+  await expect(candidate).toContainText("Pre-release");
+  await expect(candidate).toContainText("grace");
+  await expect(candidate).toContainText("Contains 3 of 4 linked changes");
+
+  const contents = page.getByRole("list", { name: "Linked changes in v1.4.0" }).getByRole("listitem");
+  await expect(contents.first()).toBeHidden();
+  await first.getByText("Contains 2 of 4 linked changes").click();
+  await expect(contents).toHaveText([/^Included\s*0a1b2c3\s*Prepare totals/, /^Included\s*#9\s*Add guest checkout/, /^Not merged\s*#10\s*Remember the cart/, /^Not included\s*feed123\s*Hotfix rounding/]);
+  await expect(first).toContainText("Included means the commit is in the history of the release's tag on GitHub.");
+
+  await expect(earlyRow).toContainText("In releases v1.4.0, v2.0.0-rc.1");
+  await expect(merged).toContainText("In releases v1.4.0, v2.0.0-rc.1");
+  await expect(lateRow).toContainText("In release v2.0.0-rc.1");
+  await expect(open).not.toContainText("In release");
+  await page.screenshot({ path: testInfo.outputPath("evidence-releases.png"), fullPage: true });
+
+  for (const [text, message] of [
+    ["v1.4.0", "Release v1.4.0 is already linked to this requirement."],
+    ["https://github.com/acme/web/releases/tag/v1.4.0", "Release v1.4.0 is already linked to this requirement."],
+    ["v9.9.9", "GitHub has no release tagged v9.9.9 in acme/web."],
+    ["https://github.com/rival/secret/releases/tag/v1.4.0", "That link is not in acme/web, the repository connected to this project."],
+  ] as const) {
+    await link(page, text);
+    await expect(page.getByRole("alert").filter({ hasText: message }), text).toBeVisible();
+  }
+
+  // A change linked after the releases is compared with them straight away.
+  await link(page, "beef456");
+  await expect(rows(page)).toHaveCount(7);
+  await expect(rows(page).nth(3)).toContainText("Contains 2 of 5 linked changes");
+  await expect(rows(page).nth(6)).toContainText("Contains 4 of 5 linked changes");
+  await expect(rows(page).nth(5)).toContainText("In release v2.0.0-rc.1");
+
+  // Refreshing asks GitHub again: the tag now includes the late commit.
+  await setGitHubReleases(repositoryId, releases([squash, early, late]));
+  await page.getByRole("button", { name: "Refresh from GitHub" }).click();
+  await expect(rows(page).nth(3)).toContainText("Contains 3 of 5 linked changes");
+  await expect(rows(page).nth(4)).toContainText("In releases v1.4.0, v2.0.0-rc.1");
+
+  await page.getByRole("button", { name: "Remove link to v1.4.0" }).click();
+  await expect(rows(page)).toHaveCount(6);
+  await expect(rows(page).nth(3)).toContainText("In release v2.0.0-rc.1");
+});
+
+test("a release with nothing to compare says so, fits a narrow screen, and a failed comparison links nothing", async ({ page }) => {
+  const { projectId, url } = await createRequirement(page);
+  const change = sha("0a1b2c3d");
+  const { repositoryId } = await connect(projectId, [issue(2, "Only an issue")]);
+  await setGitHubCommits(repositoryId, [{ sha: change, message: "A change", date: "2026-09-08T09:00:00Z" }]);
+  await setGitHubReleases(repositoryId, [{ tag: "release/2026.10-a-long-tag-name-that-has-to-wrap-on-a-phone", published_at: "2026-09-25T10:00:00Z", sha: sha("1111111") }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(url);
+  await link(page, "2");
+  await link(page, "release/2026.10-a-long-tag-name-that-has-to-wrap-on-a-phone");
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).nth(1)).toContainText("No linked commits or pull requests to compare with this release");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  for (const fault of [
+    { path: `^/repositories/${repositoryId}/compare/`, status: 500 },
+    { path: `^/repositories/${repositoryId}/compare/`, status: 200, body: { status: "unknown" } },
+    { path: `^/repositories/${repositoryId}/compare/`, close: true },
+  ] as const) {
+    await failGitHub("installation", fault);
+    await link(page, "0a1b2c3d");
+    await expect(page.getByRole("alert").filter({ hasText: "GitHub could not be reached. Try again in a moment." }), JSON.stringify(fault)).toBeVisible();
+    await clearGitHubFaults();
+    await page.reload();
+    await expect(rows(page)).toHaveCount(2);
+  }
+  for (const path of [`^/repositories/${repositoryId}/releases/tags/`, `^/repositories/${repositoryId}/commits/tags/`]) {
+    await failGitHub("installation", { path, status: 500 });
+    await page.getByRole("button", { name: "Refresh from GitHub" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "GitHub could not be reached. Try again in a moment." }), path).toBeVisible();
+    await clearGitHubFaults();
+    await page.reload();
+  }
+  await link(page, "0a1b2c3d");
+  await expect(rows(page)).toHaveCount(3);
+  await expect(rows(page).nth(2)).toContainText("Contains 0 of 1 linked change");
+});
+
 test("a link confirmed from a suggestion names the person who confirmed it", async ({ page }) => {
   const { projectId, requirementId, url } = await createRequirement(page);
   const { repositoryId } = await connect(projectId, [issue(4, "Linked by hand")]);
@@ -240,7 +355,7 @@ test("a failing check endpoint stops the link with an explanation and saves noth
     await expect(page.getByRole("alert").filter({ hasText: "GitHub could not be reached. Try again in a moment." }), JSON.stringify(fault)).toBeVisible();
     await clearGitHubFaults();
     await page.reload();
-    await expect(page.getByText("No issues, pull requests, or commits are linked yet.")).toBeVisible();
+    await expect(page.getByText("No issues, pull requests, commits, or releases are linked yet.")).toBeVisible();
   }
   await link(page, "9");
   await expect(rows(page).nth(0)).toContainText("No checks ran");
@@ -254,10 +369,11 @@ test("references that cannot be linked are refused with the reason and keep what
   await expect(rows(page)).toHaveCount(1);
 
   for (const [text, message] of [
-    ["   ", "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them."],
-    ["seven", "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them."],
-    ["0", "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them."],
-    ["https://example.com/acme/web/issues/7", "Enter an issue or pull request number, a commit SHA, or a GitHub link to one of them."],
+    ["   ", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["seven", "GitHub has no release tagged seven in acme/web."],
+    ["two words", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["0", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
+    ["https://example.com/acme/web/issues/7", "Enter an issue or pull request number, a commit SHA, a release tag, or a GitHub link to one of them."],
     ["99", "GitHub has no issue or pull request #99 in acme/web."],
     ["https://github.com/rival/secret/issues/7", "That link is not in acme/web, the repository connected to this project."],
     ["#7", "#7 is already linked to this requirement."],
@@ -342,7 +458,7 @@ test("the evidence list fits a narrow screen and its controls work with the keyb
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Remove link to #8" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByText("No issues, pull requests, or commits are linked yet.")).toBeVisible();
+  await expect(page.getByText("No issues, pull requests, commits, or releases are linked yet.")).toBeVisible();
 });
 
 test("linking and refreshing explain GitHub failures and change nothing", async ({ page }) => {
@@ -423,7 +539,7 @@ test("linking, refreshing, and removing explain API failures and change nothing"
   // Removed by someone else in the meantime: the list simply updates.
   await runTestSql(`DELETE FROM public.requirement_evidence WHERE requirement_id = '${requirementId}'`);
   await page.getByRole("button", { name: "Remove link to #6" }).click();
-  await expect(page.getByText("No issues, pull requests, or commits are linked yet.")).toBeVisible();
+  await expect(page.getByText("No issues, pull requests, commits, or releases are linked yet.")).toBeVisible();
 });
 
 test("a requirement whose evidence cannot be read shows the error inside the project frame", async ({ page }) => {

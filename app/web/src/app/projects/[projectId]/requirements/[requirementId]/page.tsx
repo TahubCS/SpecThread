@@ -65,7 +65,7 @@ export default async function Page({ params }: Props) {
         ) : (
           <p className="muted">
             Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
-            link issues, pull requests, and commits.
+            link issues, pull requests, commits, and releases.
           </p>
         )}
         {repository === null && evidence.length > 0 && (

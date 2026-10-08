@@ -187,6 +187,30 @@ docs/schema/evidence-checks.sql in the Supabase SQL editor. Rollback:
 evidence-checks-rollback.sql. It drops the stored check results and the source
 marker; the links themselves stay.
 
+## Evidence releases migration
+
+EvidenceReleases changes public.requirement_evidence so a row can be a release
+(ADR-037): `tag`, `prerelease`, `merge_sha` (a merged pull request's merge commit),
+and `contains` (jsonb, which linked changes a release includes) are added; `kind`
+allows `release`; the identity constraint requires a release to have a tag and no
+number or state, and forbids a tag on other kinds; a unique index allows each tag
+once per requirement. Existing rows stay valid. RLS and grants are unchanged.
+
+```sh
+dotnet ef migrations add EvidenceReleases --project app/api --configuration Release
+node scripts/generate-evidence-releases.mjs
+```
+
+The second command adds one statement to the migration's rollback, which deletes
+release links before the earlier constraints return, and generates
+docs/schema/evidence-releases.sql and evidence-releases-rollback.sql.
+
+Apply it after EvidenceChecks: with the API stopped,
+`dotnet ef database update --project app/api`, or run
+docs/schema/evidence-releases.sql in the Supabase SQL editor. Rollback:
+`dotnet ef database update EvidenceChecks --project app/api`, or the rollback script.
+It deletes every release link and the stored merge commits of pull requests.
+
 ## Supabase tooling
 
 ```sh

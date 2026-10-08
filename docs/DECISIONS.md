@@ -744,6 +744,42 @@ Consequences: No AI code, provider, or suggestions table exists yet, and nothing
 create a `suggested` row except a direct database write. Rolling the migration back
 loses the marker. Which model or provider to use is undecided.
 
+ADR-037: Releases are evidence, and GitHub's history says which linked changes they contain
+
+Status: Accepted
+
+Context: The remaining evidence question in docs/PROJECT.md is whether a change was
+associated with a release. The user chose to have SpecThread ask GitHub which linked
+changes a release contains, so the answer does not rest on someone asserting it.
+
+Decision: A published release of the connected repository can be linked to a
+requirement by its tag or its github.com address. The API reads the release as the
+app, resolves its tag to a commit, and stores the tag, name, pre-release flag,
+author, publish date, link, and that commit's SHA. For every linked commit and merged
+pull request it asks GitHub's compare endpoint whether that change is an ancestor of
+the release's commit and stores the answers on the release row (`contains`, a map of
+evidence ID to true or false). A commit is compared by its SHA. A merged pull request
+is compared by its merge commit, now stored as `merge_sha`, because after a squash or
+rebase merge the commit on its branch is not in the target branch's history. An
+unmerged pull request is not compared. A commit GitHub no longer has is not included.
+The comparison runs when a release is linked, when a commit or pull request is linked
+while releases exist, and for everything on refresh. Migration EvidenceReleases adds
+`tag`, `prerelease`, `merge_sha`, and `contains`, allows `kind = 'release'`, requires
+a release to have a tag and no number or state, and allows each tag once per
+requirement. A reference is read in this order: a number, a commit SHA, a github.com
+link to an issue, pull request, commit, or release, and otherwise any text without
+spaces up to 100 characters as a release tag. Releases have no check results.
+
+Consequences: "Included" means the commit is in the history of the release's tag; a
+change reverted before the release still counts. A tag made only of digits, or one
+that looks like a SHA, must be linked by its address. Mistyped text is now answered
+with "GitHub has no release tagged ..." where it used to be rejected as a format
+error. Draft releases cannot be linked. One release costs two GitHub calls plus one
+per linked commit and merged pull request, on link and on every refresh. Deployments
+are not covered: the app lacks that permission. How a tag is resolved to a commit and
+the compare statuses follow GitHub's documentation and have not been confirmed
+against the real GitHub. Rolling the migration back deletes release links.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

@@ -18,12 +18,23 @@ internal sealed record GitHubCommit(string Sha, string Message, string? Author, 
 // Lines added and removed and files changed, and for a pull request how many commits it has.
 internal sealed record GitHubChanges(int Additions, int Deletions, int ChangedFiles, int? CommitCount);
 
-// An issue, pull request, or commit as GitHub reports it now. Issues and pull requests have a
-// number and a state ("open", "closed", or "merged"); commits have neither. Sha is the commit,
-// or a pull request's latest commit. Commits lists a pull request's commits, oldest first.
+// An issue, pull request, commit, or release as GitHub reports it now. Issues and pull requests
+// have a number and a state ("open", "closed", or "merged"); commits and releases have neither.
+// Sha is the commit, a pull request's latest commit, or the commit a release's tag points at.
+// Commits lists a pull request's commits, oldest first.
 internal sealed record GitHubItem(
     string Kind, int? Number, string? Sha, string Title, string? State, string? Author, string Url,
-    DateTime CreatedAt, DateTime UpdatedAt, DateTime? ClosedAt, GitHubChanges? Changes, List<GitHubCommit>? Commits);
+    DateTime CreatedAt, DateTime UpdatedAt, DateTime? ClosedAt, GitHubChanges? Changes, List<GitHubCommit>? Commits)
+{
+    // A merged pull request's commit on its target branch. After a squash or rebase merge this,
+    // not Sha, is the commit that later releases contain.
+    public string? MergeSha { get; init; }
+
+    // A release's tag, and whether GitHub marks it as a pre-release.
+    public string? Tag { get; init; }
+
+    public bool? Prerelease { get; init; }
+}
 
 // One automated check on a commit. Result is "passed", "failed", "running", "skipped",
 // "cancelled", or "neutral". Kind is "check" (a check run) or "status" (an older commit status).
@@ -76,6 +87,13 @@ internal interface IGitHubClient
     // Reads one commit of a connected repository by its full or abbreviated SHA, acting as the app.
     Task<GitHubResult<GitHubItem>> GetCommitAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
 
+    // Reads one published release of a connected repository by its tag, acting as the app.
+    Task<GitHubResult<GitHubItem>> GetReleaseAsync(long installationId, long repositoryId, string tag, CancellationToken cancel);
+
+    // Reports whether one commit is in the history of another, acting as the app. A commit the
+    // repository no longer has is in no history.
+    Task<GitHubResult<bool>> IsAncestorAsync(long installationId, long repositoryId, string ancestorSha, string descendantSha, CancellationToken cancel);
+
     // Reads the check runs and commit statuses of a commit, acting as the app. NotFound means
     // GitHub does not let the app read them, for example because a permission was not granted.
     Task<GitHubResult<GitHubChecks>> GetChecksAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
@@ -89,6 +107,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     private const int MaxSearchPages = 30;
     private const int MaxCommitMessageLength = 300;
     private const int MaxCheckNameLength = 200;
+    private const int MaxReleaseNameLength = 300;
 
     // Installation tokens created by this instance. A client lives for one API request, so a
     // refresh of many items asks GitHub for a token once per installation, not once per item.
@@ -202,11 +221,13 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
                 {
                     return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
                 }
+                var mergeSha = merged.GetBoolean() && details.TryGetProperty("merge_commit_sha", out var mergeCommit) ? mergeCommit.GetStringOrNull() : null;
                 pullRequest = item! with
                 {
                     Kind = "pull_request",
                     State = merged.GetBoolean() ? "merged" : item.State,
                     Sha = headSha.GetString(),
+                    MergeSha = IsFullSha(mergeSha) ? mergeSha!.ToLowerInvariant() : null,
                     Changes = new GitHubChanges(additions, deletions, changedFiles, commitCount),
                 };
             }
@@ -249,6 +270,72 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             return GitHubResult<GitHubItem>.Ok(new GitHubItem(
                 "commit", null, commit.Sha, commit.Message, null, commit.Author, commit.Url, commit.Date, commit.Date, null,
                 new GitHubChanges(additions, deletions, files.GetArrayLength(), null), null));
+        }
+    }
+
+    public async Task<GitHubResult<GitHubItem>> GetReleaseAsync(long installationId, long repositoryId, string tag, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(token.Failure);
+
+        var (failure, body) = await SendAsync(HttpMethod.Get, $"repositories/{repositoryId}/releases/tags/{Uri.EscapeDataString(tag)}", token.Value!, cancel);
+        if (failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(failure));
+        GitHubItem release;
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("tag_name", out var tagName) || tagName.GetStringOrNull() is not { Length: > 0 } found ||
+                !root.TryGetProperty("html_url", out var url) || !IsGitHubLink(url.GetStringOrNull()) ||
+                !root.TryGetProperty("prerelease", out var prerelease) || prerelease.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+                (ReadDate(root, "published_at") ?? ReadDate(root, "created_at")) is not { } published)
+            {
+                return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+            }
+            var name = root.TryGetProperty("name", out var written) ? written.GetStringOrNull()?.Trim() : null;
+            if (string.IsNullOrEmpty(name)) name = found;
+            if (name.Length > MaxReleaseNameLength) name = name[..MaxReleaseNameLength];
+            release = new GitHubItem("release", null, null, name, null, ReadLogin(root, "author"), url.GetString()!, published, published, null, null, null)
+            {
+                Tag = found,
+                Prerelease = prerelease.GetBoolean(),
+            };
+        }
+
+        // "tags/<name>" names the tag even when a branch has the same name. Slashes in a tag stay slashes.
+        var reference = string.Join('/', release.Tag!.Split('/').Select(Uri.EscapeDataString));
+        var (commitFailure, commit) = await SendAsync(HttpMethod.Get, $"repositories/{repositoryId}/commits/tags/{reference}", token.Value!, cancel);
+        if (commitFailure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(commitFailure));
+        using (commit)
+        {
+            return TryReadCommit(commit!.RootElement, out var tagged)
+                ? GitHubResult<GitHubItem>.Ok(release with { Sha = tagged!.Sha })
+                : GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+        }
+    }
+
+    public async Task<GitHubResult<bool>> IsAncestorAsync(long installationId, long repositoryId, string ancestorSha, string descendantSha, CancellationToken cancel)
+    {
+        if (!IsFullSha(ancestorSha) || !IsFullSha(descendantSha)) return GitHubResult<bool>.Ok(false);
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<bool>.Fail(token.Failure);
+
+        // The answer is in "status"; one commit per page keeps the rest of the response small.
+        var (failure, body) = await SendAsync(
+            HttpMethod.Get, $"repositories/{repositoryId}/compare/{ancestorSha}...{descendantSha}?per_page=1", token.Value!, cancel);
+        if (failure == GitHubFailure.NotFound) return GitHubResult<bool>.Ok(false);
+        if (failure != GitHubFailure.None) return GitHubResult<bool>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            var status = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("status", out var value) ? value.GetStringOrNull() : null;
+            return status switch
+            {
+                // The descendant is the same commit, or has commits on top of the ancestor and none missing.
+                "ahead" or "identical" => GitHubResult<bool>.Ok(true),
+                "behind" or "diverged" => GitHubResult<bool>.Ok(false),
+                _ => GitHubResult<bool>.Fail(GitHubFailure.Unavailable),
+            };
         }
     }
 
