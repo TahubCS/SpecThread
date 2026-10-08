@@ -1,9 +1,44 @@
 # Shared handoff
 
-## Current task: Fix timestamp precision in API write responses (2026-10-02)
+## Current task: Projects list and create-project pages (2026-10-07)
 
-- Branch: `fix/archive-timestamp-precision`, created from `main` at `f41acc2`. Changes
-  are uncommitted.
+- Branch: `feature/project-ui`, created from `main` at `11285c2`. Changes are uncommitted.
+- Scope agreed with the user: projects only (list, create, then an overview with rename
+  and archive), built in slices that the user confirms. This entry covers the first slice.
+- Completed:
+  - `/projects` lists the signed-in user's active projects from the API, with an empty
+    state and a link to create one.
+  - `/projects/new` creates a personal project through a server action and returns to
+    the list. A rejected name shows a message next to the field.
+  - Browser tests now run against a real API: `scripts/start-test-web.mjs` starts one on
+    port 5106 with the web test database and the test web app as token issuer.
+- Changed files:
+  - Web: `app/web/src/lib/projects.ts`, `app/web/src/app/projects/{page,loading,actions}.ts(x)`,
+    `app/web/src/app/projects/new/page.tsx`, `app/web/src/components/project-form.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/start-test-web.mjs`, `tests/e2e/projects.spec.ts` (new),
+    `tests/api/project-data.spec.ts` (new), `tests/e2e/scaffold.spec.ts`.
+  - Docs: DECISIONS (ADR-026), TESTING, and this file.
+- Decisions and assumptions: ADR-026. Creating a project has no team choice because the
+  API has no teams. After creating, the user returns to the list, because the overview
+  page is still a placeholder. The scaffold test for the personal/team project
+  descriptions was removed with those placeholders. No API, schema, or package change.
+- Checks: `npm test` (131 passed), `npm run lint`, and `npm run typecheck` passed.
+  Inspected desktop and mobile screenshots of the list and the form error.
+- Known issues and risks:
+  - Not exercised: an unreachable API, a non-400 failure from the create call, and the
+    loading state.
+  - Project rows link to `/projects/{id}`, which is still a placeholder.
+  - The dashboard and the sidebar's "Example team" still show sample data.
+  - Production needs `SPECTHREAD_API_URL` in Vercel and a Render deploy of the merged
+    `main` before these pages work there. Neither was checked. The deployment notes in
+    the next entry still apply.
+- Next step: the user reviews this slice. Then build the project overview at
+  `/projects/{id}` with rename and archive, and send the create form there.
+
+## Previous task: Fix timestamp precision in API write responses (2026-10-02)
+
+- Branch: `fix/archive-timestamp-precision`, merged into `main` through PR #13.
 - Problem: CI failed in `tests/schema/product-api.spec.ts` because the first archive
   response carried `DateTime.UtcNow` at 100 ns precision, while a repeat request
   returned the stored value, which PostgreSQL keeps at microsecond precision.
@@ -20,9 +55,8 @@
   - Passed after the fix: `npm test` (125 passed), `npm run lint`, `npm run typecheck`,
     `dotnet build app/api --configuration Release`,
     `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check`.
-- Known issues and risks: the CI run for this branch has not been observed. `joinedAt`
-  uses the same clock but has no assertion comparing the add response with the list.
-- Next step: review the diff and commit with approval, then open a PR to `main`.
+- Known issues and risks: `joinedAt` uses the same clock but has no assertion comparing
+  the add response with the list.
 
 ## Previous task: Projects and requirements API with member management (2026-10-01)
 

@@ -452,6 +452,28 @@ keep their created_by. Invitations for people without accounts (the /invites
 scaffold), ownership transfer, and rate limiting of member lookups remain future
 work. No schema change was needed.
 
+ADR-026: Product pages read through server components and write through server actions
+
+Status: Accepted
+
+Context: The projects list and create-project pages are the first pages that use the
+API. ADR-024 requires that browsers never call the API directly. ADR-018 described
+/projects as covering personal and team-owned projects, but the API has no teams.
+
+Decision: A page loads its data in an async server component with `apiFetch` and
+validates the response shape before rendering (app/web/src/lib/projects.ts). A failed
+load throws, so the shared error page offers a retry; a route `loading.tsx` covers the
+wait. Forms post to a server action and use React's `useActionState`. The action
+validates input with the same limits as the API, shows the API's 400 field message
+next to the field, and shows one general message for any other failure, which is
+logged on the server. No form or validation library is added. Creating a project
+makes a personal project owned by the caller; the form has no team choice until the
+API supports teams.
+
+Consequences: Product pages render on every request and need the API to be reachable.
+Session expiry during a form submit shows the general failure message, not a sign-in
+prompt. Browser tests need a real API, so the test web server starts one (docs/TESTING.md).
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

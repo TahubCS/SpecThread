@@ -49,7 +49,10 @@ npm run build:api          # Standalone Release API build
 `npm test` builds the web app and the Release API before tests. It starts the
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
-issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105. Keep these
+issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
+scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
+the web test database and trusts the test web app as its token issuer, and the web app
+reaches it through SPECTHREAD_API_URL. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
 or development processes in this checkout: they share app/web/.next. Google Fonts
 currently require network access during the web build.
@@ -73,10 +76,15 @@ currently require network access during the web build.
   `safeNextPath` rejection of other origins, control characters, over-long values,
   and login/signup loops.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
-  placeholder pages, a useful 404 for an unknown URL, the personal/team project
-  descriptions, and a route walk
+  placeholder pages, a useful 404 for an unknown URL, and a route walk
   from Dashboard through a team, project, requirement, evidence, and review.
   These checks do not imply that product data or authorization are implemented.
+- Projects (browser, real API on port 5106): the empty list for a new user, creating a
+  project and finding it in the list, ordering by name, another user not seeing the
+  project, a blank name rejected with a message, keyboard submission, and the narrow
+  layout. The api project checks project response parsing, name limits, and reading field
+  messages from problem details. An unreachable API, a non-400 failure from the create
+  call, and the loading state are not exercised.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

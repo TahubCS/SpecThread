@@ -25,6 +25,10 @@ Get the connection details from the Supabase project's **Connect** dialog.
 Use a direct connection for a persistent API with IPv6 connectivity, or the
 session pooler for an IPv4-only host. Copy the actual host and username from
 the dashboard. Use TLS certificate verification (`SSL Mode=VerifyFull`).
+On Windows the Supabase root CA is not trusted by default, so the API fails with
+"Exception while performing SSL handshake". Add
+`Root Certificate=<absolute path to app/api/certs/prod-ca-2021.crt>` to the local
+connection string. Render does not need it (docs/DEPLOYMENT.md).
 
 Store the Npgsql connection string in .NET user-secrets under
 `ConnectionStrings:Database` for development, or in the API host's environment
