@@ -82,3 +82,18 @@ export async function setGitHubItems(repositoryId: number, items: FakeItem[]) {
   const response = await fetch(`${github}/repositories/${repositoryId}/items`, { method: "PUT", body: JSON.stringify({ items }) });
   if (response.status !== 204) throw new Error(`The fake GitHub rejected the items (${response.status}).`);
 }
+
+export type FakeChecks = {
+  runs?: { name: string; status: "queued" | "in_progress" | "completed"; conclusion?: string | null; html_url?: string; completed_at?: string }[];
+  /** GitHub's total when it is larger than the runs listed. */
+  total_runs?: number;
+  statuses?: { context: string; state: "success" | "failure" | "error" | "pending"; target_url?: string; updated_at?: string }[];
+  /** Answer 403 for check runs, statuses, or both, as GitHub does when the app lacks the permission. */
+  deny?: "runs" | "statuses" | "both";
+};
+
+/** Sets the check runs and commit statuses GitHub has for one commit. A commit without any has no checks. */
+export async function setGitHubChecks(repositoryId: number, commitSha: string, checks: FakeChecks) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/checks/${commitSha}`, { method: "PUT", body: JSON.stringify(checks) });
+  if (response.status !== 204) throw new Error(`The fake GitHub rejected the checks (${response.status}).`);
+}

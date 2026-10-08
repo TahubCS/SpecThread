@@ -11,6 +11,12 @@ import { createVerify } from "node:crypto";
 //                                                additions?, deletions?, changed_files?, commits?: [commit] }] }
 //   PUT    /__github/repositories/<id>/commits
 //                                    { commits: [{ sha, message, login?, name?, date, additions?, deletions?, files? }] }
+//   PUT    /__github/repositories/<id>/checks/<sha>
+//                                    { runs?: [{ name, status, conclusion?, html_url?, completed_at? }], total_runs?,
+//                                      statuses?: [{ context, state, target_url?, updated_at? }],
+//                                      deny?: "runs" | "statuses" | "both" }   (403, as without the permission)
+//
+// A commit nobody set checks for has none.
 //   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, close?, times? }
 //   DELETE /__github/faults?bearer=<token | app | installation>&path=<the same path>
 //
@@ -45,6 +51,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
   const users = new Map();
   const items = new Map();
   const commits = new Map();
+  const checks = new Map();
   const commitJson = commit => ({
     sha: commit.sha, html_url: `https://github.com/acme/repo/commit/${commit.sha}`,
     commit: { message: commit.message, author: { name: commit.name ?? "Ada Lovelace", date: commit.date } },
@@ -75,6 +82,8 @@ export function startFakeGitHub({ port, appId, publicKey }) {
           items.set(Number(repositoryItems[1]), JSON.parse(body).items);
         } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/commits$/.test(url.pathname)) {
           commits.set(Number(url.pathname.split("/")[3]), JSON.parse(body).commits);
+        } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/checks\/[0-9a-f]{40}$/.test(url.pathname)) {
+          checks.set(`${url.pathname.split("/")[3]}/${url.pathname.split("/")[5]}`, JSON.parse(body));
         } else if (request.method === "POST" && url.pathname === "/__github/faults") {
           const fault = JSON.parse(body);
           faults.push({ ...fault, path: new RegExp(fault.path) });
@@ -105,6 +114,20 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         return installed
           ? send(response, 201, { token: installationToken, expires_at: new Date(Date.now() + 3_600_000).toISOString() })
           : send(response, 404, { message: "Not Found" });
+      }
+
+      const checkPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]{40})\/(check-runs|status)$/.exec(url.pathname);
+      if (checkPath && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const set = checks.get(`${checkPath[1]}/${checkPath[2]}`) ?? {};
+        const denied = set.deny === "both" || set.deny === (checkPath[3] === "status" ? "statuses" : "runs");
+        if (denied) return send(response, 403, { message: "Resource not accessible by integration" });
+        if (checkPath[3] === "check-runs") {
+          const runs = set.runs ?? [];
+          return send(response, 200, { total_count: set.total_runs ?? runs.length, check_runs: page(runs, url) });
+        }
+        const statuses = set.statuses ?? [];
+        return send(response, 200, { state: "pending", total_count: statuses.length, statuses: page(statuses, url) });
       }
 
       const commitPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]+)$/.exec(url.pathname);

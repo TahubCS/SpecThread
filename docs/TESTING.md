@@ -150,8 +150,17 @@ currently require network access during the web build.
   changes and author shown for a commit; a pull request's totals and its commit list;
   duplicates under different spellings; unknown SHAs; answers from GitHub that are
   not the requested commit; refresh leaving commits untouched; and the migration's
-  constraints and a rollback that removes commit links only. Not exercised: the real
-  GitHub, and a pull request with more than 100 commits.
+  constraints and a rollback that removes commit links only. Checks (ADR-035): every
+  GitHub conclusion and status mapped to its result; check runs and statuses merged
+  and sorted; links outside GitHub dropped; no checks; checks GitHub will not let the
+  app read, and only one of the two kinds readable; more than 100 checks; malformed
+  answers and failures on either endpoint stopping a link or refresh with nothing
+  saved; refresh updating results for pull requests and commits; and the results in
+  words in the browser. Source (ADR-036): the link endpoint ignoring a `source` sent
+  by the caller, a suggested link naming who confirmed it, and the migration's
+  default, constraint, and rollback. Not exercised: the real GitHub, a pull request
+  with more than 100 commits, and the installation token being reused within one
+  request.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

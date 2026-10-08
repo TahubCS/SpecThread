@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import { createTestSession, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 import {
-  clearGitHubFaults, failGitHub, githubId, setGitHubCommits, setGitHubItems, setGitHubUser, sha, type FakeItem,
+  clearGitHubFaults, failGitHub, githubId, setGitHubChecks, setGitHubCommits, setGitHubItems, setGitHubUser, sha, type FakeItem,
 } from "../support/github";
 
 // Linking GitHub issues and pull requests to a requirement. GitHub is a local stand-in;
@@ -158,6 +158,92 @@ test("a member links commits by SHA or address and sees what changed, alone and 
   await page.getByRole("button", { name: "Remove link to abc1234" }).click();
   await expect(rows(page)).toHaveCount(2);
   await expect(rows(page).nth(0)).toContainText("#9");
+});
+
+test("check results show in words for a pull request and for commits, and refresh reads them again", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const [head, plain, hidden] = [sha("abc1234"), sha("0a1b2c3d"), sha("feed123")];
+  const { repositoryId } = await connect(projectId, [
+    issue(2, "Guests cannot pay"),
+    issue(9, "Add guest checkout", { pull: true, commits: [{ sha: head, message: "Add guest path", date: "2026-09-08T09:00:00Z" }] }),
+  ]);
+  await setGitHubCommits(repositoryId, [
+    { sha: plain, message: "Hotfix rounding", date: "2026-09-20T09:00:00Z" },
+    { sha: hidden, message: "Rotate keys", date: "2026-09-21T09:00:00Z" },
+  ]);
+  const run = (name: string, conclusion: string | null, status: "completed" | "in_progress" = "completed") =>
+    ({ name, status, conclusion, html_url: `https://github.com/acme/repo/runs/${name}`, completed_at: "2026-09-08T09:30:00Z" });
+  await setGitHubChecks(repositoryId, head, {
+    runs: [run("build", "success"), run("lint", "failure"), run("e2e", null, "in_progress"), run("docs", "skipped"), run("deploy", "cancelled"), run("audit", "neutral")],
+    statuses: [{ context: "ci/legacy", state: "success", target_url: "https://ci.example/builds/1", updated_at: "2026-09-08T09:31:00Z" }],
+  });
+  await setGitHubChecks(repositoryId, hidden, { deny: "both" });
+  await page.goto(url);
+  for (const text of ["2", "9", "0a1b2c3d", "feed123"]) await link(page, text);
+  await expect(rows(page)).toHaveCount(4);
+
+  const [issueRow, pull, commit, unreadable] = [rows(page).nth(0), rows(page).nth(1), rows(page).nth(2), rows(page).nth(3)];
+  await expect(issueRow).not.toContainText("check");
+  await expect(pull).toContainText("2 of 7 checks passed, 1 failed, 1 running");
+  await expect(commit).toContainText("No checks ran");
+  await expect(unreadable).toContainText("Check results could not be read");
+
+  const checks = page.getByRole("list", { name: "Checks for #9" }).getByRole("listitem");
+  await expect(checks.first()).toBeHidden();
+  await pull.getByText("2 of 7 checks passed, 1 failed, 1 running").click();
+  await expect(checks).toHaveText([/^Neutral\s*audit/, /^Passed\s*build/, /^Passed\s*ci\/legacy/, /^Cancelled\s*deploy/, /^Skipped\s*docs/, /^Running\s*e2e/, /^Failed\s*lint/]);
+  await expect(checks.nth(1).getByRole("link", { name: /build/ })).toHaveAttribute("href", "https://github.com/acme/repo/runs/build");
+  // A status that points at an outside CI service is listed without a link.
+  await expect(checks.nth(2).getByRole("link")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("evidence-checks.png"), fullPage: true });
+
+  await setGitHubChecks(repositoryId, head, { runs: [run("build", "success"), run("lint", "success"), run("e2e", "success")] });
+  await setGitHubChecks(repositoryId, plain, { runs: [run("build", "success")] });
+  await setGitHubChecks(repositoryId, hidden, { deny: "runs", statuses: [{ context: "ci/legacy", state: "failure" }] });
+  await page.getByRole("button", { name: "Refresh from GitHub" }).click();
+  await expect(pull).toContainText("3 of 3 checks passed");
+  await expect(commit).toContainText("1 of 1 check passed");
+  await expect(unreadable).toContainText("0 of 1 check passed, 1 failed");
+});
+
+test("a link confirmed from a suggestion names the person who confirmed it", async ({ page }) => {
+  const { projectId, requirementId, url } = await createRequirement(page);
+  const { repositoryId } = await connect(projectId, [issue(4, "Linked by hand")]);
+  await page.goto(url);
+  await link(page, "4");
+  await runTestSql(`INSERT INTO public.requirement_evidence
+    (requirement_id,kind,repository_id,repository_owner,repository_name,number,title,state,url,github_created_at,github_updated_at,linked_by,source)
+    VALUES ('${requirementId}','issue',${repositoryId},'acme','web',5,'Came from a suggestion','open','https://github.com/acme/web/issues/5',
+      '2026-09-05T10:00:00Z',now(),'${owner.userId}','suggested')`);
+  await page.reload();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).nth(0)).not.toContainText("Suggested");
+  await expect(rows(page).nth(1)).toContainText("Suggested, confirmed by Evidence tester");
+});
+
+test("a failing check endpoint stops the link with an explanation and saves nothing", async ({ page }) => {
+  const { projectId, url } = await createRequirement(page);
+  const head = sha("abc1234");
+  const { repositoryId } = await connect(projectId, [
+    issue(9, "Add guest checkout", { pull: true, commits: [{ sha: head, message: "Add guest path", date: "2026-09-08T09:00:00Z" }] }),
+  ]);
+  await page.goto(url);
+  for (const fault of [
+    { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 500 },
+    { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 200, body: { check_runs: "none" } },
+    { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 200, body: { total_count: 1, check_runs: [{ name: 5, status: "completed" }] } },
+    { path: `^/repositories/${repositoryId}/commits/${head}/status$`, close: true },
+    { path: `^/repositories/${repositoryId}/commits/${head}/status$`, status: 200, body: { total_count: 1, statuses: [{ context: "ci" }] } },
+  ] as const) {
+    await failGitHub("installation", fault);
+    await link(page, "9");
+    await expect(page.getByRole("alert").filter({ hasText: "GitHub could not be reached. Try again in a moment." }), JSON.stringify(fault)).toBeVisible();
+    await clearGitHubFaults();
+    await page.reload();
+    await expect(page.getByText("No issues, pull requests, or commits are linked yet.")).toBeVisible();
+  }
+  await link(page, "9");
+  await expect(rows(page).nth(0)).toContainText("No checks ran");
 });
 
 test("references that cannot be linked are refused with the reason and keep what was typed", async ({ page }) => {

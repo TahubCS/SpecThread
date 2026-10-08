@@ -295,12 +295,117 @@ test("commits are linked by SHA or address with their changes, and pull requests
   }
 
   // Refresh does not read commits again, so a failing commit endpoint does not stop it.
-  await fault({ bearer: "installation", path: `^/repositories/${repositoryId}/commits/` });
+  await fault({ bearer: "installation", path: `^/repositories/${repositoryId}/commits/[0-9a-f]+$` });
   const refreshed = await member.post(`${path}/refresh`);
   expect(refreshed.status()).toBe(200);
   expect((await refreshed.json()).find((e: { kind: string }) => e.kind === "commit")).toMatchObject({ sha: first, additions: 12 });
   await request.delete(`${gitHub}/__github/faults?bearer=installation`);
   expect(await (await member.get(path)).json()).toHaveLength(3);
+});
+
+test("check results are read for pull requests and commits, normalized, and never block a link when unreadable", async ({ request }) => {
+  const [head, lone, hidden, half] = [sha("abc1234"), sha("0a1b2c3d"), sha("feed123"), sha("beef456")];
+  const { path, repositoryId } = await setUp(request, [
+    item(3, "An issue"),
+    item(9, "Add guest checkout", { pull: true, commits: [{ sha: head, message: "Add guest path", date: "2026-09-08T09:00:00Z" }] }),
+  ]);
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/commits`, { data: { commits: [lone, hidden, half].map(value => ({ sha: value, message: "m", date: "2026-09-20T09:00:00Z" })) } });
+  const setChecks = (commit: string, data: object) => request.put(`${gitHub}/__github/repositories/${repositoryId}/checks/${commit}`, { data });
+  const run = (name: string, status: string, conclusion: string | null, extra: object = {}) =>
+    ({ name, status, conclusion, html_url: `https://github.com/acme/repo/runs/${name}`, completed_at: "2026-09-08T09:30:00Z", ...extra });
+  await setChecks(head, {
+    runs: [
+      run("success", "completed", "success"), run("failure", "completed", "failure"), run("timed_out", "completed", "timed_out"),
+      run("action_required", "completed", "action_required"), run("skipped", "completed", "skipped"), run("cancelled", "completed", "cancelled"),
+      run("neutral", "completed", "neutral"), run("stale", "completed", "stale"), run("queued", "queued", null),
+      run("in_progress", "in_progress", null), run("  ", "completed", "success", { html_url: "https://evil.example/run" }),
+    ],
+    statuses: [
+      { context: "status/success", state: "success", target_url: "https://github.com/acme/repo/status/1", updated_at: "2026-09-08T09:31:00Z" },
+      { context: "status/failure", state: "failure", target_url: "https://ci.example/2" }, { context: "status/error", state: "error" },
+      { context: "status/pending", state: "pending", updated_at: "2026-09-08T09:31:00Z" },
+    ],
+  });
+  await setChecks(hidden, { deny: "both" });
+  await setChecks(half, { deny: "runs", statuses: [{ context: "legacy", state: "success" }] });
+  const member = await as(request, "member");
+
+  const issue = await (await member.post(path, { reference: "3", source: "suggested" })).json();
+  expect(issue).toMatchObject({ kind: "issue", checks: null, checkCount: null, checksReadAt: null, source: "manual" });
+
+  const pull = await (await member.post(path, { reference: "9" })).json();
+  expect(pull.checkCount).toBe(15);
+  expect(pull.source).toBe("manual");
+  expect(Object.fromEntries(pull.checks.map((check: { name: string; result: string }) => [check.name, check.result]))).toEqual({
+    "(unnamed check)": "passed", success: "passed", failure: "failed", timed_out: "failed", action_required: "failed", skipped: "skipped",
+    cancelled: "cancelled", neutral: "neutral", stale: "neutral", queued: "running", in_progress: "running",
+    "status/success": "passed", "status/failure": "failed", "status/error": "failed", "status/pending": "running",
+  });
+  const byName = (name: string) => pull.checks.find((check: { name: string }) => check.name === name);
+  expect(byName("success")).toEqual({ name: "success", result: "passed", url: "https://github.com/acme/repo/runs/success", completedAt: "2026-09-08T09:30:00Z", kind: "check" });
+  expect(byName("queued")).toMatchObject({ completedAt: null, kind: "check" });
+  // Links that are not on GitHub itself are dropped; the check is still listed.
+  expect(byName("(unnamed check)").url).toBeNull();
+  expect(byName("status/failure")).toEqual({ name: "status/failure", result: "failed", url: null, completedAt: null, kind: "status" });
+  expect(byName("status/success")).toMatchObject({ url: "https://github.com/acme/repo/status/1", completedAt: "2026-09-08T09:31:00Z", kind: "status" });
+  expect(byName("status/pending").completedAt).toBeNull();
+  expect(pull.checks.map((check: { name: string }) => check.name)).toEqual([...pull.checks.map((check: { name: string }) => check.name)].sort((a, b) => (a.toUpperCase() < b.toUpperCase() ? -1 : 1)));
+
+  expect(await (await member.post(path, { reference: lone })).json()).toMatchObject({ kind: "commit", checks: [], checkCount: 0 });
+  const unreadable = await member.post(path, { reference: hidden });
+  expect(unreadable.status()).toBe(201);
+  const unreadableBody = await unreadable.json();
+  expect(unreadableBody).toMatchObject({ checks: null, checkCount: null });
+  expect(unreadableBody.checksReadAt).not.toBeNull();
+  // One of the two permissions is enough to show what can be read.
+  expect(await (await member.post(path, { reference: half })).json()).toMatchObject({ checks: [{ name: "legacy", result: "passed", kind: "status" }], checkCount: 1 });
+
+  // More checks than one page: the first 100 are stored and the total is kept.
+  await setChecks(head, { runs: Array.from({ length: 100 }, (_, index) => run(`job-${String(index).padStart(3, "0")}`, "completed", "success")), total_runs: 130, statuses: [{ context: "zz-status", state: "success" }] });
+  const before = await (await member.get(path)).json();
+  const fault = (data: object) => request.post(`${gitHub}/__github/faults`, { data });
+  for (const [where, body, status] of [
+    ["check-runs", { check_runs: [] }, 200], ["check-runs", { total_count: 1, check_runs: [{ name: "x" }] }, 200], ["check-runs", undefined, 500],
+    ["status", { total_count: "many", statuses: [] }, 200], ["status", { total_count: 1, statuses: [{ state: "success" }] }, 200], ["status", undefined, 429],
+  ] as const) {
+    await fault({ bearer: "installation", path: `^/repositories/${repositoryId}/commits/${head}/${where}$`, status, body, times: 1 });
+    expect((await member.post(`${path}/refresh`)).status(), `${where} ${JSON.stringify(body)}`).toBe(502);
+    // The commits were read before the pull request failed, yet nothing was saved.
+    expect(await (await member.get(path)).json()).toEqual(before);
+  }
+  const refreshed = await (await member.post(`${path}/refresh`)).json();
+  const again = refreshed.find((e: { number: number | null }) => e.number === 9);
+  expect(again.checks).toHaveLength(100);
+  expect(again.checkCount).toBe(131);
+  expect(refreshed.find((e: { sha: string | null; kind: string }) => e.kind === "commit" && e.sha === hidden).checks).toBeNull();
+});
+
+test("the check migration defaults every link to manual, constrains the source, and rolls back without losing links", async () => {
+  const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
+  const columns = "SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('checks','check_count','checks_read_at','source')";
+  const { rows: [requirement] } = await database.pool.query("SELECT id FROM public.requirements LIMIT 1");
+  const insert = (number: number, extra: Record<string, unknown> = {}) => {
+    const row = { requirement_id: requirement.id, kind: "issue", repository_id: 616161, repository_owner: "a", repository_name: "b", number, state: "open",
+      title: "t", url: "https://github.com/a/b/issues/1", github_created_at: new Date(), github_updated_at: new Date(), linked_by: "owner", ...extra };
+    const names = Object.keys(row);
+    return database.pool.query(`INSERT INTO public.requirement_evidence (${names.join(",")}) VALUES (${names.map((_, index) => `$${index + 1}`).join(",")})`, Object.values(row));
+  };
+  await insert(1);
+  await insert(2, { source: "suggested", checks: JSON.stringify([]), check_count: 0 });
+  expect((await database.pool.query("SELECT source FROM public.requirement_evidence WHERE repository_id = 616161 ORDER BY number")).rows).toEqual([{ source: "manual" }, { source: "suggested" }]);
+  for (const extra of [{ source: "ai" }, { source: "" }, { source: null }, { check_count: -1 }]) {
+    await expect(insert(3, extra), JSON.stringify(extra)).rejects.toThrow(/check constraint|not-null/);
+  }
+  const before = await count("SELECT count(*)::int AS count FROM public.requirement_evidence");
+
+  await database.pool.query(await readFile("docs/schema/evidence-checks-rollback.sql", "utf8"));
+  expect(await count(columns)).toBe(0);
+  expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(before);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
+  await database.pool.query(await readFile("docs/schema/evidence-checks.sql", "utf8"));
+  expect(await count(columns)).toBe(4);
+  // Rows that existed before the migration count as added by a person.
+  expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE source <> 'manual'")).toBe(0);
 });
 
 test("the commit migration constrains what a row can be, and its rollback removes commit links only", async () => {
@@ -326,7 +431,7 @@ test("the commit migration constrains what a row can be, and its rollback remove
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'commit'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE repository_id = 515151")).toBe(2);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(4);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
   await database.pool.query(await readFile("docs/schema/evidence-commits.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(3);
 });
@@ -347,6 +452,7 @@ test("the migration protects the new table and its rollback removes only that ta
   await expect(insert("issue", "open", 0)).rejects.toThrow(/check constraint/);
   await expect(database.pool.query("DELETE FROM public.requirements WHERE id = $1", [requirement.id])).rejects.toThrow(/foreign key/);
 
+  await database.pool.query(await readFile("docs/schema/evidence-checks-rollback.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/evidence-commits-rollback.sql", "utf8"));
   await database.pool.query(await readFile("docs/schema/requirement-evidence-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_evidence'")).toBe(0);

@@ -1,6 +1,51 @@
 # Shared handoff
 
-## Current task: Evidence slice 3, commits as evidence (2026-10-08)
+## Current task: Evidence slice 4, check results and link source (2026-10-08)
+
+- Branch: `feature/project-ui`. Slices 1 to 3 are committed (`94759df`). This entry is
+  uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed:
+  - Check results (ADR-035): a linked pull request or commit shows a line such as
+    "5 of 6 checks passed, 1 failed" that opens to each check with its result in words.
+    Refresh re-reads them.
+  - Link source (ADR-036): every evidence link is stored as `manual` or `suggested`.
+    Nothing creates `suggested` yet. The ADR sets the rules for the later AI work.
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008084108_EvidenceChecks` and the model snapshot.
+  - Schema: `scripts/generate-evidence-checks.mjs`,
+    `docs/schema/evidence-checks{,-rollback}.sql`.
+  - Web: `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github,test-database}.mjs`, `tests/support/github.ts`,
+    `tests/e2e/{evidence,project-failures}.spec.ts`,
+    `tests/schema/{evidence,github-repository}.spec.ts`, `tests/api/project-data.spec.ts`.
+  - Docs: DECISIONS (ADR-035, ADR-036), API, DATABASE, TESTING, and this file.
+- Differences from the plan: none in behavior. A check's link is kept only when it
+  is on github.com, as planned, which means statuses from outside CI services are
+  listed without a link.
+- Checks: the evidence API, unit, and evidence browser tests passed together (42).
+  In the full run of all browser tests plus the GitHub API tests, 174 passed and one
+  failed: "a session that ended sends the user to sign in". That test waits for a
+  multi-step redirect and timed out after 5 seconds under load; its wait was raised
+  to 15 seconds and its file then passed three times in a row. The full run was not
+  repeated after that change. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed. Run
+  with a temporary config without the test API on port 5100.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub.
+  - **Setup**: apply the EvidenceChecks migration
+    (`dotnet ef database update --project app/api`) and restart or redeploy the API
+    before the requirement page works.
+  - Refresh makes more GitHub calls than before and slows down as links grow.
+- Next step: releases (link a release tag). Then the review decision, reordering
+  criteria, and the evidence count on lists. The AI slice follows ADR-036.
+
+## Previous task: Evidence slice 3, commits as evidence (2026-10-08)
 
 - Branch: `feature/project-ui`. Uncommitted, together with slice 2 below.
 - Completed (ADR-034): a commit can be linked to a requirement by SHA or address and

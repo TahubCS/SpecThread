@@ -8,9 +8,10 @@ using SpecThread.Api.Projects;
 
 namespace SpecThread.Api.GitHub;
 
-// Links GitHub issues, pull requests, and commits to a requirement (ADR-033, ADR-034). Any
-// project member links, refreshes, and unlinks. What GitHub reported is stored, so it stays
-// inspectable later.
+// Links GitHub issues, pull requests, and commits to a requirement (ADR-033, ADR-034), with the
+// check results of commits and of pull requests' latest commits (ADR-035). Any project member
+// links, refreshes, and unlinks. What GitHub reported is stored, so it stays inspectable later.
+// Every link made here is recorded as made by a person (ADR-036).
 internal static partial class EvidenceEndpoints
 {
     public const int MaxEvidence = 50;
@@ -87,6 +88,9 @@ internal static partial class EvidenceEndpoints
         // An abbreviated SHA is only known in full once GitHub has answered.
         if (found.Value!.Kind == "commit" && here.Exists(e => e.Kind == "commit" && e.Sha == found.Value.Sha)) return AlreadyLinked(Label(found.Value));
 
+        var checks = await ReadChecksAsync(github, repository, found.Value.Sha, cancel);
+        if (checks.Failure is not (GitHubFailure.None or GitHubFailure.NotFound)) return Failed(checks.Failure, fullName);
+
         var now = Clock.UtcNow();
         var evidence = new RequirementEvidence
         {
@@ -101,8 +105,10 @@ internal static partial class EvidenceEndpoints
             Url = "",
             LinkedBy = userId,
             LinkedAt = now,
+            Source = "manual",
         };
         Apply(evidence, found.Value, now);
+        ApplyChecks(evidence, checks, now);
         db.RequirementEvidence.Add(evidence);
         try
         {
@@ -116,8 +122,9 @@ internal static partial class EvidenceEndpoints
         return TypedResults.Created($"/requirements/{requirementId}/evidence/{evidence.Id}", ToResponse(evidence));
     }
 
-    // Reads every linked issue and pull request of the connected repository again. Nothing is
-    // saved unless all of them were read. Commits are not read again: a commit never changes.
+    // Reads every linked issue and pull request of the connected repository again, and the check
+    // results of pull requests and commits. Nothing is saved unless all of them were read. A
+    // commit itself is not read again, because it never changes; only its checks are.
     private static async Task<Results<Ok<List<EvidenceResponse>>, NotFound, ProblemHttpResult>> Refresh(
         Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, IGitHubClient github, CancellationToken cancel)
     {
@@ -129,15 +136,22 @@ internal static partial class EvidenceEndpoints
 
         // Items linked from a repository connected earlier keep their last snapshot.
         var items = await db.RequirementEvidence
-            .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId && e.Number != null).ToListAsync(cancel);
+            .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId).ToListAsync(cancel);
+        var fullName = $"{repository.Owner}/{repository.Name}";
         var now = Clock.UtcNow();
         foreach (var item in items)
         {
-            var found = await github.GetItemAsync(repository.InstallationId, repository.RepositoryId, item.Number!.Value, cancel);
-            // An item deleted or moved on GitHub keeps its last snapshot, so the record stays inspectable.
-            if (found.Failure == GitHubFailure.NotFound) continue;
-            if (found.Failure != GitHubFailure.None) return Failed(found.Failure, $"{repository.Owner}/{repository.Name}");
-            Apply(item, found.Value!, now);
+            if (item.Number is { } number)
+            {
+                var found = await github.GetItemAsync(repository.InstallationId, repository.RepositoryId, number, cancel);
+                // An item deleted or moved on GitHub keeps its last snapshot, so the record stays inspectable.
+                if (found.Failure == GitHubFailure.NotFound) continue;
+                if (found.Failure != GitHubFailure.None) return Failed(found.Failure, fullName);
+                Apply(item, found.Value!, now);
+            }
+            var checks = await ReadChecksAsync(github, repository, item.Sha, cancel);
+            if (checks.Failure is not (GitHubFailure.None or GitHubFailure.NotFound)) return Failed(checks.Failure, fullName);
+            ApplyChecks(item, checks, now);
         }
         await db.SaveChangesAsync(cancel);
         return TypedResults.Ok(await ReadAsync(db, requirementId, cancel));
@@ -183,6 +197,27 @@ internal static partial class EvidenceEndpoints
             ? null
             : JsonSerializer.Serialize(item.Commits.ConvertAll(c => new EvidenceCommit(c.Sha, c.Message, c.Author, c.Date, c.Url)), CommitJson);
         evidence.RefreshedAt = now;
+    }
+
+    // Issues have no commit and so no checks: they are answered without asking GitHub.
+    private static Task<GitHubResult<GitHubChecks>> ReadChecksAsync(IGitHubClient github, ProjectRepository repository, string? sha, CancellationToken cancel) =>
+        sha is null
+            ? Task.FromResult(GitHubResult<GitHubChecks>.Fail(GitHubFailure.NotFound))
+            : github.GetChecksAsync(repository.InstallationId, repository.RepositoryId, sha, cancel);
+
+    // Stores what was read. Checks GitHub would not let the app read are stored as null, with the time of the attempt.
+    private static void ApplyChecks(RequirementEvidence evidence, GitHubResult<GitHubChecks> checks, DateTime now)
+    {
+        if (evidence.Sha is null)
+        {
+            (evidence.Checks, evidence.CheckCount, evidence.ChecksReadAt) = (null, null, null);
+            return;
+        }
+        evidence.Checks = checks.Value is null
+            ? null
+            : JsonSerializer.Serialize(checks.Value.Items.ConvertAll(c => new EvidenceCheck(c.Name, c.Result, c.Url, c.CompletedAt, c.Kind)), CommitJson);
+        evidence.CheckCount = checks.Value?.Total;
+        evidence.ChecksReadAt = now;
     }
 
     // Accepts "42", "#42", a commit SHA of 7 to 40 hex digits, or a github.com link to an issue,
@@ -235,7 +270,8 @@ internal static partial class EvidenceEndpoints
         e.Id, e.RequirementId, e.Kind, e.Number, e.Sha, e.Title, e.State, e.Author, e.Url, $"{e.RepositoryOwner}/{e.RepositoryName}",
         e.GitHubCreatedAt, e.GitHubUpdatedAt, e.GitHubClosedAt, e.Additions, e.Deletions, e.ChangedFiles, e.CommitCount,
         e.Commits is null ? null : JsonSerializer.Deserialize<List<EvidenceCommit>>(e.Commits, CommitJson),
-        e.LinkedBy, e.LinkedAt, e.RefreshedAt);
+        e.Checks is null ? null : JsonSerializer.Deserialize<List<EvidenceCheck>>(e.Checks, CommitJson), e.CheckCount, e.ChecksReadAt,
+        e.Source, e.LinkedBy, e.LinkedAt, e.RefreshedAt);
 
     private sealed record Scope(Guid ProjectId, bool Archived);
 }
@@ -246,8 +282,11 @@ internal sealed record LinkEvidenceRequest(string? Reference);
 
 internal sealed record EvidenceCommit(string Sha, string Message, string? Author, DateTime Date, string Url);
 
+internal sealed record EvidenceCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
+
 internal sealed record EvidenceResponse(
     Guid Id, Guid RequirementId, string Kind, int? Number, string? Sha, string Title, string? State, string? Author, string Url, string Repository,
     DateTime GithubCreatedAt, DateTime GithubUpdatedAt, DateTime? GithubClosedAt,
     int? Additions, int? Deletions, int? ChangedFiles, int? CommitCount, List<EvidenceCommit>? Commits,
-    string LinkedBy, DateTime LinkedAt, DateTime RefreshedAt);
+    List<EvidenceCheck>? Checks, int? CheckCount, DateTime? ChecksReadAt,
+    string Source, string LinkedBy, DateTime LinkedAt, DateTime RefreshedAt);

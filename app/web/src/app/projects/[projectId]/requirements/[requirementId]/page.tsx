@@ -60,7 +60,8 @@ export default async function Page({ params }: Props) {
         <h2 id="evidence-heading">Evidence</h2>
         {repository || evidence.length > 0 ? (
           <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence}
-            repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null} />
+            repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
+            people={Object.fromEntries(members.map(member => [member.userId, member.name]))} />
         ) : (
           <p className="muted">
             Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to

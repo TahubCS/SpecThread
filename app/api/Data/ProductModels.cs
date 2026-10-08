@@ -52,7 +52,10 @@ public sealed class ProjectRepository
 
 // An issue, pull request, or commit linked to a requirement, with what GitHub reported when it was
 // last read (ADR-033, ADR-034). Issues and pull requests have Number and State; commits have Sha.
-// Commits is a JSON array of a pull request's commits.
+// Commits is a JSON array of a pull request's commits. Checks is a JSON array of the check
+// results of a commit or of a pull request's latest commit (ADR-035); null means they were not
+// readable. Source says how the link came to be (ADR-036): "manual", or "suggested" and then
+// confirmed by the person in LinkedBy.
 public sealed class RequirementEvidence
 {
     public Guid Id { get; set; }
@@ -70,6 +73,10 @@ public sealed class RequirementEvidence
     public int? ChangedFiles { get; set; }
     public int? CommitCount { get; set; }
     public string? Commits { get; set; }
+    public string? Checks { get; set; }
+    public int? CheckCount { get; set; }
+    public DateTime? ChecksReadAt { get; set; }
+    public string Source { get; set; } = "manual";
     public string? Author { get; set; }
     public required string Url { get; set; }
     public DateTime GitHubCreatedAt { get; set; }

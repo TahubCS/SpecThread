@@ -25,6 +25,13 @@ internal sealed record GitHubItem(
     string Kind, int? Number, string? Sha, string Title, string? State, string? Author, string Url,
     DateTime CreatedAt, DateTime UpdatedAt, DateTime? ClosedAt, GitHubChanges? Changes, List<GitHubCommit>? Commits);
 
+// One automated check on a commit. Result is "passed", "failed", "running", "skipped",
+// "cancelled", or "neutral". Kind is "check" (a check run) or "status" (an older commit status).
+internal sealed record GitHubCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
+
+// The checks GitHub reports for a commit: the first ones read, and how many there are in all.
+internal sealed record GitHubChecks(List<GitHubCheck> Items, int Total);
+
 internal enum GitHubFailure
 {
     None,
@@ -68,6 +75,10 @@ internal interface IGitHubClient
 
     // Reads one commit of a connected repository by its full or abbreviated SHA, acting as the app.
     Task<GitHubResult<GitHubItem>> GetCommitAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
+
+    // Reads the check runs and commit statuses of a commit, acting as the app. NotFound means
+    // GitHub does not let the app read them, for example because a permission was not granted.
+    Task<GitHubResult<GitHubChecks>> GetChecksAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
 }
 
 internal sealed class GitHubClient(HttpClient http, IConfiguration configuration, ILogger<GitHubClient> logger) : IGitHubClient
@@ -77,6 +88,11 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     private const int MaxListedRepositories = 500;
     private const int MaxSearchPages = 30;
     private const int MaxCommitMessageLength = 300;
+    private const int MaxCheckNameLength = 200;
+
+    // Installation tokens created by this instance. A client lives for one API request, so a
+    // refresh of many items asks GitHub for a token once per installation, not once per item.
+    private readonly Dictionary<long, string> installationTokens = [];
 
     public static void Configure(HttpClient client)
     {
@@ -236,9 +252,134 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         }
     }
 
+    public async Task<GitHubResult<GitHubChecks>> GetChecksAsync(long installationId, long repositoryId, string sha, CancellationToken cancel)
+    {
+        if (!IsFullSha(sha)) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.NotFound);
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubChecks>.Fail(token.Failure);
+
+        var items = new List<GitHubCheck>();
+        var total = 0;
+        var readable = false;
+
+        var (runsFailure, runs) = await SendAsync(
+            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/check-runs?per_page={PageSize}", token.Value!, cancel);
+        if (runsFailure is not (GitHubFailure.None or GitHubFailure.NotFound)) return GitHubResult<GitHubChecks>.Fail(AsInstallation(runsFailure));
+        if (runsFailure == GitHubFailure.None)
+        {
+            using (runs)
+            {
+                var root = runs!.RootElement;
+                if (root.ValueKind != JsonValueKind.Object || !TryReadCount(root, "total_count", out var count) ||
+                    !root.TryGetProperty("check_runs", out var list) || list.ValueKind != JsonValueKind.Array)
+                {
+                    return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
+                }
+                foreach (var entry in list.EnumerateArray())
+                {
+                    if (!TryReadCheckRun(entry, out var check)) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
+                    items.Add(check!);
+                }
+                total += Math.Max(count, items.Count);
+                readable = true;
+            }
+        }
+
+        var (statusFailure, status) = await SendAsync(
+            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/status?per_page={PageSize}", token.Value!, cancel);
+        if (statusFailure is not (GitHubFailure.None or GitHubFailure.NotFound)) return GitHubResult<GitHubChecks>.Fail(AsInstallation(statusFailure));
+        if (statusFailure == GitHubFailure.None)
+        {
+            using (status)
+            {
+                var root = status!.RootElement;
+                if (root.ValueKind != JsonValueKind.Object || !TryReadCount(root, "total_count", out var count) ||
+                    !root.TryGetProperty("statuses", out var list) || list.ValueKind != JsonValueKind.Array)
+                {
+                    return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
+                }
+                var before = items.Count;
+                foreach (var entry in list.EnumerateArray())
+                {
+                    if (!TryReadStatus(entry, out var check)) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
+                    items.Add(check!);
+                }
+                total += Math.Max(count, items.Count - before);
+                readable = true;
+            }
+        }
+
+        // The app may be granted one of the two permissions and not the other; what it can read is shown.
+        if (!readable) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.NotFound);
+        items.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        if (items.Count > PageSize) items.RemoveRange(PageSize, items.Count - PageSize);
+        return GitHubResult<GitHubChecks>.Ok(new GitHubChecks(items, total));
+    }
+
+    private static bool TryReadCheckRun(JsonElement entry, out GitHubCheck? check)
+    {
+        check = null;
+        if (entry.ValueKind != JsonValueKind.Object ||
+            !entry.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String ||
+            !entry.TryGetProperty("status", out var status) || status.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+        var conclusion = entry.TryGetProperty("conclusion", out var value) ? value.GetStringOrNull() : null;
+        var result = status.GetString() != "completed" ? "running" : conclusion switch
+        {
+            "success" => "passed",
+            "failure" or "timed_out" or "action_required" => "failed",
+            "skipped" => "skipped",
+            "cancelled" => "cancelled",
+            _ => "neutral",
+        };
+        check = new GitHubCheck(CheckName(name.GetString()!), result, ReadGitHubLink(entry, "html_url"),
+            result == "running" ? null : ReadDate(entry, "completed_at"), "check");
+        return true;
+    }
+
+    private static bool TryReadStatus(JsonElement entry, out GitHubCheck? check)
+    {
+        check = null;
+        if (entry.ValueKind != JsonValueKind.Object ||
+            !entry.TryGetProperty("context", out var context) || context.ValueKind != JsonValueKind.String ||
+            !entry.TryGetProperty("state", out var state) || state.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+        var result = state.GetString() switch
+        {
+            "success" => "passed",
+            "failure" or "error" => "failed",
+            "pending" => "running",
+            _ => "neutral",
+        };
+        // Statuses usually point at an outside CI service; only links to GitHub itself are kept.
+        check = new GitHubCheck(CheckName(context.GetString()!), result, ReadGitHubLink(entry, "target_url"),
+            result == "running" ? null : ReadDate(entry, "updated_at"), "status");
+        return true;
+    }
+
+    private static string CheckName(string name)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0) return "(unnamed check)";
+        return trimmed.Length > MaxCheckNameLength ? trimmed[..MaxCheckNameLength] : trimmed;
+    }
+
+    private static string? ReadGitHubLink(JsonElement entry, string property) =>
+        entry.TryGetProperty(property, out var value) && IsGitHubLink(value.GetStringOrNull()) ? value.GetString() : null;
+
+    private static DateTime? ReadDate(JsonElement entry, string property) =>
+        entry.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.TryGetDateTime(out var date)
+            ? date.ToUniversalTime()
+            : null;
+
     // A short-lived token that lets the API read what the installation was granted.
     private async Task<GitHubResult<string>> CreateInstallationTokenAsync(long installationId, CancellationToken cancel)
     {
+        if (installationTokens.TryGetValue(installationId, out var cached)) return GitHubResult<string>.Ok(cached);
         var appToken = CreateAppToken();
         if (appToken is null) return GitHubResult<string>.Fail(GitHubFailure.NotConfigured);
 
@@ -253,10 +394,13 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         using (body)
         {
             var root = body!.RootElement;
-            return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("token", out var token) &&
-                token.ValueKind == JsonValueKind.String && token.GetString() is { Length: > 0 } value
-                ? GitHubResult<string>.Ok(value)
-                : GitHubResult<string>.Fail(GitHubFailure.Unavailable);
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("token", out var token) ||
+                token.GetStringOrNull() is not { Length: > 0 } value)
+            {
+                return GitHubResult<string>.Fail(GitHubFailure.Unavailable);
+            }
+            installationTokens[installationId] = value;
+            return GitHubResult<string>.Ok(value);
         }
     }
 

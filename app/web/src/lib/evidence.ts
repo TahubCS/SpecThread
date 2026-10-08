@@ -1,10 +1,23 @@
 /** One commit of a pull request. `message` is the first line only. */
 export type EvidenceCommit = { sha: string; message: string; author: string | null; date: string; url: string };
 
+export const CHECK_RESULTS = ["passed", "failed", "running", "skipped", "cancelled", "neutral"] as const;
+
+/**
+ * One automated check on a commit, as GitHub reported it. `kind` is a check run or an older
+ * commit status. `url` is set only when the check has a page on GitHub itself.
+ */
+export type EvidenceCheck = {
+  name: string; result: (typeof CHECK_RESULTS)[number]; url: string | null; completedAt: string | null; kind: "check" | "status";
+};
+
 /**
  * An issue, pull request, or commit linked to a requirement, as GitHub reported it when last
  * read (docs/API.md). Issues and pull requests have `number` and `state`; commits have `sha`.
- * Pull requests and commits carry what changed; pull requests also list their commits.
+ * Pull requests and commits carry what changed; pull requests also list their commits. They
+ * also carry the check results of the commit (for a pull request, its latest): `checks` is null
+ * when GitHub would not let them be read. `source` says whether a person added the link or
+ * confirmed a suggestion; `linkedBy` is that person either way.
  */
 export type Evidence = {
   id: string;
@@ -19,6 +32,10 @@ export type Evidence = {
   changedFiles: number | null;
   commitCount: number | null;
   commits: EvidenceCommit[] | null;
+  checks: EvidenceCheck[] | null;
+  checkCount: number | null;
+  checksReadAt: string | null;
+  source: "manual" | "suggested";
   author: string | null;
   url: string;
   repository: string;
@@ -47,6 +64,16 @@ function parseCommit(value: unknown): EvidenceCommit {
   return { sha: item.sha, message: item.message, author: item.author, date: item.date, url: item.url };
 }
 
+function parseCheck(value: unknown): EvidenceCheck {
+  const item = value as Record<string, unknown> | null;
+  if (typeof item !== "object" || item === null || typeof item.name !== "string" ||
+      !CHECK_RESULTS.includes(item.result as EvidenceCheck["result"]) || (item.url !== null && !isGitHubLink(item.url)) ||
+      (item.completedAt !== null && !isDate(item.completedAt)) || (item.kind !== "check" && item.kind !== "status")) {
+    throw new Error("The API returned unexpected evidence.");
+  }
+  return { name: item.name, result: item.result as EvidenceCheck["result"], url: item.url, completedAt: item.completedAt, kind: item.kind };
+}
+
 /** Validates one evidence link from an API response. Throws when the shape is not the documented one. */
 export function parseEvidence(value: unknown): Evidence {
   const item = value as Record<string, unknown> | null;
@@ -55,7 +82,9 @@ export function parseEvidence(value: unknown): Evidence {
       typeof item.repository !== "string" || !isDate(item.githubCreatedAt) || !isDate(item.githubUpdatedAt) ||
       (item.githubClosedAt !== null && !isDate(item.githubClosedAt)) || !isCount(item.additions) || !isCount(item.deletions) ||
       !isCount(item.changedFiles) || !isCount(item.commitCount) || (item.commits !== null && !Array.isArray(item.commits)) ||
-      (item.sha !== null && !isSha(item.sha)) || typeof item.linkedBy !== "string" || !isDate(item.linkedAt) || !isDate(item.refreshedAt)) {
+      (item.sha !== null && !isSha(item.sha)) || (item.checks !== null && !Array.isArray(item.checks)) || !isCount(item.checkCount) ||
+      (item.checksReadAt !== null && !isDate(item.checksReadAt)) || (item.source !== "manual" && item.source !== "suggested") ||
+      typeof item.linkedBy !== "string" || !isDate(item.linkedAt) || !isDate(item.refreshedAt)) {
     throw new Error("The API returned unexpected evidence.");
   }
   // A commit is identified by its SHA; an issue or pull request by its number, and it has a state.
@@ -69,6 +98,8 @@ export function parseEvidence(value: unknown): Evidence {
     sha: item.sha, title: item.title, state: item.state as Evidence["state"], additions: item.additions, deletions: item.deletions,
     changedFiles: item.changedFiles, commitCount: item.commitCount,
     commits: item.commits === null ? null : (item.commits as unknown[]).map(parseCommit),
+    checks: item.checks === null ? null : (item.checks as unknown[]).map(parseCheck),
+    checkCount: item.checkCount, checksReadAt: item.checksReadAt, source: item.source,
     author: item.author, url: item.url, repository: item.repository, githubCreatedAt: item.githubCreatedAt,
     githubUpdatedAt: item.githubUpdatedAt, githubClosedAt: item.githubClosedAt, linkedBy: item.linkedBy, linkedAt: item.linkedAt,
     refreshedAt: item.refreshedAt,
@@ -97,6 +128,23 @@ export function evidenceLabel(evidence: Pick<Evidence, "number" | "sha">): strin
 export function evidenceChanges(evidence: Pick<Evidence, "additions" | "deletions" | "changedFiles">): string | null {
   if (evidence.additions === null || evidence.deletions === null || evidence.changedFiles === null) return null;
   return `+${evidence.additions} −${evidence.deletions} in ${evidence.changedFiles === 1 ? "1 file" : `${evidence.changedFiles} files`}`;
+}
+
+/**
+ * Describes a commit's or pull request's check results in words, such as "5 of 6 checks passed,
+ * 1 failed". Returns null for issues, which have no checks. "Passed" means only that a recorded
+ * automated check reported success.
+ */
+export function checkSummary(evidence: Pick<Evidence, "kind" | "checks" | "checkCount">): string | null {
+  if (evidence.kind === "issue") return null;
+  if (evidence.checks === null) return "Check results could not be read";
+  const total = Math.max(evidence.checkCount ?? 0, evidence.checks.length);
+  if (total === 0) return "No checks ran";
+  const count = (result: EvidenceCheck["result"]) => evidence.checks!.filter(check => check.result === result).length;
+  const parts = [`${count("passed")} of ${total} ${total === 1 ? "check" : "checks"} passed`];
+  if (count("failed")) parts.push(`${count("failed")} failed`);
+  if (count("running")) parts.push(`${count("running")} running`);
+  return parts.join(", ");
 }
 
 /** Reads the `detail` of a problem-details body, or null when there is none. */

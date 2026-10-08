@@ -168,6 +168,25 @@ script. It deletes every commit link and the stored changes and commits of pull
 requests, and leaves `number` and `state` with empty defaults that the original
 migration did not have.
 
+## Evidence checks migration
+
+EvidenceChecks adds four columns to public.requirement_evidence: `checks` (jsonb),
+`check_count`, and `checks_read_at` for check results (ADR-035), and `source`
+(`manual` or `suggested`, default `manual`) for how the link came to be (ADR-036).
+Existing rows become `manual`. No table is added, so RLS and grants are unchanged.
+
+```sh
+dotnet ef migrations add EvidenceChecks --project app/api --configuration Release
+node scripts/generate-evidence-checks.mjs
+```
+
+Apply it after EvidenceCommits: with the API stopped,
+`dotnet ef database update --project app/api`, or run
+docs/schema/evidence-checks.sql in the Supabase SQL editor. Rollback:
+`dotnet ef database update EvidenceCommits --project app/api`, or
+evidence-checks-rollback.sql. It drops the stored check results and the source
+marker; the links themselves stay.
+
 ## Supabase tooling
 
 ```sh

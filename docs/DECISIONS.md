@@ -693,6 +693,57 @@ for very large commits. Rolling the migration back deletes commit links. Check
 results and releases are still to come; the pull request's latest commit SHA is
 stored so check results can be read for it later.
 
+ADR-035: Check results are stored with the commit or pull request they ran on
+
+Status: Accepted
+
+Context: A reviewer must be able to see which automated checks ran and what they
+reported (docs/PROJECT.md). Linked pull requests already store their latest commit's
+SHA (ADR-034).
+
+Decision: When a pull request or commit is linked or refreshed, the API reads that
+commit's check runs and its older-style commit statuses from GitHub as the app and
+stores them on the evidence row (`checks`, `check_count`, `checks_read_at`; migration
+EvidenceChecks). Each is normalized to a name, a result, a link, a completion time,
+and whether it is a check run or a status. The result is one of: passed (success),
+failed (failure, timed out, action required, error), running (not completed, pending),
+skipped, cancelled, or neutral (anything else). "Passed" means only that a recorded
+check reported success. The first 100 are stored, sorted by name, with GitHub's
+total. A link is kept only when it points at github.com, so a status from an outside
+CI service is listed without one. If GitHub will not let the app read either kind
+(403 or 404), `checks` is stored as null and the item is still linked or refreshed;
+if it can read one kind, that kind is shown. Any other GitHub failure stops the link
+or the refresh as before. Refresh now also visits commits, for their checks only. The
+GitHub client keeps an installation token for the length of one API request.
+
+Consequences: A refresh makes more GitHub calls (five for a pull request, two for a
+commit) and gets slower as links grow. Results are a snapshot: a running check stays
+"running" until someone refreshes. A missing Checks or Commit statuses permission
+shows as "Check results could not be read", not as an error. Reusing the token within
+a request is not covered by a test.
+
+ADR-036: Every evidence link records its source, and AI may only suggest
+
+Status: Accepted
+
+Context: The user plans AI summaries and recommendations. The product boundary
+(AGENTS.md) is that AI may suggest relationships or summaries while people inspect
+the evidence and make the acceptance decision.
+
+Decision: `requirement_evidence.source` is `manual` or `suggested` (default `manual`;
+migration EvidenceChecks). `linked_by` is always a person: for a suggested link, the
+person who confirmed it. The link endpoint ignores any `source` a caller sends and
+writes `manual`; only a future "confirm a suggestion" endpoint will write
+`suggested`. The requirement page names who confirmed a suggested link. Rules for
+the AI work that follows: suggestions are kept in their own store and enter
+`requirement_evidence` only when a project member confirms them; AI never records a
+review decision; every core flow works with AI unavailable or switched off; and AI
+output shown to users is labeled as a suggestion and tied to the evidence it refers to.
+
+Consequences: No AI code, provider, or suggestions table exists yet, and nothing can
+create a `suggested` row except a direct database write. Rolling the migration back
+loses the marker. Which model or provider to use is undecided.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

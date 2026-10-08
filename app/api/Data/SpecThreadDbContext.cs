@@ -124,6 +124,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
             // A commit is identified by its SHA; an issue or pull request by its number, and it has a state.
             table.HasCheckConstraint("ck_requirement_evidence_identity",
                 "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL) OR (kind <> 'commit' AND number IS NOT NULL AND number > 0 AND state IS NOT NULL)");
+            table.HasCheckConstraint("ck_requirement_evidence_source", "source IN ('manual', 'suggested')");
+            table.HasCheckConstraint("ck_requirement_evidence_checks", "COALESCE(check_count, 0) >= 0");
             table.HasCheckConstraint("ck_requirement_evidence_changes",
                 "COALESCE(additions, 0) >= 0 AND COALESCE(deletions, 0) >= 0 AND COALESCE(changed_files, 0) >= 0 AND COALESCE(commit_count, 0) >= 0");
         });
@@ -141,6 +143,10 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidence.Property(x => x.ChangedFiles).HasColumnName("changed_files");
         evidence.Property(x => x.CommitCount).HasColumnName("commit_count");
         evidence.Property(x => x.Commits).HasColumnName("commits").HasColumnType("jsonb");
+        evidence.Property(x => x.Checks).HasColumnName("checks").HasColumnType("jsonb");
+        evidence.Property(x => x.CheckCount).HasColumnName("check_count");
+        evidence.Property(x => x.ChecksReadAt).HasColumnName("checks_read_at");
+        evidence.Property(x => x.Source).HasColumnName("source").HasDefaultValue("manual");
         evidence.Property(x => x.Title).HasColumnName("title");
         evidence.Property(x => x.State).HasColumnName("state");
         evidence.Property(x => x.Author).HasColumnName("author");

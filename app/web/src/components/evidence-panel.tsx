@@ -3,25 +3,29 @@
 import { useActionState, useState } from "react";
 import { CircleDot, GitCommitHorizontal, GitPullRequest, RefreshCw, X } from "lucide-react";
 import { linkEvidence, refreshEvidence, unlinkEvidence } from "@/app/projects/evidence-actions";
-import { EVIDENCE_REFERENCE_MAX, evidenceChanges, evidenceLabel, type Evidence } from "@/lib/evidence";
+import { checkSummary, EVIDENCE_REFERENCE_MAX, evidenceChanges, evidenceLabel, type Evidence } from "@/lib/evidence";
 import { formatDate } from "@/lib/projects";
 
 const stateText = { open: "Open", closed: "Closed", merged: "Merged" } as const;
 const kindText = { issue: "issue", pull_request: "pull request", commit: "commit" } as const;
 const icons = { issue: CircleDot, pull_request: GitPullRequest, commit: GitCommitHorizontal } as const;
+const resultText = { passed: "Passed", failed: "Failed", running: "Running", skipped: "Skipped", cancelled: "Cancelled", neutral: "Neutral" } as const;
 const external = { target: "_blank", rel: "noreferrer" } as const;
 
 /**
  * Renders a requirement's linked issues, pull requests, and commits as a timeline, oldest first,
  * with what GitHub reported when they were last read. Pull requests and commits show what
- * changed, and a pull request lists its commits. While the requirement can change, members add
- * a link, remove one, and read everything from GitHub again.
+ * changed and the results of their automated checks, and a pull request lists its commits. A
+ * link that began as a suggestion names the person who confirmed it. While the requirement can
+ * change, members add a link, remove one, and read everything from GitHub again.
  */
-export function EvidencePanel({ projectId, requirementId, evidence, repository, editable }: {
+export function EvidencePanel({ projectId, requirementId, evidence, repository, people, editable }: {
   projectId: string;
   requirementId: string;
   evidence: Evidence[];
   repository: string;
+  /** Names of the project's members by user ID, for naming who confirmed a suggested link. */
+  people: Record<string, string>;
   editable: boolean;
 }) {
   const [link, linkAction, linking] = useActionState(linkEvidence.bind(null, projectId, requirementId), { reference: "", error: null, linked: 0 });
@@ -66,6 +70,10 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
                 </div>
                 {item.kind === "commit" && changes && <p className="evidence-changes">{changes}</p>}
                 {item.kind === "pull_request" && item.commits && <PullRequestCommits item={item} changes={changes} />}
+                <Checks item={item} />
+                {item.source === "suggested" && (
+                  <p className="evidence-changes">Suggested, confirmed by {people[item.linkedBy] ?? "a former member"}</p>
+                )}
               </li>
             );
           })}
@@ -111,6 +119,35 @@ function PullRequestCommits({ item, changes }: { item: Evidence; changes: string
         ))}
       </ol>
       {total > commits.length && <p className="muted">Showing the first {commits.length} of {total} commits.</p>}
+    </details>
+  );
+}
+
+/**
+ * Renders the check results of a commit, or of a pull request's latest commit: a one-line count,
+ * and each check with its result in words on demand. Renders nothing for issues.
+ */
+function Checks({ item }: { item: Evidence }) {
+  const summary = checkSummary(item);
+  if (!summary) return null;
+  const checks = item.checks ?? [];
+  if (checks.length === 0) return <p className="evidence-changes">{summary}</p>;
+  const total = Math.max(item.checkCount ?? 0, checks.length);
+  return (
+    <details className="evidence-commits">
+      <summary>{summary}</summary>
+      <ul aria-label={`Checks for ${evidenceLabel(item)}`}>
+        {checks.map((check, index) => (
+          <li key={`${check.kind}-${check.name}-${index}`}>
+            <span className={`check-result is-${check.result}`}><span aria-hidden="true" />{resultText[check.result]}</span>
+            {check.url
+              ? <a href={check.url} {...external}>{check.name}<span className="sr-only"> (opens GitHub in a new tab)</span></a>
+              : <span className="check-name">{check.name}</span>}
+            {check.completedAt && <span className="row-meta"><time dateTime={check.completedAt}>{formatDate(check.completedAt)}</time></span>}
+          </li>
+        ))}
+      </ul>
+      {total > checks.length && <p className="muted">Showing the first {checks.length} of {total} checks.</p>}
     </details>
   );
 }

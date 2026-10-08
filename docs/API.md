@@ -63,7 +63,9 @@ to the project; non-members get 404 as if the project did not exist.
 40 hex digits, or the github.com address of any of them, in the project's connected
 repository (ADR-033, ADR-034). Digits alone are read as a number. The API reads the
 item from GitHub before saving. Unknown items and links to another repository are 400
-on `reference`. Refresh re-reads issues and pull requests, not commits.
+on `reference`. Refresh re-reads issues and pull requests, and the check results of
+pull requests and commits (ADR-035); a commit itself is not re-read. `source` in the
+request is ignored: links made through this endpoint are always `manual` (ADR-036).
 409 carries the reason in `detail`: already linked, 50 links reached, no repository
 connected, the app uninstalled, or an archived requirement or project. 502 and 503
 mean the same as for repositories.
@@ -102,6 +104,11 @@ type AvailableRepository = {
 };
 type ProjectRepository = AvailableRepository & { url: string; connectedBy: string; connectedAt: string };
 type EvidenceCommit = { sha: string; message: string; author: string | null; date: string; url: string };
+type EvidenceCheck = {
+  name: string; result: "passed" | "failed" | "running" | "skipped" | "cancelled" | "neutral";
+  url: string | null;          // only when the check has a page on github.com
+  completedAt: string | null; kind: "check" | "status";
+};
 type Evidence = {
   id: string; requirementId: string; kind: "issue" | "pull_request" | "commit";
   number: number | null;                        // issues and pull requests
@@ -110,6 +117,10 @@ type Evidence = {
   title: string; author: string | null; url: string; repository: string;
   additions: number | null; deletions: number | null; changedFiles: number | null; // pull requests and commits
   commitCount: number | null; commits: EvidenceCommit[] | null;                    // pull requests (first 100 commits)
+  // Pull requests (latest commit) and commits. checks is null when GitHub would not let them be read;
+  // checkCount is GitHub's total and may exceed the 100 stored. All three are null for issues.
+  checks: EvidenceCheck[] | null; checkCount: number | null; checksReadAt: string | null;
+  source: "manual" | "suggested"; // linkedBy is the person who added or confirmed the link
   githubCreatedAt: string; githubUpdatedAt: string; githubClosedAt: string | null;
   linkedBy: string; linkedAt: string; refreshedAt: string;
 };

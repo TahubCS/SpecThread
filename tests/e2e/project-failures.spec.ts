@@ -164,7 +164,8 @@ test("a session that ended sends the user to sign in instead of creating a proje
   await runTestSql(`DELETE FROM public.session WHERE "userId" = '${owner.userId}'`);
   await page.getByRole("button", { name: "Create project" }).click();
 
-  await expect(page).toHaveURL(/\/login\?next=/);
+  // The error page first asks whether a session still exists, so this takes longer than one navigation.
+  await expect(page).toHaveURL(/\/login\?next=/, { timeout: 15_000 });
   // The statement raises, and so fails the test, if a project was created anyway.
   await runTestSql(`DO $$ BEGIN IF EXISTS (SELECT 1 FROM public.projects WHERE owner_user_id = '${owner.userId}')
     THEN RAISE EXCEPTION 'A project was created without a session'; END IF; END $$;`);

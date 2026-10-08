@@ -6,7 +6,7 @@ import {
   parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
 import {
-  evidenceChanges, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
+  checkSummary, evidenceChanges, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
 
@@ -136,11 +136,13 @@ test("evidence is accepted only in the documented shape", () => {
   const commit = { sha, message: "Add guest path", author: "ada", date: "2026-09-06T09:00:00Z", url: `https://github.com/acme/web/commit/${sha}` };
   const evidence = { id: "e1", requirementId: "r1", kind: "pull_request", number: 5, sha, title: "Add guest checkout", state: "merged",
     additions: 40, deletions: 5, changedFiles: 3, commitCount: 1, commits: [commit],
+    checks: [{ name: "build", result: "passed", url: "https://github.com/acme/web/runs/1", completedAt: "2026-09-06T10:05:00Z", kind: "check" }],
+    checkCount: 1, checksReadAt: "2026-10-08T10:00:00Z", source: "manual",
     author: null, url: "https://github.com/acme/web/pull/5", repository: "acme/web", githubCreatedAt: "2026-09-06T10:00:00Z",
     githubUpdatedAt: "2026-10-01T10:00:00Z", githubClosedAt: "2026-10-06T10:00:00Z", linkedBy: "u1",
     linkedAt: "2026-10-08T10:00:00Z", refreshedAt: "2026-10-08T10:00:00Z" };
   const issue = { ...evidence, kind: "issue", state: "open", author: "ada", sha: null, additions: null, deletions: null,
-    changedFiles: null, commitCount: null, commits: null, githubClosedAt: null };
+    changedFiles: null, commitCount: null, commits: null, checks: null, checkCount: null, checksReadAt: null, githubClosedAt: null };
   const linkedCommit = { ...issue, kind: "commit", number: null, state: null, sha, additions: 12, deletions: 3, changedFiles: 1 };
   expect(parseEvidenceList([{ ...evidence, extra: 1 }])).toEqual([evidence]);
   expect(parseEvidence(issue).author).toBe("ada");
@@ -150,6 +152,10 @@ test("evidence is accepted only in the documented shape", () => {
     { ...evidence, commitCount: 1.5 }, { ...evidence, commits: {} }, { ...evidence, commits: [{ ...commit, sha: "A".repeat(40) }] },
     { ...evidence, commits: [{ ...commit, url: "https://evil.example/c" }] }, { ...linkedCommit, sha: null },
     { ...linkedCommit, number: 5 }, { ...linkedCommit, state: "open" },
+    { ...evidence, source: "ai" }, { ...evidence, source: undefined }, { ...evidence, checks: {} }, { ...evidence, checkCount: -1 },
+    { ...evidence, checksReadAt: "soon" }, { ...evidence, checks: [{ ...evidence.checks[0], result: "verified" }] },
+    { ...evidence, checks: [{ ...evidence.checks[0], url: "https://ci.example/1" }] }, { ...evidence, checks: [{ ...evidence.checks[0], kind: "ai" }] },
+    { ...evidence, checks: [{ ...evidence.checks[0], completedAt: "later" }] }, { ...evidence, checks: [null] },
     { ...evidence, url: "https://evil.example/acme/web/pull/5" }, { ...evidence, url: "javascript:alert(1)" },
     { ...evidence, author: 1 }, { ...evidence, githubCreatedAt: "soon" }, { ...evidence, githubClosedAt: "later" }, { ...evidence, refreshedAt: null }]) {
     expect(() => parseEvidence(value)).toThrow("unexpected evidence");
@@ -164,6 +170,21 @@ test("evidence is accepted only in the documented shape", () => {
   expect(evidenceChanges({ additions: 12, deletions: 3, changedFiles: 1 })).toBe("+12 −3 in 1 file");
   expect(evidenceChanges({ additions: 0, deletions: 0, changedFiles: 4 })).toBe("+0 −0 in 4 files");
   expect(evidenceChanges({ additions: null, deletions: null, changedFiles: null })).toBeNull();
+  expect(parseEvidence({ ...evidence, source: "suggested" }).source).toBe("suggested");
+  expect(parseEvidence({ ...evidence, checks: [{ name: "ci", result: "running", url: null, completedAt: null, kind: "status" }] }).checks)
+    .toEqual([{ name: "ci", result: "running", url: null, completedAt: null, kind: "status" }]);
+
+  const check = (result: string) => ({ name: result, result, url: null, completedAt: null, kind: "check" }) as never;
+  expect(checkSummary({ kind: "issue", checks: null, checkCount: null })).toBeNull();
+  expect(checkSummary({ kind: "commit", checks: null, checkCount: null })).toBe("Check results could not be read");
+  expect(checkSummary({ kind: "pull_request", checks: [], checkCount: 0 })).toBe("No checks ran");
+  expect(checkSummary({ kind: "commit", checks: [check("passed")], checkCount: 1 })).toBe("1 of 1 check passed");
+  expect(checkSummary({ kind: "commit", checks: [check("passed"), check("skipped"), check("neutral"), check("cancelled")], checkCount: 4 }))
+    .toBe("1 of 4 checks passed");
+  expect(checkSummary({ kind: "pull_request", checks: [check("passed"), check("failed"), check("failed"), check("running")], checkCount: 4 }))
+    .toBe("1 of 4 checks passed, 2 failed, 1 running");
+  // GitHub's total can exceed the checks that were stored.
+  expect(checkSummary({ kind: "commit", checks: [check("passed")], checkCount: 150 })).toBe("1 of 150 checks passed");
   expect(problemDetail({ detail: "#7 is already linked to this requirement." })).toBe("#7 is already linked to this requirement.");
   for (const problem of [null, "text", {}, { detail: "" }, { detail: 5 }]) expect(problemDetail(problem)).toBeNull();
 });
