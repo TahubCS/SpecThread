@@ -46,7 +46,7 @@ internal static class RequirementEndpoints
             .ToLookup(e => e.RequirementId, e => e.Id);
 
         return TypedResults.Ok(requirements.ConvertAll(r => new RequirementSummary(
-            r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
+            r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, evidence[r.Id].Count(),
             reviews.TryGetValue(r.Id, out var review)
                 ? new ReviewSummary(review.Decision, review.DecidedBy, review.DecidedAt, ReviewEndpoints.IsOutdated(review, r.Version, evidence[r.Id]))
                 : null)));
@@ -201,7 +201,7 @@ internal sealed record RequirementRequest(string? Title, string? Description, Li
 internal sealed record UpdateRequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria, int? Version);
 
 internal sealed record RequirementSummary(
-    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, ReviewSummary? Review);
+    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, int Version,

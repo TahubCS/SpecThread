@@ -196,6 +196,13 @@ currently require network access during the web build.
   tests/api/project-data.spec.ts. The reviews migration stays applied in the other
   schema specs, so their migration-history counts include it. Not exercised: two
   reviewers deciding at the same moment.
+- Evidence count on requirement lists: tests/schema/reviews.spec.ts checks that the
+  list's `evidenceCount` is 0 with nothing linked, counts issues, commits, and
+  releases, follows a removed link, and leaves out other requirements' links.
+  tests/e2e/evidence.spec.ts checks "No evidence", the plural and singular count on
+  the Requirements tab and the overview, the row at 390px, and the error page for a
+  list whose count is missing, text, or negative. The parser and wording are unit
+  tested in tests/api/project-data.spec.ts.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

@@ -99,6 +99,8 @@ type Project = { id: string; name: string; ownerUserId: string; createdAt: strin
 type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null;
+  // How many evidence links of any kind the requirement has. Only on the list.
+  evidenceCount: number;
   // The latest decision, or null. Only on the list; a requirement's page reads /reviews.
   review: { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean } | null;
 };
@@ -110,7 +112,7 @@ type Review = {
   evidence: { id: string; kind: string; label: string; title: string; state: string | null }[];
   decidedBy: string; decidedAt: string;
 };
-type Requirement = Omit<RequirementSummary, "review"> & {
+type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string; createdBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];
 };

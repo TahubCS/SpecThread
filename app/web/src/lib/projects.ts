@@ -37,10 +37,10 @@ export function fieldError(problem: unknown, field: string): string | null {
   return Array.isArray(messages) && typeof messages[0] === "string" ? messages[0] : null;
 }
 
-/** A requirement as listed for a project (docs/API.md). `review` is its latest decision, or null. */
+/** A requirement as listed for a project (docs/API.md). `evidenceCount` is how many evidence links it has; `review` is its latest decision, or null. */
 export type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
-  createdAt: string; updatedAt: string; archivedAt: string | null; review: ReviewSummary | null;
+  createdAt: string; updatedAt: string; archivedAt: string | null; evidenceCount: number; review: ReviewSummary | null;
 };
 
 /** A project member with the name and email other members may see (docs/API.md). */
@@ -60,12 +60,13 @@ export function parseRequirementSummaries(value: unknown): RequirementSummary[] 
     const item = entry as Record<string, unknown> | null;
     if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
         typeof item.title !== "string" || typeof item.version !== "number" || !isDate(item.createdAt) ||
-        !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string")) {
+        !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string") ||
+        typeof item.evidenceCount !== "number" || !Number.isInteger(item.evidenceCount) || item.evidenceCount < 0) {
       throw new Error("The API returned an unexpected requirement.");
     }
     return {
       id: item.id, projectId: item.projectId, title: item.title, version: item.version,
-      createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt,
+      createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt, evidenceCount: item.evidenceCount,
       review: parseReviewSummary(item.review),
     };
   });

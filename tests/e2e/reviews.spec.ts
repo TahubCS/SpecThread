@@ -288,7 +288,7 @@ test("when decisions cannot be loaded the page says so and loads on another try"
   // A list whose latest decision is not in the documented shape is not shown as if it were fine.
   await failApi(reviewer.userId, { method: "GET", path: "/requirements$", status: 200, body: [{
     id: requirementId, projectId: requirementId, title: "Guest checkout", version: 1, createdAt: "2026-10-01T10:00:00Z",
-    updatedAt: "2026-10-01T10:00:00Z", archivedAt: null, review: { decision: "verified", decidedBy: "x", decidedAt: "2026-10-01T10:00:00Z", outdated: false },
+    updatedAt: "2026-10-01T10:00:00Z", archivedAt: null, evidenceCount: 0, review: { decision: "verified", decidedBy: "x", decidedAt: "2026-10-01T10:00:00Z", outdated: false },
   }] });
   await review.goto(url.replace(/\/[0-9a-f-]{36}$/, ""));
   await expect(review.getByRole("heading", { name: "Page unavailable" })).toBeVisible();

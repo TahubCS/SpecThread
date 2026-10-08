@@ -6,7 +6,7 @@ import {
   moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
 import {
-  checkSummary, evidenceChanges, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
+  checkSummary, evidenceChanges, evidenceCountText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
   releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
@@ -50,8 +50,15 @@ test("only UUID-shaped project IDs are sent to the API", () => {
 
 test("requirement and member lists are accepted only in the documented shape", () => {
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", version: 2,
-    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, review: null };
+    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, evidenceCount: 3, review: null };
   expect(parseRequirementSummaries([{ ...requirement, description: "ignored" }])).toEqual([requirement]);
+  expect(parseRequirementSummaries([{ ...requirement, evidenceCount: 0 }])[0].evidenceCount).toBe(0);
+  for (const evidenceCount of [undefined, null, "3", -1, 1.5]) {
+    expect(() => parseRequirementSummaries([{ ...requirement, evidenceCount }]), String(evidenceCount)).toThrow("unexpected requirement");
+  }
+  expect(evidenceCountText(0)).toBe("No evidence");
+  expect(evidenceCountText(1)).toBe("1 evidence link");
+  expect(evidenceCountText(12)).toBe("12 evidence links");
   const review = { decision: "more_evidence", decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z", outdated: true };
   expect(parseRequirementSummaries([{ ...requirement, review: { ...review, note: "ignored" } }])).toEqual([{ ...requirement, review }]);
   for (const value of [undefined, "accepted", {}, { ...review, decision: "verified" }, { ...review, outdated: "no" }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 1 }]) {

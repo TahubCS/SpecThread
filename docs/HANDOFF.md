@@ -1,6 +1,40 @@
 # Shared handoff
 
-## Current task: Reorder acceptance criteria (2026-10-08)
+## Current task: Evidence count on requirement lists (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, together with the reorder entry below
+  unless that has been committed since.
+- Completed: each row on the Requirements tab and the overview's recent requirements
+  says "No evidence", "1 evidence link", or "N evidence links", before the review
+  badge. `GET /projects/{projectId}/requirements` returns `evidenceCount` per
+  requirement, counted from the evidence IDs that endpoint already loaded. No
+  database or migration change.
+- Changed files: `app/api/Requirements/RequirementEndpoints.cs`,
+  `app/web/src/lib/{projects,requirements,evidence}.ts`,
+  `app/web/src/components/requirement-rows.tsx`, `app/web/src/app/app-shell.css`,
+  `tests/schema/reviews.spec.ts`, `tests/e2e/{evidence,reviews}.spec.ts`,
+  `tests/api/project-data.spec.ts`, `docs/{API,TESTING}.md`, and this file. No ADR.
+- Differences from the plan: `reviewedText` in `lib/reviews.ts` keeps its own
+  wording ("with no evidence links") instead of sharing the new helper, because the
+  two sentences read differently at zero.
+- Checks: after the last code change, all browser tests plus
+  `tests/schema/{evidence,github-repository}.spec.ts` passed (191), including the
+  session test that failed under load in the previous entry. Before that,
+  `tests/schema/reviews.spec.ts`, `tests/api/project-data.spec.ts`, and the evidence
+  and review browser tests passed together (47). `npm run lint`,
+  `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed. Run with a
+  temporary config because the dev API held port 5100; the api-project tests on
+  that port and the older schema specs were not rerun.
+- Known issues and risks:
+  - **Setup**: restart or redeploy the API with this build. The web now requires
+    `evidenceCount`; against an older API the requirement lists show the error page.
+  - The count says how much is linked, not whether it is enough or passing.
+- Next step: the AI slice under ADR-036 (suggestions only; a person decides). It
+  needs a plan and decisions first: provider, what is sent to it, and where
+  suggestions appear.
+
+## Previous task: Reorder acceptance criteria (2026-10-08)
 
 - Branch: `feature/project-ui`. Review decisions are committed (`643f36a`). This
   entry is uncommitted. The approved plan is in

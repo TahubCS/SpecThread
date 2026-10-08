@@ -1,7 +1,7 @@
 import type { RequirementSummary } from "./projects";
 
 /** A requirement with its description and ordered acceptance criteria (docs/API.md). */
-export type Requirement = Omit<RequirementSummary, "review"> & {
+export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string;
   createdBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];

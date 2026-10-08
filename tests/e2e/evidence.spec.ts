@@ -555,3 +555,41 @@ test("a requirement whose evidence cannot be read shows the error inside the pro
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
 });
+
+test("requirement lists say how many evidence links each requirement has", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  await connect(projectId, [issue(12, "Guests cannot pay"), issue(15, "Add guest checkout", { pull: true })]);
+  const listed = (name: string) => page.getByRole("list", { name }).getByRole("listitem");
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(listed("Requirements")).toContainText("No evidence");
+
+  await page.goto(url);
+  await link(page, "12");
+  await link(page, "15");
+  await expect(rows(page)).toHaveCount(2);
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(listed("Requirements")).toContainText("2 evidence links");
+  await page.goto(`/projects/${projectId}`);
+  await expect(listed("Recent requirements")).toContainText("2 evidence links");
+
+  await page.goto(url);
+  await page.getByRole("button", { name: "Remove link to #15" }).click();
+  await expect(rows(page)).toHaveCount(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(listed("Requirements")).toContainText("1 evidence link");
+  await expect(listed("Requirements")).not.toContainText("1 evidence links");
+  await expect(listed("Requirements")).toContainText("Not reviewed");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("requirement-list-counts.png"), fullPage: true });
+
+  // A list without a usable count is not shown as if nothing were linked.
+  const row = { id: projectId, projectId, title: "Guest checkout", version: 1, createdAt: "2026-10-01T10:00:00Z",
+    updatedAt: "2026-10-01T10:00:00Z", archivedAt: null, review: null };
+  for (const evidenceCount of [undefined, "1", -1]) {
+    await failApi(owner.userId, { method: "GET", path: `^/projects/${projectId}/requirements$`, status: 200, body: [{ ...row, evidenceCount }] });
+    await page.goto(`/projects/${projectId}/requirements`);
+    await expect(page.getByRole("heading", { name: "Page unavailable" }), String(evidenceCount)).toBeVisible();
+    await clearApiFaults(owner.userId);
+  }
+});

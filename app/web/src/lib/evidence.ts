@@ -192,3 +192,8 @@ export function problemDetail(problem: unknown): string | null {
   const detail = (problem as { detail?: unknown } | null)?.detail;
   return typeof detail === "string" && detail ? detail : null;
 }
+
+/** Says how many evidence links a requirement has, such as "No evidence" or "3 evidence links". */
+export function evidenceCountText(count: number): string {
+  return count === 0 ? "No evidence" : count === 1 ? "1 evidence link" : `${count} evidence links`;
+}

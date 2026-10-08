@@ -146,6 +146,7 @@ a.row:focus-visible { outline-offset: -2px; }
 .row-meta { flex: none; margin-left: auto; color: var(--app-text-3); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row .badge + .row-meta { margin-left: 0; }
 .row .badge { margin-left: auto; }
+.row .row-count + .badge { margin-left: 0; }
 
 /* Dashboard */
 .dashboard-preview { padding: 24px var(--app-gutter) 56px; }

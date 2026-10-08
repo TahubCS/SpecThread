@@ -216,6 +216,30 @@ test("requirement lists carry the latest decision and whether it still describes
   expect(await review(other.id)).toBeNull();
 });
 
+test("requirement lists count each requirement's evidence links of every kind", async ({ request }) => {
+  const { projectId, requirementId } = await setUp(request);
+  const author = await as(request, "author");
+  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts" })).json();
+  const counts = async () => Object.fromEntries((await (await author.get(`/projects/${projectId}/requirements`)).json())
+    .map((r: { id: string; evidenceCount: number }) => [r.id, r.evidenceCount]));
+  expect(await counts()).toEqual({ [requirementId]: 0, [other.id]: 0 });
+
+  const issue = await linkIssue(requirementId, "Guests cannot pay", "2026-09-01T10:00:00Z");
+  expect(await counts()).toEqual({ [requirementId]: 1, [other.id]: 0 });
+  await database.pool.query(`INSERT INTO public.requirement_evidence
+    (requirement_id,kind,repository_id,repository_owner,repository_name,sha,title,url,github_created_at,github_updated_at,linked_by)
+    VALUES ($1,'commit',1,'acme','web',$2,'Add guest path','https://github.com/acme/web/commit/1',now(),now(),'author')`,
+  [requirementId, "def5678".padEnd(40, "0")]);
+  await database.pool.query(`INSERT INTO public.requirement_evidence
+    (requirement_id,kind,repository_id,repository_owner,repository_name,tag,title,url,github_created_at,github_updated_at,linked_by)
+    VALUES ($1,'release',1,'acme','web','v1.0.0','First release','https://github.com/acme/web/releases/tag/v1.0.0',now(),now(),'author')`, [requirementId]);
+  await linkIssue(other.id, "Elsewhere", "2026-09-02T10:00:00Z");
+  expect(await counts()).toEqual({ [requirementId]: 3, [other.id]: 1 });
+
+  await database.pool.query("DELETE FROM public.requirement_evidence WHERE id = $1", [issue]);
+  expect(await counts()).toEqual({ [requirementId]: 2, [other.id]: 1 });
+});
+
 test("the migration protects the new table, constrains its rows, and its rollback removes only that table", async () => {
   const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews' AND rowsecurity")).toBe(1);
