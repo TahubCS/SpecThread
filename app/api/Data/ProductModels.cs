@@ -49,3 +49,33 @@ public sealed class ProjectRepository
     public required string ConnectedBy { get; set; }
     public DateTime ConnectedAt { get; set; }
 }
+
+// An issue, pull request, or commit linked to a requirement, with what GitHub reported when it was
+// last read (ADR-033, ADR-034). Issues and pull requests have Number and State; commits have Sha.
+// Commits is a JSON array of a pull request's commits.
+public sealed class RequirementEvidence
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public required string Kind { get; set; }
+    public long RepositoryId { get; set; }
+    public required string RepositoryOwner { get; set; }
+    public required string RepositoryName { get; set; }
+    public int? Number { get; set; }
+    public string? Sha { get; set; }
+    public required string Title { get; set; }
+    public string? State { get; set; }
+    public int? Additions { get; set; }
+    public int? Deletions { get; set; }
+    public int? ChangedFiles { get; set; }
+    public int? CommitCount { get; set; }
+    public string? Commits { get; set; }
+    public string? Author { get; set; }
+    public required string Url { get; set; }
+    public DateTime GitHubCreatedAt { get; set; }
+    public DateTime GitHubUpdatedAt { get; set; }
+    public DateTime? GitHubClosedAt { get; set; }
+    public required string LinkedBy { get; set; }
+    public DateTime LinkedAt { get; set; }
+    public DateTime RefreshedAt { get; set; }
+}

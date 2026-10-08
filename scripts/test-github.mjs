@@ -6,8 +6,17 @@ import { createVerify } from "node:crypto";
 // faults for one token or for the app:
 //
 //   PUT    /__github/users/<token>   { installations: [{ id, appInstalled?, repositories: [{ id, owner, name, private? }] }] }
-//   POST   /__github/faults          { bearer: <token> | "app", path, status?, body?, close?, times? }
-//   DELETE /__github/faults?bearer=<token | app>
+//   PUT    /__github/repositories/<id>/items
+//                                    { items: [{ number, pull?, merged?, title, state, user?, created_at, updated_at, closed_at?,
+//                                                additions?, deletions?, changed_files?, commits?: [commit] }] }
+//   PUT    /__github/repositories/<id>/commits
+//                                    { commits: [{ sha, message, login?, name?, date, additions?, deletions?, files? }] }
+//   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, close?, times? }
+//   DELETE /__github/faults?bearer=<token | app | installation>&path=<the same path>
+//
+// The app reads issues and pull requests with the installation token it is given here, so
+// faults for those calls use the bearer "installation". Faults for "app" and "installation"
+// are seen by every test, so their path must name one test's own installation or repository.
 //
 // A token nobody registered is answered with 401, like an expired GitHub token.
 
@@ -34,6 +43,14 @@ function appClaims(token, publicKey) {
 
 export function startFakeGitHub({ port, appId, publicKey }) {
   const users = new Map();
+  const items = new Map();
+  const commits = new Map();
+  const commitJson = commit => ({
+    sha: commit.sha, html_url: `https://github.com/acme/repo/commit/${commit.sha}`,
+    commit: { message: commit.message, author: { name: commit.name ?? "Ada Lovelace", date: commit.date } },
+    author: commit.login === null ? null : { login: commit.login ?? "ada" },
+  });
+  const installationToken = "ghs_test_installation_token";
   const faults = [];
   const send = (response, status, body) => {
     response.writeHead(status, { "content-type": "application/json" });
@@ -51,14 +68,21 @@ export function startFakeGitHub({ port, appId, publicKey }) {
       const body = await readBody(request);
 
       if (url.pathname.startsWith("/__github/")) {
+        const repositoryItems = /^\/__github\/repositories\/(\d+)\/items$/.exec(url.pathname);
         if (request.method === "PUT" && url.pathname.startsWith("/__github/users/")) {
           users.set(decodeURIComponent(url.pathname.slice("/__github/users/".length)), JSON.parse(body).installations);
+        } else if (request.method === "PUT" && repositoryItems) {
+          items.set(Number(repositoryItems[1]), JSON.parse(body).items);
+        } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/commits$/.test(url.pathname)) {
+          commits.set(Number(url.pathname.split("/")[3]), JSON.parse(body).commits);
         } else if (request.method === "POST" && url.pathname === "/__github/faults") {
           const fault = JSON.parse(body);
           faults.push({ ...fault, path: new RegExp(fault.path) });
         } else if (request.method === "DELETE" && url.pathname === "/__github/faults") {
-          const bearer = url.searchParams.get("bearer");
-          for (let index = faults.length - 1; index >= 0; index--) if (faults[index].bearer === bearer) faults.splice(index, 1);
+          const [bearer, path] = [url.searchParams.get("bearer"), url.searchParams.get("path")];
+          for (let index = faults.length - 1; index >= 0; index--) {
+            if (faults[index].bearer === bearer && (path === null || faults[index].path.source === new RegExp(path).source)) faults.splice(index, 1);
+          }
         } else {
           return send(response, 404);
         }
@@ -67,7 +91,8 @@ export function startFakeGitHub({ port, appId, publicKey }) {
 
       const bearer = (request.headers.authorization ?? "").replace(/^Bearer /, "");
       const asApp = url.pathname.startsWith("/app/");
-      const index = faults.findIndex(fault => fault.bearer === (asApp ? "app" : bearer) && fault.path.test(url.pathname));
+      const faultKey = asApp ? "app" : bearer === installationToken ? "installation" : bearer;
+      const index = faults.findIndex(fault => fault.bearer === faultKey && fault.path.test(url.pathname));
       const fault = index === -1 ? null : faults[index];
       if (fault?.times !== undefined && --fault.times <= 0) faults.splice(index, 1);
       if (fault?.close) return void request.socket.destroy();
@@ -78,8 +103,46 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         if (appClaims(bearer, publicKey)?.iss !== String(appId)) return send(response, 401, { message: "Bad credentials" });
         const installed = [...users.values()].flat().some(installation => installation.id === Number(access[1]) && installation.appInstalled !== false);
         return installed
-          ? send(response, 201, { token: "ghs_test_installation_token", expires_at: new Date(Date.now() + 3_600_000).toISOString() })
+          ? send(response, 201, { token: installationToken, expires_at: new Date(Date.now() + 3_600_000).toISOString() })
           : send(response, 404, { message: "Not Found" });
+      }
+
+      const commitPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]+)$/.exec(url.pathname);
+      if (commitPath && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const found = (commits.get(Number(commitPath[1])) ?? []).find(entry => entry.sha.startsWith(commitPath[2]));
+        if (!found) return send(response, 422, { message: "No commit found for SHA" });
+        const [additions, deletions] = [found.additions ?? 0, found.deletions ?? 0];
+        return send(response, 200, {
+          ...commitJson(found), stats: { additions, deletions, total: additions + deletions },
+          files: Array.from({ length: found.files ?? 0 }, (_, index) => ({ filename: `file-${index}.ts` })),
+        });
+      }
+      const pullCommits = /^\/repositories\/(\d+)\/pulls\/(\d+)\/commits$/.exec(url.pathname);
+      if (pullCommits && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const found = (items.get(Number(pullCommits[1])) ?? []).find(entry => entry.pull && entry.number === Number(pullCommits[2]));
+        return found ? send(response, 200, page(found.commits ?? [], url).map(commitJson)) : send(response, 404, { message: "Not Found" });
+      }
+
+      const item = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)$/.exec(url.pathname);
+      if (item && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const found = (items.get(Number(item[1])) ?? []).find(entry => entry.number === Number(item[3]));
+        if (!found || (item[2] === "pulls" && !found.pull)) return send(response, 404, { message: "Not Found" });
+        const base = {
+          number: found.number, title: found.title, state: found.state, user: found.user === null ? null : { login: found.user ?? "octocat" },
+          html_url: `https://github.com/acme/repo/${found.pull ? "pull" : "issues"}/${found.number}`,
+          created_at: found.created_at, updated_at: found.updated_at, closed_at: found.closed_at ?? null,
+        };
+        if (item[2] === "pulls") {
+          const listed = found.commits ?? [];
+          return send(response, 200, {
+            ...base, merged: found.merged ?? false, commits: found.commit_count ?? listed.length, additions: found.additions ?? 0,
+            deletions: found.deletions ?? 0, changed_files: found.changed_files ?? 0, head: { sha: listed.at(-1)?.sha ?? "f".repeat(40) },
+          });
+        }
+        return send(response, 200, found.pull ? { ...base, pull_request: { url: "https://api.github.test/pull" } } : base);
       }
 
       const installations = users.get(bearer);

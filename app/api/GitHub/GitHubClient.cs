@@ -12,6 +12,19 @@ internal sealed record GitHubRepository(long InstallationId, long RepositoryId, 
 
 internal sealed record GitHubRepositoryList(List<GitHubRepository> Repositories, bool Truncated);
 
+// One commit as GitHub reports it. Message is the first line only.
+internal sealed record GitHubCommit(string Sha, string Message, string? Author, DateTime Date, string Url);
+
+// Lines added and removed and files changed, and for a pull request how many commits it has.
+internal sealed record GitHubChanges(int Additions, int Deletions, int ChangedFiles, int? CommitCount);
+
+// An issue, pull request, or commit as GitHub reports it now. Issues and pull requests have a
+// number and a state ("open", "closed", or "merged"); commits have neither. Sha is the commit,
+// or a pull request's latest commit. Commits lists a pull request's commits, oldest first.
+internal sealed record GitHubItem(
+    string Kind, int? Number, string? Sha, string Title, string? State, string? Author, string Url,
+    DateTime CreatedAt, DateTime UpdatedAt, DateTime? ClosedAt, GitHubChanges? Changes, List<GitHubCommit>? Commits);
+
 internal enum GitHubFailure
 {
     None,
@@ -19,8 +32,10 @@ internal enum GitHubFailure
     NotConfigured,
     // GitHub does not accept the user's token.
     TokenRejected,
-    // The installation or repository does not exist, or this caller cannot see it.
+    // The installation, repository, issue, or pull request does not exist, or this caller cannot see it.
     NotFound,
+    // The app is no longer installed where the repository was connected.
+    NotInstalled,
     // GitHub could not be reached, is rate limiting, or answered with something unexpected.
     Unavailable,
 }
@@ -47,6 +62,12 @@ internal interface IGitHubClient
 
     // Confirms the API can act as the app on that installation.
     Task<GitHubFailure> CheckInstallationAsync(long installationId, CancellationToken cancel);
+
+    // Reads one issue or pull request of a connected repository, acting as the app.
+    Task<GitHubResult<GitHubItem>> GetItemAsync(long installationId, long repositoryId, int number, CancellationToken cancel);
+
+    // Reads one commit of a connected repository by its full or abbreviated SHA, acting as the app.
+    Task<GitHubResult<GitHubItem>> GetCommitAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
 }
 
 internal sealed class GitHubClient(HttpClient http, IConfiguration configuration, ILogger<GitHubClient> logger) : IGitHubClient
@@ -55,6 +76,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     private const int MaxListPages = 5;
     private const int MaxListedRepositories = 500;
     private const int MaxSearchPages = 30;
+    private const int MaxCommitMessageLength = 300;
 
     public static void Configure(HttpClient client)
     {
@@ -129,20 +151,180 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         return GitHubResult<GitHubRepository>.Fail(GitHubFailure.NotFound);
     }
 
-    public async Task<GitHubFailure> CheckInstallationAsync(long installationId, CancellationToken cancel)
+    public async Task<GitHubFailure> CheckInstallationAsync(long installationId, CancellationToken cancel) =>
+        (await CreateInstallationTokenAsync(installationId, cancel)).Failure;
+
+    public async Task<GitHubResult<GitHubItem>> GetItemAsync(long installationId, long repositoryId, int number, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(token.Failure);
+
+        // GitHub serves pull requests from the issues endpoint too, marked with "pull_request".
+        var (failure, body) = await SendAsync(HttpMethod.Get, $"repositories/{repositoryId}/issues/{number}", token.Value!, cancel);
+        if (failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (!TryReadItem(root, number, out var item)) return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+            if (!root.TryGetProperty("pull_request", out var marker) || marker.ValueKind != JsonValueKind.Object)
+            {
+                return GitHubResult<GitHubItem>.Ok(item!);
+            }
+
+            var (pullFailure, pull) = await SendAsync(HttpMethod.Get, $"repositories/{repositoryId}/pulls/{number}", token.Value!, cancel);
+            if (pullFailure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(pullFailure));
+            GitHubItem pullRequest;
+            using (pull)
+            {
+                var details = pull!.RootElement;
+                if (details.ValueKind != JsonValueKind.Object ||
+                    !details.TryGetProperty("merged", out var merged) || merged.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+                    !TryReadCount(details, "commits", out var commitCount) || !TryReadCount(details, "additions", out var additions) ||
+                    !TryReadCount(details, "deletions", out var deletions) || !TryReadCount(details, "changed_files", out var changedFiles) ||
+                    !details.TryGetProperty("head", out var head) || head.ValueKind != JsonValueKind.Object ||
+                    !head.TryGetProperty("sha", out var headSha) || !IsFullSha(headSha.GetStringOrNull()))
+                {
+                    return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+                }
+                pullRequest = item! with
+                {
+                    Kind = "pull_request",
+                    State = merged.GetBoolean() ? "merged" : item.State,
+                    Sha = headSha.GetString(),
+                    Changes = new GitHubChanges(additions, deletions, changedFiles, commitCount),
+                };
+            }
+
+            // The first page is enough to show what changed; CommitCount carries the true total.
+            var (listFailure, list) = await SendAsync(
+                HttpMethod.Get, $"repositories/{repositoryId}/pulls/{number}/commits?per_page={PageSize}", token.Value!, cancel);
+            if (listFailure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(listFailure));
+            using (list)
+            {
+                if (list!.RootElement.ValueKind != JsonValueKind.Array) return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+                var commits = new List<GitHubCommit>();
+                foreach (var entry in list.RootElement.EnumerateArray())
+                {
+                    if (!TryReadCommit(entry, out var commit)) return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+                    commits.Add(commit!);
+                }
+                return GitHubResult<GitHubItem>.Ok(pullRequest with { Commits = commits });
+            }
+        }
+    }
+
+    public async Task<GitHubResult<GitHubItem>> GetCommitAsync(long installationId, long repositoryId, string sha, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(token.Failure);
+
+        var (failure, body) = await SendAsync(HttpMethod.Get, $"repositories/{repositoryId}/commits/{Uri.EscapeDataString(sha)}", token.Value!, cancel);
+        if (failure != GitHubFailure.None) return GitHubResult<GitHubItem>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (!TryReadCommit(root, out var commit) || !commit!.Sha.StartsWith(sha, StringComparison.OrdinalIgnoreCase) ||
+                !root.TryGetProperty("stats", out var stats) || stats.ValueKind != JsonValueKind.Object ||
+                !TryReadCount(stats, "additions", out var additions) || !TryReadCount(stats, "deletions", out var deletions) ||
+                !root.TryGetProperty("files", out var files) || files.ValueKind != JsonValueKind.Array)
+            {
+                return GitHubResult<GitHubItem>.Fail(GitHubFailure.Unavailable);
+            }
+            return GitHubResult<GitHubItem>.Ok(new GitHubItem(
+                "commit", null, commit.Sha, commit.Message, null, commit.Author, commit.Url, commit.Date, commit.Date, null,
+                new GitHubChanges(additions, deletions, files.GetArrayLength(), null), null));
+        }
+    }
+
+    // A short-lived token that lets the API read what the installation was granted.
+    private async Task<GitHubResult<string>> CreateInstallationTokenAsync(long installationId, CancellationToken cancel)
     {
         var appToken = CreateAppToken();
-        if (appToken is null) return GitHubFailure.NotConfigured;
+        if (appToken is null) return GitHubResult<string>.Fail(GitHubFailure.NotConfigured);
 
         var (failure, body) = await SendAsync(HttpMethod.Post, $"app/installations/{installationId}/access_tokens", appToken, cancel);
-        body?.Dispose();
         if (failure == GitHubFailure.TokenRejected)
         {
             logger.LogError("GitHub rejected the GitHub App credentials. Check GitHub:AppId and GitHub:PrivateKey.");
-            return GitHubFailure.NotConfigured;
+            return GitHubResult<string>.Fail(GitHubFailure.NotConfigured);
         }
-        return failure;
+        if (failure == GitHubFailure.NotFound) return GitHubResult<string>.Fail(GitHubFailure.NotInstalled);
+        if (failure != GitHubFailure.None) return GitHubResult<string>.Fail(failure);
+        using (body)
+        {
+            var root = body!.RootElement;
+            return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("token", out var token) &&
+                token.ValueKind == JsonValueKind.String && token.GetString() is { Length: > 0 } value
+                ? GitHubResult<string>.Ok(value)
+                : GitHubResult<string>.Fail(GitHubFailure.Unavailable);
+        }
     }
+
+    // An installation token GitHub just issued and then rejects is GitHub's problem, not the user's.
+    private static GitHubFailure AsInstallation(GitHubFailure failure) =>
+        failure == GitHubFailure.TokenRejected ? GitHubFailure.Unavailable : failure;
+
+    private static bool TryReadItem(JsonElement root, int number, out GitHubItem? item)
+    {
+        item = null;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("number", out var found) || found.ValueKind != JsonValueKind.Number || !found.TryGetInt32(out var read) || read != number ||
+            !root.TryGetProperty("title", out var title) || title.ValueKind != JsonValueKind.String ||
+            !root.TryGetProperty("state", out var state) || state.GetStringOrNull() is not ("open" or "closed") ||
+            !root.TryGetProperty("html_url", out var url) || !IsGitHubLink(url.GetStringOrNull()) ||
+            !root.TryGetProperty("created_at", out var created) || created.ValueKind != JsonValueKind.String || !created.TryGetDateTime(out var createdAt) ||
+            !root.TryGetProperty("updated_at", out var updated) || updated.ValueKind != JsonValueKind.String || !updated.TryGetDateTime(out var updatedAt))
+        {
+            return false;
+        }
+        DateTime? closedAt = null;
+        if (root.TryGetProperty("closed_at", out var closed) && closed.ValueKind == JsonValueKind.String)
+        {
+            if (!closed.TryGetDateTime(out var value)) return false;
+            closedAt = value.ToUniversalTime();
+        }
+        item = new GitHubItem("issue", number, null, title.GetString()!, state.GetString()!, ReadLogin(root, "user"), url.GetString()!,
+            createdAt.ToUniversalTime(), updatedAt.ToUniversalTime(), closedAt, null, null);
+        return true;
+    }
+
+    // Reads a commit from either the commit or the pull-request-commits response.
+    private static bool TryReadCommit(JsonElement root, out GitHubCommit? commit)
+    {
+        commit = null;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("sha", out var sha) || !IsFullSha(sha.GetStringOrNull()) ||
+            !root.TryGetProperty("html_url", out var url) || !IsGitHubLink(url.GetStringOrNull()) ||
+            !root.TryGetProperty("commit", out var detail) || detail.ValueKind != JsonValueKind.Object ||
+            !detail.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.String ||
+            !detail.TryGetProperty("author", out var author) || author.ValueKind != JsonValueKind.Object ||
+            !author.TryGetProperty("date", out var date) || date.ValueKind != JsonValueKind.String || !date.TryGetDateTime(out var committed))
+        {
+            return false;
+        }
+        var firstLine = message.GetString()!.Split('\n', 2)[0].Trim();
+        if (firstLine.Length > MaxCommitMessageLength) firstLine = firstLine[..MaxCommitMessageLength];
+        // The GitHub account when the commit email matches one, otherwise the name written in the commit.
+        var name = ReadLogin(root, "author") ?? (author.TryGetProperty("name", out var written) ? written.GetStringOrNull() : null);
+        commit = new GitHubCommit(sha.GetString()!.ToLowerInvariant(), firstLine.Length == 0 ? "(no message)" : firstLine, name, committed.ToUniversalTime(), url.GetString()!);
+        return true;
+    }
+
+    // Deleted GitHub accounts leave items without a user.
+    private static string? ReadLogin(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var user) && user.ValueKind == JsonValueKind.Object && user.TryGetProperty("login", out var login)
+            ? login.GetStringOrNull()
+            : null;
+
+    private static bool TryReadCount(JsonElement root, string property, out int count)
+    {
+        count = 0;
+        return root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out count) && count >= 0;
+    }
+
+    private static bool IsGitHubLink(string? value) => value?.StartsWith("https://github.com/", StringComparison.Ordinal) == true;
+
+    private static bool IsFullSha(string? value) => value is { Length: 40 } && value.All(Uri.IsHexDigit);
 
     private async Task<GitHubResult<List<GitHubRepository>>> ReadRepositoryPageAsync(string userToken, long installationId, int page, CancellationToken cancel)
     {
@@ -180,7 +362,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
             using var response = await http.SendAsync(request, cancel);
             if (response.StatusCode == HttpStatusCode.Unauthorized) return (GitHubFailure.TokenRejected, null);
-            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden or HttpStatusCode.UnprocessableEntity)
             {
                 // A 403 with no remaining quota is rate limiting, not a missing resource.
                 var exhausted = response.Headers.TryGetValues("x-ratelimit-remaining", out var remaining) && remaining.FirstOrDefault() == "0";
@@ -262,4 +444,10 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         id = 0;
         return item.TryGetProperty("id", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out id) && id > 0;
     }
+}
+
+internal static class JsonElementExtensions
+{
+    public static string? GetStringOrNull(this JsonElement element) =>
+        element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 }

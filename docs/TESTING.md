@@ -57,7 +57,9 @@ SPECTHREAD_API_URL. The test API talks to a stand-in for GitHub on 5108
 (scripts/test-github.mjs) with an app key generated for the run; tests describe what
 one user's GitHub token can see with tests/support/github.ts and never reach the
 real GitHub. The repository API tests use their own stand-in on 5109 and API
-instances on 5110 and 5111. A test calls `failApi` from tests/support/api-faults.ts to make the
+instances on 5110 and 5111; the evidence API tests use 5113 and 5114. Test API
+instances blank the GitHub settings unless a test sets them, so a developer's
+user-secrets never reach them. A test calls `failApi` from tests/support/api-faults.ts to make the
 API fail, drop the connection, answer with a wrong body, or respond slowly for that
 test's own user only, so parallel tests are unaffected. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
@@ -131,6 +133,25 @@ currently require network access during the web build.
   and the 500 limit, 502 and 503 mapping, missing app credentials, anonymous 401, the
   user's token never being stored, and the migration's RLS, constraints, and rollback.
   Not exercised: the real GitHub, and an expired GitHub token being refreshed.
+- Evidence (ADR-033). Browser: the hint when no repository is connected; linking by
+  number, `#number`, and address; timeline order, state, and author; refused
+  references with what was typed kept; refresh picking up closed and merged items and
+  keeping deleted ones; unlinking; read-only evidence for archived requirements,
+  archived projects, and a disconnected repository; keyboard use and the narrow
+  layout; GitHub failing, dropping connections, answering wrongly, rejecting the app,
+  or reporting the app uninstalled; API failures for link, refresh, and unlink; and
+  the error page inside the project frame. API (schema suite): members only, 404 for
+  outsiders and for evidence of another requirement, reference validation, duplicates,
+  other repositories, the 50-link limit, archived and unconnected projects, no partial
+  refresh after a failure, and the migration's RLS, constraints, and rollback. Tests
+  that make the app or the installation token fail name their own installation or
+  repository in the fault path, because every test shares those. Commits (ADR-034):
+  linking by short SHA, full SHA, commit address, and pull-request commit address;
+  changes and author shown for a commit; a pull request's totals and its commit list;
+  duplicates under different spellings; unknown SHAs; answers from GitHub that are
+  not the requested commit; refresh leaving commits untouched; and the migration's
+  constraints and a rollback that removes commit links only. Not exercised: the real
+  GitHub, and a pull request with more than 100 commits.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

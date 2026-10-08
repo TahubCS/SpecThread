@@ -79,7 +79,7 @@ internal static class RepositoryEndpoints
         if (found.Failure != GitHubFailure.None) return Failed(found.Failure);
 
         var installation = await github.CheckInstallationAsync(request.InstallationId.Value, cancel);
-        if (installation == GitHubFailure.NotFound)
+        if (installation == GitHubFailure.NotInstalled)
         {
             errors.Add("installationId", "The SpecThread app is no longer installed there.");
             return TypedResults.ValidationProblem(errors.ToDictionary());
@@ -131,7 +131,7 @@ internal static class RepositoryEndpoints
         ["githubToken"] = ["GitHub did not accept your GitHub sign-in. Link GitHub again and retry."],
     });
 
-    private static ProblemHttpResult Failed(GitHubFailure failure) => failure == GitHubFailure.NotConfigured
+    internal static ProblemHttpResult Failed(GitHubFailure failure) => failure == GitHubFailure.NotConfigured
         ? TypedResults.Problem("GitHub is not configured for this deployment.", statusCode: StatusCodes.Status503ServiceUnavailable)
         : TypedResults.Problem("GitHub could not be reached. Try again in a moment.", statusCode: StatusCodes.Status502BadGateway);
 

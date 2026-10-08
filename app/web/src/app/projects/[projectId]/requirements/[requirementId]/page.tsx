@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
+import { EvidencePanel } from "@/components/evidence-panel";
 import { RequirementArchive } from "@/components/requirement-archive";
-import { listMembers, requireProject, requireRequirement } from "@/lib/project-data";
+import { getProjectRepository } from "@/lib/github-data";
+import { listEvidence, listMembers, requireProject, requireRequirement } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
 type Props = PageProps<"/projects/[projectId]/requirements/[requirementId]">;
@@ -16,7 +18,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   const project = await requireProject(projectId);
-  const [requirement, members] = await Promise.all([requireRequirement(projectId, requirementId), listMembers(projectId)]);
+  const [requirement, members, repository] = await Promise.all([
+    requireRequirement(projectId, requirementId), listMembers(projectId), getProjectRepository(projectId),
+  ]);
+  const evidence = await listEvidence(requirement.id);
   const author = members.find(member => member.userId === requirement.createdBy)?.name ?? "a former member";
   const editable = !project.archivedAt && !requirement.archivedAt;
   const base = `/projects/${project.id}/requirements`;
@@ -50,6 +55,24 @@ export default async function Page({ params }: Props) {
               {requirement.acceptanceCriteria.map(criterion => <li key={criterion.id}>{criterion.text}</li>)}
             </ol>
           )}
+      </section>
+      <section className="requirement-section" aria-labelledby="evidence-heading">
+        <h2 id="evidence-heading">Evidence</h2>
+        {repository || evidence.length > 0 ? (
+          <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence}
+            repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null} />
+        ) : (
+          <p className="muted">
+            Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
+            link issues, pull requests, and commits.
+          </p>
+        )}
+        {repository === null && evidence.length > 0 && (
+          <p className="notice">
+            No repository is connected, so these links cannot be changed or refreshed.{" "}
+            <Link href={`/projects/${project.id}/settings/repository`}>Connect a repository</Link>
+          </p>
+        )}
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
     </article>

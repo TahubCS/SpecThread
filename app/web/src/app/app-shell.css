@@ -297,6 +297,38 @@ a.row:focus-visible { outline-offset: -2px; }
 .criteria-inputs .field { flex: 1; min-width: 0; }
 .criteria-inputs .icon-button { width: 36px; height: 36px; }
 .project-page .settings-block.is-danger { max-width: none; }
+/* Evidence */
+.evidence-rows { margin-bottom: 12px; }
+.evidence-rows .evidence-changes, .evidence-rows .evidence-commits { margin: -4px 14px 10px 42px; color: var(--app-text-2); font-size: 13px; }
+.evidence-changes, .evidence-commits summary { font-variant-numeric: tabular-nums; }
+.evidence-commits summary { width: fit-content; cursor: pointer; }
+.evidence-commits summary:hover { color: var(--app-text); }
+.evidence-commits ol { display: grid; gap: 6px; margin: 10px 0 2px; padding: 0; list-style: none; }
+.evidence-commits li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
+.evidence-commits a { position: relative; flex: 1 1 160px; min-width: 0; overflow: hidden; color: var(--app-text); text-overflow: ellipsis; white-space: nowrap; }
+.evidence-commits a:hover { text-decoration: underline; }
+.evidence-commits .row-meta { margin-left: 0; }
+.evidence-rows .evidence-commits p { margin: 8px 0 0; }
+.evidence-rows .row { flex-wrap: wrap; row-gap: 2px; }
+.evidence-number { flex: none; color: var(--app-text-3); font-family: var(--app-mono); font-size: 12px; }
+/* Positioned so the hidden "opens in a new tab" text is clipped with the title instead of widening the page. */
+.evidence-rows a.row-title { position: relative; flex: 1 1 180px; color: var(--app-text); }
+.evidence-rows a.row-title:hover { text-decoration: underline; }
+.evidence-rows .row .badge { margin-left: 0; }
+.evidence-rows .row-meta { margin-left: 0; }
+.evidence-rows form { display: contents; }
+.evidence-rows .icon-button { width: 28px; height: 28px; margin-right: -6px; }
+.evidence-state > span:first-child { width: 7px; height: 7px; margin-right: 6px; border: 1.5px solid var(--app-text-3); border-radius: 50%; }
+.evidence-state.is-open > span:first-child { border-color: var(--app-ok); background: var(--app-ok); }
+.evidence-state.is-merged > span:first-child { border-color: var(--app-text); background: var(--app-text); }
+.evidence-refresh { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 16px; font-size: 13px; }
+.evidence-link { margin-top: 4px; }
+.evidence-link-row { display: flex; gap: 8px; }
+.evidence-link-row input { flex: 1; min-width: 0; }
+.evidence-link-row .button { min-height: 36px; }
+.requirement-section > .notice { margin-top: 12px; }
+.requirement-section .muted a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+
 /* Repository connection */
 .settings-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; padding: 12px 14px; border: 1px solid var(--app-line); border-radius: 10px; color: var(--app-text); }
 .settings-link:hover { border-color: var(--app-line-strong); background: var(--app-hover); }

@@ -20,14 +20,25 @@ export async function setGitHubUser(token: string, installations: FakeInstallati
   if (response.status !== 204) throw new Error(`The fake GitHub rejected the user (${response.status}).`);
 }
 
-/** Makes GitHub fail for one user token, or for the app when `bearer` is "app". */
+// Faults this worker registered and has not cleared yet. Tests in one worker run one at a time.
+const registered: { bearer: string; path: string }[] = [];
+
+/**
+ * Makes GitHub fail for one user token, for the app ("app"), or for calls made with the
+ * installation token ("installation"). Every test shares the app and the installation token,
+ * so for those two the path must name this test's own installation or repository.
+ */
 export async function failGitHub(bearer: string, fault: { path: string; status?: number; body?: unknown; close?: boolean; times?: number }) {
   const response = await fetch(`${github}/faults`, { method: "POST", body: JSON.stringify({ bearer, ...fault }) });
   if (response.status !== 204) throw new Error(`The fake GitHub rejected the fault (${response.status}).`);
+  registered.push({ bearer, path: fault.path });
 }
 
-export async function clearGitHubFaults(bearer: string) {
-  await fetch(`${github}/faults?bearer=${encodeURIComponent(bearer)}`, { method: "DELETE" });
+/** Removes the faults this test registered, and only those. */
+export async function clearGitHubFaults() {
+  for (const { bearer, path } of registered.splice(0)) {
+    await fetch(`${github}/faults?bearer=${encodeURIComponent(bearer)}&path=${encodeURIComponent(path)}`, { method: "DELETE" });
+  }
 }
 
 /**
@@ -39,4 +50,35 @@ export async function linkGitHubAccount(userId: string) {
   await runTestSql(`INSERT INTO public.account (id,"accountId","providerId","userId","accessToken","createdAt","updatedAt")
     VALUES ('${randomUUID()}','${githubId()}','github','${userId}','${token}',now(),now())`);
   return token;
+}
+
+export type FakeCommit = {
+  sha: string; message: string; date: string;
+  /** GitHub login; null when the commit email matches no account, so the written name is used. */
+  login?: string | null;
+  name?: string; additions?: number; deletions?: number; files?: number;
+};
+
+export type FakeItem = {
+  number: number; pull?: boolean; merged?: boolean; title: string; state: "open" | "closed";
+  /** GitHub login; null for a deleted account. */
+  user?: string | null;
+  created_at: string; updated_at: string; closed_at?: string | null;
+  /** For pull requests: totals, and the commits GitHub lists for it. */
+  additions?: number; deletions?: number; changed_files?: number; commit_count?: number; commits?: FakeCommit[];
+};
+
+/** A 40-digit commit SHA that starts with the given hex digits. */
+export const sha = (start: string) => start.padEnd(40, "0");
+
+/** Sets the commits GitHub has for one repository. */
+export async function setGitHubCommits(repositoryId: number, commits: FakeCommit[]) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/commits`, { method: "PUT", body: JSON.stringify({ commits }) });
+  if (response.status !== 204) throw new Error(`The fake GitHub rejected the commits (${response.status}).`);
+}
+
+/** Sets the issues and pull requests GitHub has for one repository. */
+export async function setGitHubItems(repositoryId: number, items: FakeItem[]) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/items`, { method: "PUT", body: JSON.stringify({ items }) });
+  if (response.status !== 204) throw new Error(`The fake GitHub rejected the items (${response.status}).`);
 }

@@ -14,8 +14,7 @@ test.beforeEach(async ({ context }) => {
 });
 test.afterEach(async () => {
   await clearApiFaults(owner.userId);
-  await clearGitHubFaults("app");
-  if (token) await clearGitHubFaults(token);
+  await clearGitHubFaults();
 });
 
 async function createProject(page: Page, name: string) {
@@ -174,7 +173,7 @@ for (const [label, fault, message] of [
     await expect(page.getByText(message)).toBeVisible();
     await expect(page.getByRole("radio")).toHaveCount(0);
 
-    await clearGitHubFaults(token);
+    await clearGitHubFaults();
     await page.reload();
     await expect(page.getByRole("radio", { name: /acme\/web-shop/ })).toBeVisible();
   });
@@ -182,20 +181,21 @@ for (const [label, fault, message] of [
 
 for (const [label, bearer, fault, message] of [
   ["GitHub fails while checking the repository", "user", { path: "/repositories$", status: 502 }, "GitHub could not be reached. Try again in a moment."],
-  ["GitHub drops the connection while checking the app", "app", { path: "/access_tokens$", close: true }, "GitHub could not be reached. Try again in a moment."],
-  ["GitHub rejects the app's credentials", "app", { path: "/access_tokens$", status: 401 }, "GitHub is not set up for this SpecThread deployment yet."],
+  ["GitHub drops the connection while checking the app", "app", { path: "access_tokens", close: true }, "GitHub could not be reached. Try again in a moment."],
+  ["GitHub rejects the app's credentials", "app", { path: "access_tokens", status: 401 }, "GitHub is not set up for this SpecThread deployment yet."],
   ["GitHub rejects the user's token", "user", { path: "/repositories$", status: 401 }, "GitHub did not accept your GitHub sign-in. Link GitHub again and retry."],
 ] as const) {
   test(`connecting saves nothing and explains the failure when ${label}`, async ({ page }) => {
     const projectId = await createProject(page, "Checkout");
-    await gitHubWith([repo("web-shop")]);
+    const installation = await gitHubWith([repo("web-shop")]);
     await page.goto(`/projects/${projectId}/settings/repository`);
     await page.getByRole("radio", { name: /acme\/web-shop/ }).check();
-    await failGitHub(bearer === "app" ? "app" : token, fault);
+    // Every test shares the app, so a fault for it names this test's own installation.
+    await failGitHub(bearer === "app" ? "app" : token, bearer === "app" ? { ...fault, path: `^/app/installations/${installation.id}/access_tokens$` } : fault);
     await page.getByRole("button", { name: "Connect repository" }).click();
 
     await expect(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
-    await clearGitHubFaults(bearer === "app" ? "app" : token);
+    await clearGitHubFaults();
     await page.getByRole("button", { name: "Connect repository" }).click();
     await expect(page.getByRole("link", { name: /acme\/web-shop/ })).toBeVisible();
   });

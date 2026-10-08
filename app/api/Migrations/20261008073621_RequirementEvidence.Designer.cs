@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SpecThread.Api.Data;
@@ -11,9 +12,11 @@ using SpecThread.Api.Data;
 namespace SpecThread.Api.Migrations
 {
     [DbContext(typeof(SpecThreadDbContext))]
-    partial class SpecThreadDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008073621_RequirementEvidence")]
+    partial class RequirementEvidence
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -497,29 +500,9 @@ namespace SpecThread.Api.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<int?>("Additions")
-                        .HasColumnType("integer")
-                        .HasColumnName("additions");
-
                     b.Property<string>("Author")
                         .HasColumnType("text")
                         .HasColumnName("author");
-
-                    b.Property<int?>("ChangedFiles")
-                        .HasColumnType("integer")
-                        .HasColumnName("changed_files");
-
-                    b.Property<int?>("CommitCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("commit_count");
-
-                    b.Property<string>("Commits")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("commits");
-
-                    b.Property<int?>("Deletions")
-                        .HasColumnType("integer")
-                        .HasColumnName("deletions");
 
                     b.Property<DateTime?>("GitHubClosedAt")
                         .HasColumnType("timestamp with time zone")
@@ -549,7 +532,7 @@ namespace SpecThread.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("linked_by");
 
-                    b.Property<int?>("Number")
+                    b.Property<int>("Number")
                         .HasColumnType("integer")
                         .HasColumnName("number");
 
@@ -577,11 +560,8 @@ namespace SpecThread.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requirement_id");
 
-                    b.Property<string>("Sha")
-                        .HasColumnType("text")
-                        .HasColumnName("sha");
-
                     b.Property<string>("State")
+                        .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("state");
 
@@ -602,21 +582,13 @@ namespace SpecThread.Api.Migrations
                     b.HasIndex("RequirementId", "RepositoryId", "Number")
                         .IsUnique();
 
-                    b.HasIndex("RequirementId", "RepositoryId", "Sha")
-                        .IsUnique()
-                        .HasFilter("kind = 'commit'");
-
                     b.ToTable("requirement_evidence", "public", t =>
                         {
-                            t.HasCheckConstraint("ck_requirement_evidence_changes", "COALESCE(additions, 0) >= 0 AND COALESCE(deletions, 0) >= 0 AND COALESCE(changed_files, 0) >= 0 AND COALESCE(commit_count, 0) >= 0");
+                            t.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request')");
 
-                            t.HasCheckConstraint("ck_requirement_evidence_identity", "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL) OR (kind <> 'commit' AND number IS NOT NULL AND number > 0 AND state IS NOT NULL)");
+                            t.HasCheckConstraint("ck_requirement_evidence_number", "number > 0 AND repository_id > 0");
 
-                            t.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit')");
-
-                            t.HasCheckConstraint("ck_requirement_evidence_repository", "repository_id > 0");
-
-                            t.HasCheckConstraint("ck_requirement_evidence_state", "state IS NULL OR state IN ('open', 'closed', 'merged')");
+                            t.HasCheckConstraint("ck_requirement_evidence_state", "state IN ('open', 'closed', 'merged')");
                         });
                 });
 

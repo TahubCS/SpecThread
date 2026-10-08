@@ -50,6 +50,7 @@ app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
 app.MapRepositoryEndpoints();
+app.MapEvidenceEndpoints();
 
 app.Run();
 

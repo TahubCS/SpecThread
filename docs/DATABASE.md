@@ -122,6 +122,52 @@ docs/schema/project-repositories.sql once in the Supabase SQL editor. Rollback:
 `dotnet ef database update AuthRateLimits --project app/api`, or the rollback
 script. It drops only the repository connections, which owners can recreate.
 
+## Requirement evidence migration
+
+RequirementEvidence adds public.requirement_evidence: one row per issue or pull
+request linked to a requirement, with what GitHub reported when it was last read
+(ADR-033). A unique index allows each item once per requirement. RLS is enabled with
+no allow policies; PUBLIC, anon, and authenticated grants are revoked. It changes no
+existing table and depends on ProjectRepositories only for ordering.
+
+```sh
+dotnet ef migrations add RequirementEvidence --project app/api --configuration Release
+node scripts/generate-requirement-evidence.mjs
+```
+
+Apply it after ProjectRepositories and before deploying an API with the evidence
+endpoints: with the API stopped, `dotnet ef database update RequirementEvidence
+--project app/api`, or run docs/schema/requirement-evidence.sql once in the Supabase
+SQL editor. Rollback: `dotnet ef database update ProjectRepositories --project
+app/api`, or requirement-evidence-rollback.sql. It deletes every evidence link;
+members can link the items again, but who linked them and when is lost.
+
+## Evidence commits migration
+
+EvidenceCommits changes public.requirement_evidence so a row can be a commit
+(ADR-034): `number` and `state` become optional; `sha`, `additions`, `deletions`,
+`changed_files`, `commit_count`, and `commits` (jsonb) are added; check constraints
+require a commit to have a 40-digit SHA and no number or state, and an issue or pull
+request to have a number and a state; a unique index allows each commit once per
+requirement. Existing rows stay valid. RLS and grants on the table are unchanged.
+
+```sh
+dotnet ef migrations add EvidenceCommits --project app/api --configuration Release
+node scripts/generate-evidence-commits.mjs
+```
+
+The second command adds one statement to the migration's rollback, which deletes
+commit links before the old constraints return, and generates
+docs/schema/evidence-commits.sql and evidence-commits-rollback.sql.
+
+Apply it after RequirementEvidence: with the API stopped,
+`dotnet ef database update --project app/api` applies every pending migration in
+order; or run the SQL scripts in order in the Supabase SQL editor. Rollback:
+`dotnet ef database update RequirementEvidence --project app/api`, or the rollback
+script. It deletes every commit link and the stored changes and commits of pull
+requests, and leaves `number` and `state` with empty defaults that the original
+migration did not have.
+
 ## Supabase tooling
 
 ```sh

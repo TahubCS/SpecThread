@@ -54,6 +54,20 @@ to the project; non-members get 404 as if the project did not exist.
 | PUT | `/projects/{projectId}/repository` | owner | `{ installationId, repositoryId, githubToken }` | 200 `{ repository: ProjectRepository }` |
 | DELETE | `/projects/{projectId}/repository` | owner | | 204 (idempotent) |
 
+| GET | `/requirements/{requirementId}/evidence` | member | | 200 `Evidence[]` (oldest first by GitHub's created time) |
+| POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
+| POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
+| DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
+
+`reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
+40 hex digits, or the github.com address of any of them, in the project's connected
+repository (ADR-033, ADR-034). Digits alone are read as a number. The API reads the
+item from GitHub before saving. Unknown items and links to another repository are 400
+on `reference`. Refresh re-reads issues and pull requests, not commits.
+409 carries the reason in `detail`: already linked, 50 links reached, no repository
+connected, the app uninstalled, or an archived requirement or project. 502 and 503
+mean the same as for repositories.
+
 `githubToken` is the signed-in user's own GitHub token for the SpecThread GitHub App
 (ADR-032). In the web app use `gitHubAccess()` from `@/lib/github-data`; never send
 the token to the browser. The API uses it for that request only. A token GitHub
@@ -87,6 +101,18 @@ type AvailableRepository = {
   installationId: number; repositoryId: number; owner: string; name: string; fullName: string; isPrivate: boolean;
 };
 type ProjectRepository = AvailableRepository & { url: string; connectedBy: string; connectedAt: string };
+type EvidenceCommit = { sha: string; message: string; author: string | null; date: string; url: string };
+type Evidence = {
+  id: string; requirementId: string; kind: "issue" | "pull_request" | "commit";
+  number: number | null;                        // issues and pull requests
+  state: "open" | "closed" | "merged" | null;   // issues and pull requests
+  sha: string | null;                           // a commit, or a pull request's latest commit
+  title: string; author: string | null; url: string; repository: string;
+  additions: number | null; deletions: number | null; changedFiles: number | null; // pull requests and commits
+  commitCount: number | null; commits: EvidenceCommit[] | null;                    // pull requests (first 100 commits)
+  githubCreatedAt: string; githubUpdatedAt: string; githubClosedAt: string | null;
+  linkedBy: string; linkedAt: string; refreshedAt: string;
+};
 ```
 
 Timestamps are ISO 8601 UTC strings. Text is trimmed before saving.

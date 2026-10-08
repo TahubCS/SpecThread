@@ -7,6 +7,7 @@ import {
   isUuid, parseMembers, parseProject, parseRequirementSummaries,
   type Project, type ProjectMember, type RequirementSummary,
 } from "./projects";
+import { parseEvidenceList, type Evidence } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
@@ -58,4 +59,11 @@ export const requireRequirement = cache(async (projectId: string, requirementId:
   const requirement = parseRequirement(body);
   if (requirement.projectId !== projectId) notFound();
   return requirement;
+});
+
+/** Lists the issues and pull requests linked to a requirement, oldest first. Call after `requireRequirement`. */
+export const listEvidence = cache(async (requirementId: string): Promise<Evidence[]> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence`) : null;
+  if (body === null) notFound();
+  return parseEvidenceList(body);
 });

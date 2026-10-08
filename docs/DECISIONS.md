@@ -636,6 +636,63 @@ snapshot from connection time and is not updated if it is renamed. Listing stops
 app that calls it: against an older API, project pages show not-found. Linking
 issues and pull requests, checks, releases, and webhooks are later slices.
 
+ADR-033: Issues and pull requests are linked to a requirement as stored GitHub snapshots
+
+Status: Accepted
+
+Context: With a repository connected (ADR-032), a requirement needs the issues and
+pull requests that implement it. The product must keep inspectable evidence
+(ADR-004), and no webhook exists yet.
+
+Decision: `requirement_evidence` (migration RequirementEvidence) stores one row per
+linked issue or pull request: its kind, number, title, state (open, closed, or
+merged), author, GitHub link, GitHub's created, updated, and closed times, the
+repository it came from, who linked it, and when it was last read. Any project member
+links an item by number, `#number`, or its github.com address, which must be in the
+project's connected repository. The API reads the item from GitHub as the app
+(installation token) before saving, so only items that exist can be linked. A
+requirement holds at most 50 links and each item once. "Refresh" reads every linked
+item of the connected repository again and saves only if all reads succeed; an item
+GitHub no longer has keeps its last snapshot. Unlinking removes the row only.
+Archived requirements and projects are read-only. Without a connected repository,
+existing links stay readable but cannot change. A missing item is 400 on
+`reference`; a duplicate, the limit, no repository, or an uninstalled app is 409 with
+the reason in `detail`.
+
+Consequences: Evidence is as fresh as the last refresh; nothing updates on its own
+until webhooks exist. An installation token is created for every GitHub read and is
+not cached. Commits, check results, and releases are not shown yet. Reconnecting a
+different repository leaves earlier links as unrefreshable snapshots.
+
+ADR-034: Commits are evidence, linked directly and shown inside pull requests
+
+Status: Accepted
+
+Context: The user's purpose for the product is that the changes made in commits
+count as evidence, not only issues and pull requests.
+
+Decision: A commit of the connected repository can be linked to a requirement by its
+SHA (7 to 40 hex digits) or its github.com address, including the address of a commit
+opened inside a pull request. The API reads it from GitHub as the app and stores the
+full SHA, the first line of the message (at most 300 characters), the author
+(GitHub account, otherwise the name written in the commit), the commit date, and the
+lines added, lines removed, and files changed. A linked pull request now also stores
+its totals (commits, lines added and removed, files changed), its latest commit's
+SHA, and its first 100 commits as a JSON array, shown on demand. Migration
+EvidenceCommits changes `requirement_evidence`: `number` and `state` become optional,
+and `sha`, `additions`, `deletions`, `changed_files`, `commit_count`, and `commits`
+are added. A check constraint requires a commit to have a SHA and no number or state,
+and an issue or pull request to have a number and a state. A commit can be linked
+once per requirement. Text made only of digits is read as an issue number. Refresh
+reads issues and pull requests again but not commits, because a commit does not
+change.
+
+Consequences: A commit whose SHA is all digits and seven or more long must be linked
+by its address. Files changed in a commit is the number GitHub lists, which it caps
+for very large commits. Rolling the migration back deletes commit links. Check
+results and releases are still to come; the pull request's latest commit SHA is
+stored so check results can be read for it later.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

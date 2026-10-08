@@ -1,6 +1,81 @@
 # Shared handoff
 
-## Current task: Evidence slice 1, connecting a GitHub repository (2026-10-08)
+## Current task: Evidence slice 3, commits as evidence (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, together with slice 2 below.
+- Completed (ADR-034): a commit can be linked to a requirement by SHA or address and
+  shows its message, author, date, and lines and files changed. A linked pull request
+  shows its totals and lists its commits on demand.
+- Changed files beyond slice 2: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+  `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+  `20261008082151_EvidenceCommits` and the model snapshot,
+  `scripts/generate-evidence-commits.mjs`, `docs/schema/evidence-commits{,-rollback}.sql`,
+  `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+  `app/web/src/app/app-shell.css`, `scripts/{test-github,test-database}.mjs`,
+  `tests/support/github.ts`, `tests/e2e/evidence.spec.ts`,
+  `tests/schema/{evidence,github-repository}.spec.ts`, `tests/api/project-data.spec.ts`,
+  and docs/{DECISIONS,API,DATABASE,TESTING,HANDOFF}.md.
+- Checks: 155 browser tests and the 15 evidence and repository API tests passed in one
+  run; the project-data unit tests passed in the run before the last database-rule
+  fix, which did not touch them. Run with a temporary config without the test API on
+  port 5100. `npm run lint`, `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub.
+  - **Setup**: apply the pending migrations (RequirementEvidence, then
+    EvidenceCommits; `dotnet ef database update --project app/api` does both) and
+    restart or redeploy the API before the requirement page works.
+  - A test found that the first version of the new check constraint allowed a commit
+    with no SHA and an issue with no number; the constraint was corrected before the
+    migration was ever applied.
+- Next step: check results for a linked pull request, then releases. After evidence,
+  the three follow-ups listed below (review decision, reordering criteria, evidence
+  count on lists).
+
+## Previous task: Evidence slice 2, linking issues and pull requests (2026-10-08)
+
+- Branch: `feature/project-ui`. Slice 1 below is committed (`b062d13`). This entry is
+  uncommitted.
+- Completed (ADR-033): a requirement page has an Evidence section. Members link an
+  issue or pull request from the connected repository by number or address, see the
+  items as a timeline with state and author as GitHub reported them, refresh them from
+  GitHub, and remove a link.
+- Changed files:
+  - API: `app/api/GitHub/{EvidenceEndpoints,GitHubClient,RepositoryEndpoints}.cs`,
+    `app/api/Program.cs`, `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`,
+    migration `20261008073621_RequirementEvidence` and the model snapshot.
+  - Schema: `scripts/generate-requirement-evidence.mjs`,
+    `docs/schema/requirement-evidence{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{evidence,project-data}.ts`,
+    `app/web/src/app/projects/evidence-actions.ts`,
+    `app/web/src/components/{evidence-panel,repository-connect}.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `tests/e2e/{evidence,repository}.spec.ts`, `tests/schema/{evidence,github-repository}.spec.ts`,
+    `tests/api/project-data.spec.ts`, `tests/support/{github,api-process}.ts`,
+    `scripts/{test-github,test-database}.mjs`.
+  - Docs: DECISIONS (ADR-033), API, DATABASE, TESTING, and this file.
+- Checks: 154 browser tests and the 13 evidence and repository API tests passed in one
+  run, and the project-data unit tests passed, with a temporary config that left out
+  the test API on port 5100, which the user's dev API held. `npm run lint`,
+  `npm run typecheck`, the Release API build, and `dotnet format app/api
+  --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub. The user connected a real repository in slice 1; linking has only been
+    tried against the stand-in.
+  - **Setup before it works locally or in production**: apply the RequirementEvidence
+    migration (docs/DATABASE.md), then restart or redeploy the API. Until then a
+    requirement page shows not-found (old API) or the error page (missing table).
+  - Evidence does not update on its own; someone presses Refresh.
+  - Two fixes found by tests: a refused repository connect no longer clears the chosen
+    repository, and test API instances no longer pick up a developer's user-secrets.
+- Next step: slice 3, commits and check results for a linked pull request, then
+  slice 4, releases. After evidence, the three follow-ups listed below (review
+  decision, reordering criteria, evidence count on lists).
+
+## Previous task: Evidence slice 1, connecting a GitHub repository (2026-10-08)
 
 - Branch: `feature/project-ui`. Uncommitted, on top of the uncommitted requirements
   work and members removal described below.

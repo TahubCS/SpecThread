@@ -10,6 +10,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<Requirement> Requirements => Set<Requirement>();
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
     public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
+    public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -113,5 +114,46 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         repository.Property(x => x.ConnectedAt).HasColumnName("connected_at").HasDefaultValueSql("now()");
         repository.HasOne<Project>().WithOne().HasForeignKey<ProjectRepository>(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         repository.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.ConnectedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var evidence = model.Entity<RequirementEvidence>();
+        evidence.ToTable("requirement_evidence", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit')");
+            table.HasCheckConstraint("ck_requirement_evidence_state", "state IS NULL OR state IN ('open', 'closed', 'merged')");
+            table.HasCheckConstraint("ck_requirement_evidence_repository", "repository_id > 0");
+            // A commit is identified by its SHA; an issue or pull request by its number, and it has a state.
+            table.HasCheckConstraint("ck_requirement_evidence_identity",
+                "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL) OR (kind <> 'commit' AND number IS NOT NULL AND number > 0 AND state IS NOT NULL)");
+            table.HasCheckConstraint("ck_requirement_evidence_changes",
+                "COALESCE(additions, 0) >= 0 AND COALESCE(deletions, 0) >= 0 AND COALESCE(changed_files, 0) >= 0 AND COALESCE(commit_count, 0) >= 0");
+        });
+        evidence.HasKey(x => x.Id);
+        evidence.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        evidence.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        evidence.Property(x => x.Kind).HasColumnName("kind");
+        evidence.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        evidence.Property(x => x.RepositoryOwner).HasColumnName("repository_owner");
+        evidence.Property(x => x.RepositoryName).HasColumnName("repository_name");
+        evidence.Property(x => x.Number).HasColumnName("number");
+        evidence.Property(x => x.Sha).HasColumnName("sha");
+        evidence.Property(x => x.Additions).HasColumnName("additions");
+        evidence.Property(x => x.Deletions).HasColumnName("deletions");
+        evidence.Property(x => x.ChangedFiles).HasColumnName("changed_files");
+        evidence.Property(x => x.CommitCount).HasColumnName("commit_count");
+        evidence.Property(x => x.Commits).HasColumnName("commits").HasColumnType("jsonb");
+        evidence.Property(x => x.Title).HasColumnName("title");
+        evidence.Property(x => x.State).HasColumnName("state");
+        evidence.Property(x => x.Author).HasColumnName("author");
+        evidence.Property(x => x.Url).HasColumnName("url");
+        evidence.Property(x => x.GitHubCreatedAt).HasColumnName("github_created_at");
+        evidence.Property(x => x.GitHubUpdatedAt).HasColumnName("github_updated_at");
+        evidence.Property(x => x.GitHubClosedAt).HasColumnName("github_closed_at");
+        evidence.Property(x => x.LinkedBy).HasColumnName("linked_by");
+        evidence.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+        evidence.Property(x => x.RefreshedAt).HasColumnName("refreshed_at").HasDefaultValueSql("now()");
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Number }).IsUnique();
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Sha }).IsUnique().HasFilter("kind = 'commit'");
+        evidence.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        evidence.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
