@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Data;
 
@@ -15,6 +16,9 @@ internal static class ProjectAccess
     // so endpoints answer 404 rather than revealing that it exists.
     public static IQueryable<Project> ProjectsFor(this SpecThreadDbContext db, string userId) =>
         db.Projects.Where(p => db.ProjectMembers.Any(m => m.ProjectId == p.Id && m.UserId == userId));
+    public static Task<bool> CanManageTeam(this SpecThreadDbContext db, Guid teamId, string userId, CancellationToken cancel) =>
+        db.Teams.AnyAsync(t => t.Id == teamId && db.TeamMembers.Any(m => m.TeamId == t.Id && m.UserId == userId &&
+            (t.OwnerUserId == userId || m.Role == "admin")), cancel);
 }
 
 // Boundary validation for user-supplied text. Limits are recorded in ADR-024.

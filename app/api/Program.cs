@@ -48,6 +48,7 @@ app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
 app.MapTeamEndpoints();
+app.MapTeamManagementEndpoints();
 
 app.Run();
 

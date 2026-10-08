@@ -1,9 +1,10 @@
 "use client";
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
-import { Archive, Link as LinkIcon, MoreHorizontal, Settings, Star } from "lucide-react";
+import { Archive, Link as LinkIcon, LogOut, MoreHorizontal, Settings, Star } from "lucide-react";
 import type { Team } from "@/lib/team-types";
 import { updateTeamPreferences } from "./team-preferences";
+import { LeaveTeamDialog } from "./leave-team-button";
 import styles from "./teams.module.css";
 
 /** Native popover escapes the sidebar's scroll container and supports Tab/Escape. */
@@ -14,6 +15,7 @@ export function TeamMenu({ team, onChange }: { team: Team; onChange?: (team: Tea
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [favorite, setFavorite] = useState(team.isFavorite);
+  const [leaving, setLeaving] = useState(false);
   const base = "/teams/" + team.id;
   async function toggleFavorite() {
     setBusy(true); setMessage("");
@@ -44,7 +46,9 @@ export function TeamMenu({ team, onChange }: { team: Team; onChange?: (team: Tea
       }}><LinkIcon size={17} />Copy URL</button>
       <Link href={base + "/archive"} onClick={() => menu.current?.hidePopover()}><Archive size={17} />Open archive</Link>
       <hr />
+      <button onClick={() => { menu.current?.hidePopover(); setLeaving(true); }}><LogOut size={17} />Leave team…</button>
       {message && <p role="status">{message}</p>}
     </div>
+    <LeaveTeamDialog team={team} open={leaving} onClose={() => setLeaving(false)} />
   </>;
 }

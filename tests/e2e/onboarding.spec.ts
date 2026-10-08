@@ -57,6 +57,7 @@ test("team groups expand independently and persist favorites and expansion", asy
     const menu = second.getByRole("group", { name: "Actions for Z team", exact: true });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("link")).toHaveText(["Team settings", "Open archive"]);
+    await expect(menu.getByRole("button", { name: "Leave team…", exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("team-menu-desktop.png"), fullPage: true });
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();

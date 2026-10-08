@@ -108,6 +108,8 @@ internal static class ProjectEndpoints
     internal static ProblemHttpResult OwnerOnly() =>
         TypedResults.Problem("Only the project owner can do this.", statusCode: StatusCodes.Status403Forbidden);
 
+    internal static ProblemHttpResult ManagersOnly() => TypedResults.Problem("Only the team Owner or an Admin can do this.", statusCode: StatusCodes.Status403Forbidden);
+
     private static ProjectResponse ToResponse(Project p) =>
         new(p.Id, p.Name, p.OwnerUserId, p.CreatedAt, p.ArchivedAt);
 }
