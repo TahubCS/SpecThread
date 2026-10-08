@@ -49,6 +49,19 @@ to the project; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/members` | owner | `{ email }` | 201 `ProjectMember` |
 | DELETE | `/projects/{projectId}/members/{userId}` | owner, or that member leaving | | 204 |
 
+| POST | `/github/repositories` | any user | `{ githubToken }` | 200 `{ installUrl, repositories: AvailableRepository[], truncated }` |
+| GET | `/projects/{projectId}/repository` | member | | 200 `{ repository: ProjectRepository \| null }` |
+| PUT | `/projects/{projectId}/repository` | owner | `{ installationId, repositoryId, githubToken }` | 200 `{ repository: ProjectRepository }` |
+| DELETE | `/projects/{projectId}/repository` | owner | | 204 (idempotent) |
+
+`githubToken` is the signed-in user's own GitHub token for the SpecThread GitHub App
+(ADR-032). In the web app use `gitHubAccess()` from `@/lib/github-data`; never send
+the token to the browser. The API uses it for that request only. A token GitHub
+rejects is 400 on `githubToken`; a repository GitHub does not show that user through
+that installation is 400 on `repositoryId`; an installation the app can no longer act
+on is 400 on `installationId`. GitHub being unreachable is 502. Missing or rejected
+app credentials are 503.
+
 Adding a member needs the email of an existing SpecThread account with a verified
 address. The match ignores case. Otherwise the response is 400 with an error on `email`.
 Adding someone who is already a member returns 409. The owner can't be removed (409).
@@ -70,6 +83,10 @@ type Requirement = RequirementSummary & {
   acceptanceCriteria: { id: string; text: string; position: number }[];
 };
 type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean };
+type AvailableRepository = {
+  installationId: number; repositoryId: number; owner: string; name: string; fullName: string; isPrivate: boolean;
+};
+type ProjectRepository = AvailableRepository & { url: string; connectedBy: string; connectedAt: string };
 ```
 
 Timestamps are ISO 8601 UTC strings. Text is trimmed before saving.

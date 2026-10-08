@@ -96,6 +96,32 @@ reverting the web app to memory storage first, then running
 limit counters, resetting throttles; it preserves users, sessions, and product
 data. Never apply the full initial rollback to undo this change.
 
+## Project repositories migration
+
+ProjectRepositories adds public.project_repositories: one row per project with the
+GitHub installation and repository IDs, the owner and name at connection time, and
+who connected it and when (ADR-032). RLS is enabled with no allow policies; PUBLIC,
+anon, and authenticated grants are revoked. It does not change any existing table.
+
+Generation commands (offline connection settings suffice):
+
+```sh
+dotnet ef migrations add ProjectRepositories --project app/api --configuration Release
+node scripts/generate-project-repositories.mjs
+```
+
+The second command appends the RLS statements and generates
+docs/schema/project-repositories.sql and project-repositories-rollback.sql. It can
+be rerun.
+
+Apply it before deploying an API that has the repository endpoints, and deploy that
+API before the web app that calls them. With the API stopped and
+`ConnectionStrings:Database` set, run
+`dotnet ef database update ProjectRepositories --project app/api`, or run
+docs/schema/project-repositories.sql once in the Supabase SQL editor. Rollback:
+`dotnet ef database update AuthRateLimits --project app/api`, or the rollback
+script. It drops only the repository connections, which owners can recreate.
+
 ## Supabase tooling
 
 ```sh

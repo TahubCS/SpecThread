@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Box } from "lucide-react";
 import { RequirementRows } from "@/components/requirement-rows";
+import { getProjectRepository } from "@/lib/github-data";
 import { listMembers, listRequirements, requireProject } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
@@ -8,7 +9,9 @@ import { formatDate } from "@/lib/projects";
 export default async function Page({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
   const project = await requireProject(projectId);
-  const [requirements, members] = await Promise.all([listRequirements(projectId), listMembers(projectId)]);
+  const [requirements, members, repository] = await Promise.all([
+    listRequirements(projectId), listMembers(projectId), getProjectRepository(projectId),
+  ]);
   const owner = members.find(member => member.isOwner);
   const recent = [...requirements].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);
 
@@ -40,6 +43,8 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
             <dd><span className={`status-dot${project.archivedAt ? "" : " is-active"}`} aria-hidden="true" />{project.archivedAt ? "Archived" : "Active"}</dd>
             <dt>Owner</dt>
             <dd>{owner?.name ?? "Unknown"}</dd>
+            <dt>Repository</dt>
+            <dd><Link href={`/projects/${project.id}/settings/repository`}>{repository ? repository.fullName : "Not connected"}</Link></dd>
             <dt>Requirements</dt>
             <dd><Link href={`/projects/${project.id}/requirements`}>{requirements.length}</Link></dd>
             <dt>Created</dt>

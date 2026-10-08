@@ -56,7 +56,7 @@ test("projects are listed by name, and other users cannot see or open them", asy
   const otherPage = await other.newPage();
   await otherPage.goto("/projects");
   await expect(otherPage.getByText("You have no projects yet.")).toBeVisible();
-  for (const path of [`/projects/${billing}`, `/projects/${billing}/requirements`, `/projects/${billing}/settings/repository`, "/projects/not-a-project"]) {
+  for (const path of [`/projects/${billing}`, `/projects/${billing}/requirements`, `/projects/${billing}/settings/verification`, "/projects/not-a-project"]) {
     // The loading state has already started the response, so the status stays 200.
     await otherPage.goto(path);
     await expect(otherPage.getByRole("heading", { name: "Page not found" }), path).toBeVisible();
@@ -115,8 +115,8 @@ test("project tabs show its requirements, planned sections keep the frame, and t
   await page.goto(`/projects/${projectId}/members`);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/settings/repository`);
-  await expect(page.getByRole("heading", { name: "Repository settings", level: 1 })).toBeVisible();
+  await page.goto(`/projects/${projectId}/settings/verification`);
+  await expect(page.getByRole("heading", { name: "Verification settings", level: 1 })).toBeVisible();
   await expect(page.getByText("Product data and actions are not connected yet.")).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Checkout" })).toBeVisible();

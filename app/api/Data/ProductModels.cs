@@ -36,3 +36,16 @@ public sealed class AcceptanceCriterion
     public required string Text { get; set; }
     public int Position { get; set; }
 }
+
+// The one GitHub repository a project reads evidence from (ADR-032).
+public sealed class ProjectRepository
+{
+    public Guid ProjectId { get; set; }
+    public long InstallationId { get; set; }
+    public long RepositoryId { get; set; }
+    public required string Owner { get; set; }
+    public required string Name { get; set; }
+    public bool IsPrivate { get; set; }
+    public required string ConnectedBy { get; set; }
+    public DateTime ConnectedAt { get; set; }
+}

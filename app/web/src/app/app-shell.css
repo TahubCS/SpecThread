@@ -297,6 +297,27 @@ a.row:focus-visible { outline-offset: -2px; }
 .criteria-inputs .field { flex: 1; min-width: 0; }
 .criteria-inputs .icon-button { width: 36px; height: 36px; }
 .project-page .settings-block.is-danger { max-width: none; }
+/* Repository connection */
+.settings-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; padding: 12px 14px; border: 1px solid var(--app-line); border-radius: 10px; color: var(--app-text); }
+.settings-link:hover { border-color: var(--app-line-strong); background: var(--app-hover); }
+.settings-link > span { display: grid; gap: 2px; min-width: 0; }
+.settings-link strong { font-weight: 500; }
+.settings-link span span { overflow: hidden; color: var(--app-text-2); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.settings-link svg { flex: none; color: var(--app-text-3); }
+.repository-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.repository-card p { flex-basis: 100%; margin: 0; color: var(--app-text-2); font-size: 13px; }
+.repository-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--app-text); font-weight: 600; overflow-wrap: anywhere; }
+.repository-name:hover { text-decoration: underline; }
+.repository-name svg { flex: none; color: var(--app-text-3); }
+.repository-help { margin: 0 0 16px; color: var(--app-text-2); }
+.repository-help a, .app-main .notice a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+.repository-picker fieldset { min-width: 0; margin: 0 0 16px; padding: 0; border: 0; }
+.repository-picker legend { margin-bottom: 8px; padding: 0; font-size: 13px; font-weight: 500; }
+.repository-picker label.row { cursor: pointer; }
+.repository-picker label.row:hover { background: var(--app-hover); }
+.repository-picker input[type="radio"] { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--app-text); }
+.repository-picker > .notice { margin-bottom: 16px; }
+.app-main .badge svg { margin-right: 4px; }
 /* Planned sections inside a project share its frame. */
 .project-tabs ~ .scaffold-page { padding-top: 24px; }
 

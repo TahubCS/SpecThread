@@ -72,7 +72,7 @@ test("every reserved page participates in navigation", async () => {
   const root = path.join(process.cwd(), "app/web/src/app");
   // Pages that no longer use the placeholder stay in the route catalog.
   const connected = ["dashboard", "settings/account", "projects", "projects/new", "projects/[projectId]",
-    "projects/[projectId]/requirements", "projects/[projectId]/settings",
+    "projects/[projectId]/requirements", "projects/[projectId]/settings", "projects/[projectId]/settings/repository",
     "projects/[projectId]/requirements/new", "projects/[projectId]/requirements/[requirementId]",
     "projects/[projectId]/requirements/[requirementId]/edit",
   ].map(route => path.join(root, route, "page.tsx"));

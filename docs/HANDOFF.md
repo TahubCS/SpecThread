@@ -1,6 +1,45 @@
 # Shared handoff
 
-## Current task: Requirements in the project workspace (2026-10-08)
+## Current task: Evidence slice 1, connecting a GitHub repository (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, on top of the uncommitted requirements
+  work and members removal described below.
+- Completed (ADR-032): the owner connects one GitHub repository to a project in
+  Settings > Repository, through the GitHub App, and can disconnect it. The connection
+  shows in the project's details panel and Settings.
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,RepositoryEndpoints}.cs`, `app/api/Program.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008070130_ProjectRepositories` and the model snapshot.
+  - Schema: `scripts/generate-project-repositories.mjs`,
+    `docs/schema/project-repositories{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{repositories,github-data}.ts`,
+    `app/web/src/app/projects/repository-actions.ts`,
+    `app/web/src/components/repository-connect.tsx`,
+    `app/web/src/app/projects/[projectId]/settings/{page,repository/page}.tsx`,
+    `app/web/src/app/projects/[projectId]/page.tsx`, `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github.mjs,test-github.d.mts,start-test-web.mjs,test-database.mjs}`,
+    `tests/support/github.ts`, `tests/e2e/repository.spec.ts`,
+    `tests/schema/github-repository.spec.ts`, `tests/api/{project-data,products}.spec.ts`,
+    `playwright.config.ts` (dummy GitHub client values for the test web app).
+  - Docs: DECISIONS (ADR-032), API, DATABASE, DEPLOYMENT, TESTING, and this file.
+- Checks: all 144 browser tests, the 7 repository API tests, and the project-data unit
+  tests passed, run with a temporary config that left out the test API on port 5100,
+  which the user's dev API held. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100 (including the edited
+    `tests/api/products.spec.ts`), the other schema specs, and the real GitHub.
+  - **Local and production setup is needed before project pages work again**: apply the
+    ProjectRepositories migration, restart or redeploy the API, and set the GitHub
+    settings (docs/DEPLOYMENT.md). Until then project pages show not-found, because the
+    running API has no repository endpoint.
+  - Codex's teams branch will add its own migration; the two need ordering when the
+    branches meet.
+- Next step: slice 2, linking issues and pull requests to a requirement. Then the
+  three follow-ups listed in the next entry.
+
+## Previous task: Requirements in the project workspace (2026-10-08)
 
 - Branch: `feature/project-ui`, fast-forwarded to `feature/visual-polish` at `4fc3492`
   and pushed. The two branches are the same up to that commit. The changes in this

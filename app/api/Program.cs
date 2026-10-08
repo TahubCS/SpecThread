@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
+using SpecThread.Api.GitHub;
 using SpecThread.Api.Projects;
 using SpecThread.Api.Requirements;
 
@@ -21,6 +22,8 @@ builder.Services.AddDbContext<SpecThreadDbContext>(options =>
 
     options.UseNpgsql(connectionString);
 });
+
+builder.Services.AddHttpClient<IGitHubClient, GitHubClient>(GitHubClient.Configure);
 
 var app = builder.Build();
 
@@ -46,6 +49,7 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
 app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
+app.MapRepositoryEndpoints();
 
 app.Run();
 

@@ -53,7 +53,11 @@ issuer. Auth tests also start extra API instances on 5102-5104, and product API 
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
 the web test database and trusts the test web app as its token issuer. The web app
 reaches it through a test-only proxy on 5107 (scripts/test-api-proxy.mjs), set as
-SPECTHREAD_API_URL. A test calls `failApi` from tests/support/api-faults.ts to make the
+SPECTHREAD_API_URL. The test API talks to a stand-in for GitHub on 5108
+(scripts/test-github.mjs) with an app key generated for the run; tests describe what
+one user's GitHub token can see with tests/support/github.ts and never reach the
+real GitHub. The repository API tests use their own stand-in on 5109 and API
+instances on 5110 and 5111. A test calls `failApi` from tests/support/api-faults.ts to make the
 API fail, drop the connection, answer with a wrong body, or respond slowly for that
 test's own user only, so parallel tests are unaffected. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
@@ -115,6 +119,18 @@ currently require network access during the web build.
   requirement parsing, input trimming and limits, and mapping problem details to
   fields. Not exercised: 50 criteria through the browser, and two saves landing in
   the same instant.
+- GitHub repository connection (ADR-032). Browser: connecting, seeing the repository
+  across the project, and disconnecting after confirmation; no linked GitHub account;
+  a rejected GitHub sign-in; no installation; the choice kept after a refused attempt;
+  a repository or installation that disappeared; non-owners and archived projects
+  seeing it read-only; GitHub down, rate limiting, dropping connections, or answering
+  wrongly while listing and while connecting; API failures while connecting and
+  disconnecting; and the error page inside the project frame. API (schema suite):
+  owner-only changes, 404 for non-members, refusing other users' installations and
+  repositories and mismatched pairs, input validation, paging past 100 repositories
+  and the 500 limit, 502 and 503 mapping, missing app credentials, anonymous 401, the
+  user's token never being stored, and the migration's RLS, constraints, and rollback.
+  Not exercised: the real GitHub, and an expired GitHub token being refreshed.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

@@ -1,8 +1,10 @@
 import { spawn, execFileSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { startTestDatabase } from "./test-database.mjs";
 import buildApi from "./build-api.mjs";
 import { startApiProxy } from "./test-api-proxy.mjs";
+import { startFakeGitHub } from "./test-github.mjs";
 
 // Playwright starts webServer entries in order, before globalSetup.
 // Build here before the second entry starts the API and locks its DLL on Windows.
@@ -11,6 +13,10 @@ buildApi();
 const apiOrigin = "http://127.0.0.1:5106";
 // The web app reaches the API through this proxy, so tests can make API calls fail for one user.
 const proxyOrigin = "http://127.0.0.1:5107";
+// A stand-in for GitHub, so tests never reach the real one. The app key exists only for this run.
+const gitHubOrigin = "http://127.0.0.1:5108";
+const gitHubAppId = "424242";
+const gitHubKey = generateKeyPairSync("rsa", { modulusLength: 2048 });
 let database;
 let api;
 let server;
@@ -39,12 +45,17 @@ try {
       ...process.env,
       ConnectionStrings__Database: `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}`,
       Auth__Issuer: process.env.BETTER_AUTH_URL,
+      GitHub__ApiBaseUrl: gitHubOrigin,
+      GitHub__AppId: gitHubAppId,
+      GitHub__AppSlug: "specthread-test",
+      GitHub__PrivateKey: gitHubKey.privateKey.export({ type: "pkcs1", format: "pem" }),
     },
     stdio: "inherit",
   });
   api.on("exit", code => void stop(code ?? 1));
   api.on("error", () => void stop(1));
   await startApiProxy({ port: 5107, upstream: apiOrigin });
+  await startFakeGitHub({ port: 5108, appId: gitHubAppId, publicKey: gitHubKey.publicKey });
   const env = { ...process.env, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: proxyOrigin };
   execFileSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], { cwd: "app/web", env, stdio: "inherit" });
   server = spawn(process.execPath, ["../../node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3100"], { cwd: "app/web", env, stdio: "inherit" });

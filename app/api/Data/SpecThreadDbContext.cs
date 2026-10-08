@@ -9,6 +9,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Requirement> Requirements => Set<Requirement>();
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
+    public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -94,5 +95,23 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         criterion.Property(x => x.Position).HasColumnName("position");
         criterion.HasIndex(x => new { x.RequirementId, x.Position }).IsUnique();
         criterion.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+
+        var repository = model.Entity<ProjectRepository>();
+        repository.ToTable("project_repositories", table =>
+        {
+            table.HasCheckConstraint("ck_project_repositories_ids", "installation_id > 0 AND repository_id > 0");
+            table.HasCheckConstraint("ck_project_repositories_name", "length(btrim(owner)) > 0 AND length(btrim(name)) > 0");
+        });
+        repository.HasKey(x => x.ProjectId);
+        repository.Property(x => x.ProjectId).HasColumnName("project_id").ValueGeneratedNever();
+        repository.Property(x => x.InstallationId).HasColumnName("installation_id");
+        repository.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        repository.Property(x => x.Owner).HasColumnName("owner");
+        repository.Property(x => x.Name).HasColumnName("name");
+        repository.Property(x => x.IsPrivate).HasColumnName("is_private");
+        repository.Property(x => x.ConnectedBy).HasColumnName("connected_by");
+        repository.Property(x => x.ConnectedAt).HasColumnName("connected_at").HasDefaultValueSql("now()");
+        repository.HasOne<Project>().WithOne().HasForeignKey<ProjectRepository>(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        repository.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.ConnectedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -604,6 +604,38 @@ Consequences: Until teams exist in the API, project membership can only be chang
 through the API directly. Project ownership, the project list, and the owner-only
 rules will need to change when projects move under teams.
 
+ADR-032: A project connects one GitHub repository through the GitHub App
+
+Status: Accepted
+
+Context: The user chose a real GitHub connection for evidence. The GitHub App
+`specthread` is also the app used for GitHub sign-in, so a signed-in GitHub user has
+a token issued by it. An installation ID alone must not be trusted: anyone can guess
+one.
+
+Decision: A project has at most one repository, stored in `project_repositories`
+(migration ProjectRepositories). The owner connects it in project Settings. The web
+app reads the owner's GitHub token from their linked GitHub account through Better
+Auth and sends it to the API for that one request; it is never stored by the API,
+logged, or sent to the browser. The API lists repositories with
+`GET /user/installations` and `GET /user/installations/{id}/repositories`, so GitHub
+decides what the user can reach. Before saving, the API finds the chosen repository
+in that installation with the user's token and confirms it can act as the app there
+by creating an installation token. All GitHub calls go through `IGitHubClient`
+(app/api/GitHub). New settings: `GitHub:AppId`, `GitHub:PrivateKey` (PEM; literal
+`\n` accepted), `GitHub:AppSlug`, and optional `GitHub:ApiBaseUrl` for tests. No
+Setup URL or webhook is used. Members read the connection; only the owner connects
+or disconnects; archived projects cannot change it. GitHub being unreachable is 502,
+missing or rejected app credentials 503, and a token or repository GitHub does not
+accept 400 on the field.
+
+Consequences: A user who signed up by email must link GitHub before connecting. The
+web app's GitHub client ID must be this GitHub App's. The repository's name is a
+snapshot from connection time and is not updated if it is renamed. Listing stops at
+500 repositories. The API must be deployed with the migration applied before the web
+app that calls it: against an older API, project pages show not-found. Linking
+issues and pull requests, checks, releases, and webhooks are later slices.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

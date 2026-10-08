@@ -5,6 +5,7 @@ import {
 import {
   parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
+import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
 
 const project = { id: "p1", name: "Billing", ownerUserId: "u1", createdAt: "2026-10-01T10:00:00.123456Z", archivedAt: null };
 
@@ -99,5 +100,30 @@ test("requirement validation problems are mapped to their fields", () => {
   } }, "Failed")).toEqual({ title: "Enter a value.", description: "Too long.", criteria: "Too many.", items: { 2: "Enter a value." } });
   for (const problem of [null, {}, { errors: {} }, { errors: { version: ["Send the version you loaded."] } }, { errors: { title: "text" } }]) {
     expect(requirementProblemErrors(problem, "Failed")).toEqual({ items: {}, form: "Failed" });
+  }
+});
+
+test("repository connections and choices are accepted only in the documented shape", () => {
+  const repository = { installationId: 11, repositoryId: 101, owner: "acme", name: "web", fullName: "acme/web",
+    url: "https://github.com/acme/web", isPrivate: true, connectedBy: "u1", connectedAt: "2026-10-08T10:00:00Z" };
+  expect(parseProjectRepository({ repository: null })).toBeNull();
+  expect(parseProjectRepository({ repository: { ...repository, extra: 1 } })).toEqual(repository);
+  for (const value of [null, {}, { repository: {} }, { repository: { ...repository, installationId: "11" } },
+    { repository: { ...repository, repositoryId: 0 } }, { repository: { ...repository, url: "https://evil.example/acme/web" } },
+    { repository: { ...repository, url: "javascript:alert(1)" } }, { repository: { ...repository, connectedAt: "soon" } }]) {
+    expect(() => parseProjectRepository(value)).toThrow("unexpected repository connection");
+  }
+
+  const available = { installationId: 11, repositoryId: 101, owner: "acme", name: "web", fullName: "acme/web", isPrivate: false };
+  expect(parseAvailableRepositories({ installUrl: null, repositories: [{ ...available, extra: 1 }], truncated: false }))
+    .toEqual({ installUrl: null, repositories: [available], truncated: false });
+  for (const value of [null, [], { installUrl: null, repositories: [], truncated: "no" }, { installUrl: "https://evil.example/install", repositories: [], truncated: false },
+    { installUrl: null, repositories: [{ ...available, repositoryId: 1.5 }], truncated: false }, { installUrl: null, repositories: [null], truncated: false }]) {
+    expect(() => parseAvailableRepositories(value)).toThrow(/unexpected repository/);
+  }
+
+  expect(parseRepositoryChoice("11:101")).toEqual({ installationId: 11, repositoryId: 101 });
+  for (const value of [null, undefined, "", "11", "11:", ":101", "0:101", "11:0", "11:101:5", "-1:101", "1e3:101", "11:abc", " 11:101", "9".repeat(16) + ":1"]) {
+    expect(parseRepositoryChoice(value), String(value)).toBeNull();
   }
 });
