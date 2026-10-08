@@ -1,6 +1,6 @@
 # SpecThread API for the web app
 
-The ASP.NET Core API in app/api owns product data and its rules (ADR-002, ADR-027).
+The ASP.NET Core API in app/api owns product data and its rules (ADR-002, ADR-040).
 This page summarizes the contract. The authoritative schema is the OpenAPI document,
 served in Development at `/openapi/v1.json`.
 
@@ -51,6 +51,43 @@ to the project's team; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/members` | member | | 410 (retired) |
 | DELETE | `/projects/{projectId}/members/{userId}` | member | | 410 (retired) |
 
+| POST | `/github/repositories` | any user | `{ githubToken }` | 200 `{ installUrl, repositories: AvailableRepository[], truncated }` |
+| GET | `/projects/{projectId}/repository` | member | | 200 `{ repository: ProjectRepository \| null }` |
+| PUT | `/projects/{projectId}/repository` | owner | `{ installationId, repositoryId, githubToken }` | 200 `{ repository: ProjectRepository }` |
+| DELETE | `/projects/{projectId}/repository` | owner | | 204 (idempotent) |
+
+| GET | `/requirements/{requirementId}/evidence` | member | | 200 `Evidence[]` (oldest first by GitHub's created time) |
+| POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
+| POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
+| DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
+| GET | `/requirements/{requirementId}/reviews` | member | | 200 `Review[]` (newest first) |
+| POST | `/requirements/{requirementId}/reviews` | member, not the requirement's author | `{ decision, note?, version }` | 201 `Review` |
+
+`reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
+40 hex digits, a release tag, or the github.com address of any of them, in the
+project's connected repository (ADR-033, ADR-034, ADR-037). It is read in that order:
+digits alone are a number, 7 to 40 hex digits are a SHA, and any other text without
+spaces is a release tag, so a tag that looks like a number or a SHA must be given as
+its release address. The API reads the
+item from GitHub before saving. Unknown items and links to another repository are 400
+on `reference`. Refresh re-reads issues, pull requests, and releases, the check
+results of pull requests and commits (ADR-035), and what each release contains; a
+commit itself is not re-read. `source` in the
+request is ignored: links made through this endpoint are always `manual` (ADR-036).
+409 carries the reason in `detail`: already linked, 50 links reached, no repository
+connected, the app uninstalled, or an archived requirement or project. 502 and 503
+mean the same as for repositories.
+
+`githubToken` is the signed-in user's own GitHub token for the SpecThread GitHub App
+(ADR-032). In the web app use `gitHubAccess()` from `@/lib/github-data`; never send
+the token to the browser. The API uses it for that request only. A token GitHub
+rejects is 400 on `githubToken`; a repository GitHub does not show that user through
+that installation is 400 on `repositoryId`; an installation the app can no longer act
+on is 400 on `installationId`. GitHub being unreachable is 502. Missing or rejected
+app credentials are 503.
+
+Adding a member needs the email of an existing SpecThread account with a verified
+address. The match ignores case. Otherwise the response is 400 with an error on `email`.
 Every team member can read every project and edit its requirements. Only the team
 Owner/Admin manage projects. `teamId` is required on creation and immutable on
 rename. Missing/empty IDs return 400 field errors; unknown/inaccessible teams return
@@ -72,12 +109,62 @@ type Project = {
 type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null;
+  // How many evidence links of any kind the requirement has. Only on the list.
+  evidenceCount: number;
+  // The latest decision, or null. Only on the list; a requirement's page reads /reviews.
+  review: { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean } | null;
 };
-type Requirement = RequirementSummary & {
+type Decision = "accepted" | "rejected" | "more_evidence";
+type Review = {
+  id: string; requirementId: string; decision: Decision; note: string;
+  requirementVersion: number; // the version the reviewer saw
+  // The evidence links as they were when the decision was made. label is "#9", a short SHA, or a tag.
+  evidence: { id: string; kind: string; label: string; title: string; state: string | null }[];
+  decidedBy: string; decidedAt: string;
+};
+type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string; createdBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];
 };
 type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean; role: "owner" | "admin" | "member" };
+type AvailableRepository = {
+  installationId: number; repositoryId: number; owner: string; name: string; fullName: string; isPrivate: boolean;
+};
+type ProjectRepository = AvailableRepository & { url: string; connectedBy: string; connectedAt: string };
+type EvidenceCommit = { sha: string; message: string; author: string | null; date: string; url: string };
+type EvidenceCheck = {
+  name: string; result: "passed" | "failed" | "running" | "skipped" | "cancelled" | "neutral";
+  url: string | null;          // only when the check has a page on github.com
+  completedAt: string | null; kind: "check" | "status";
+};
+type Evidence = {
+  id: string; requirementId: string; kind: "issue" | "pull_request" | "commit" | "release";
+  number: number | null;                        // issues and pull requests
+  state: "open" | "closed" | "merged" | null;   // issues and pull requests
+  sha: string | null;                           // a commit, a pull request's latest commit, or a release's tagged commit
+  tag: string | null; prerelease: boolean | null; // releases
+  // Releases: evidence ID of each compared commit or merged pull request -> whether the release's history includes it.
+  // A linked change with no entry was not compared (an unmerged pull request, or one from another repository).
+  contains: Record<string, boolean> | null;
+  title: string; author: string | null; url: string; repository: string;
+  additions: number | null; deletions: number | null; changedFiles: number | null; // pull requests and commits
+  commitCount: number | null; commits: EvidenceCommit[] | null;                    // pull requests (first 100 commits)
+  // Pull requests (latest commit) and commits. checks is null when GitHub would not let them be read;
+  // checkCount is GitHub's total and may exceed the 100 stored. All three are null for issues.
+  checks: EvidenceCheck[] | null; checkCount: number | null; checksReadAt: string | null;
+  source: "manual" | "suggested"; // linkedBy is the person who added or confirmed the link
+  githubCreatedAt: string; githubUpdatedAt: string; githubClosedAt: string | null;
+  linkedBy: string; linkedAt: string; refreshedAt: string;
+};
+```
+
+Review decisions (ADR-038): `note` may have up to 2,000 characters and is required
+for `rejected` and `more_evidence`. `version` is the requirement version the
+reviewer was shown; any other current version is refused with 409. The requirement's
+author gets 403, and an archived requirement or project 409. Decisions are only
+added: there is no update or delete. A decision is `outdated` when the requirement's
+version, or the set of its evidence link IDs, differs from what was reviewed;
+refreshing evidence does not change that.
 ```
 
 `ownerUserId` on Project is retained historical creator provenance. Use `teamRole`
@@ -94,7 +181,7 @@ Errors are problem details (`application/problem+json`) with `title`, `status`, 
 |---|---|---|
 | 400 | Validation failed; `errors` maps fields such as `title` or `acceptanceCriteria[2]` to messages | Show the messages next to the fields |
 | 401 | Missing or invalid token | Send the user to sign in |
-| 403 | Insufficient team role, or the account record is missing | Explain the required role |
+| 403 | Insufficient team role, a decision by the requirement's author, or the account record is missing | Show the `detail` |
 | 404 | Not found, or not a member | Show a not-found state |
 | 409 | Archived item, stale `version`, or onboarding required | Reload, or finish onboarding |
 | 410 | Individual project membership writes retired | Manage membership through the team |
@@ -102,7 +189,7 @@ Errors are problem details (`application/problem+json`) with `title`, `status`, 
 Limits: project names and requirement titles 1-200 characters, descriptions up to 10,000,
 up to 50 acceptance criteria of 1-2,000 characters each, and emails up to 254 characters.
 
-## Teams navigation and onboarding (ADR-026/027)
+## Teams navigation and onboarding (ADR-039/040)
 
 | Method | Path | Who | Body | Success |
 |---|---|---|---|---|
@@ -179,7 +266,7 @@ the existing restore endpoint, which rechecks current permissions. Members can
 view the archive but have no restore controls. Restoration refreshes the archive
 and active-project lists.
 
-## Team invitations (ADR-027)
+## Team invitations (ADR-040)
 
 | Method | Path | Who | Body | Success |
 |---|---|---|---|---|

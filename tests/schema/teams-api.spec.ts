@@ -17,7 +17,7 @@ test.beforeAll(async () => {
     ('member','Member','member@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now())`);
   const connection = new URL(database.connectionString);
-  api = await startApi(5107, { Auth__Issuer: issuer,
+  api = await startApi(5116, { Auth__Issuer: issuer,
     ConnectionStrings__Database: `Host=${connection.hostname};Port=${connection.port};Database=postgres;Username=${connection.username};Password=${connection.password}` });
 });
 test.afterAll(async () => { api?.stop(); await database?.stop(); });

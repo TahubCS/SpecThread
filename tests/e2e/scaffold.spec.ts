@@ -4,11 +4,9 @@ import path from "node:path";
 import { navigationFor, scaffoldRoutes } from "../../app/web/src/lib/scaffold-routes";
 
 const routes = [
-  ["/projects", "Projects"],
-  ["/projects/project-1/settings/repository", "Repository settings"],
-  ["/projects/project-1/requirements/requirement-1/evidence", "Evidence thread"],
-  ["/projects/project-1/requirements/requirement-1/review", "Review requirement"],
-  ["/projects/project-1/matrix", "Traceability matrix"],
+  ["/reviews", "My reviews"],
+  ["/notifications", "Notifications"],
+  ["/help", "Help"],
 ] as const;
 
 test("scaffold navigation reaches the main product areas", async ({ page }, testInfo) => {
@@ -22,9 +20,9 @@ test("scaffold navigation reaches the main product areas", async ({ page }, test
 
 test("planned pages keep their navigation and fit a narrow workspace", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/projects");
+  await page.goto("/reviews");
   await expect(page.getByRole("status").getByText("Product data and actions are not connected yet.")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Create project" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Notifications" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -44,32 +42,28 @@ test("unknown routes show a useful not-found page", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
 });
 
-test("projects includes personal and team-owned projects in its routing scope", async ({ page }) => {
-  await page.goto("/projects");
-  await expect(page.getByText("Browse your personal projects and projects shared through teams.")).toBeVisible();
-  await page.goto("/projects/new");
-  await expect(page.getByText("Create a personal project or choose a team to own it.")).toBeVisible();
-});
-
 test("standalone search is not part of the route map", async ({ page }) => {
   const response = await page.goto("/search");
   expect(response?.status()).toBe(404);
 });
 
-test("route navigation connects projects, requirements, evidence, and review", async ({ page }) => {
-  await page.goto("/dashboard");
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Projects", exact: true }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Project overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirements" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirement overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Evidence thread" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Back to Requirement overview" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Review requirement" }).click();
-  await expect(page).toHaveURL(/\/projects\/example-project\/requirements\/example-requirement\/review$/);
+test("planned-page links reuse a real project and skip project pages elsewhere", () => {
+  const inside = navigationFor("/projects/p-1/requirements/r-1")!;
+  expect(inside.parent).toEqual({ href: "/projects/p-1/requirements", label: "Requirements" });
+  expect(inside.links).toContainEqual({ href: "/projects/p-1/requirements/r-1/evidence", label: "Evidence thread" });
+  for (const path of ["/teams/t-1/projects", "/reviews", "/onboarding/repository", "/dashboard"]) {
+    expect(navigationFor(path)!.links.filter(link => link.href.includes("example-project")), path).toEqual([]);
+  }
 });
 
 test("every reserved page participates in navigation", async () => {
   const root = path.join(process.cwd(), "app/web/src/app");
+  // Pages that no longer use the placeholder stay in the route catalog.
+  const connected = ["dashboard", "settings/account", "projects", "projects/new", "projects/[projectId]",
+    "projects/[projectId]/requirements", "projects/[projectId]/settings", "projects/[projectId]/settings/repository",
+    "projects/[projectId]/requirements/new", "projects/[projectId]/requirements/[requirementId]",
+    "projects/[projectId]/requirements/[requirementId]/edit",
+  ].map(route => path.join(root, route, "page.tsx"));
   async function pagesIn(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });
     const nested = await Promise.all(entries.map(async entry => {
@@ -77,8 +71,8 @@ test("every reserved page participates in navigation", async () => {
       if (entry.isDirectory()) return pagesIn(fullPath);
       if (entry.name !== "page.tsx") return [];
       const contents = await readFile(fullPath, "utf8");
-      if (!contents.includes("ScaffoldPage") && !fullPath.startsWith(path.join(root, "teams") + path.sep) && !fullPath.startsWith(path.join(root, "invites") + path.sep) && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
-          !fullPath.endsWith(`${path.sep}settings${path.sep}account${path.sep}page.tsx`)) return [];
+      if (!contents.includes("ScaffoldPage") && !connected.includes(fullPath) &&
+          !fullPath.startsWith(path.join(root, "teams") + path.sep) && !fullPath.startsWith(path.join(root, "invites") + path.sep)) return [];
       return [`/${path.relative(root, directory).split(path.sep).join("/")}`];
     }));
     return nested.flat();

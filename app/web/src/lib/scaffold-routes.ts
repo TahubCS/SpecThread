@@ -50,10 +50,8 @@ export const scaffoldRoutes = [
   ["/projects/[projectId]/releases/[releaseId]", "Release details"],
   ["/projects/[projectId]/verification", "Verification"],
   ["/projects/[projectId]/verification/[runId]", "Verification run"],
-  ["/projects/[projectId]/members", "Project members"],
   ["/projects/[projectId]/settings", "Project settings"],
   ["/projects/[projectId]/settings/repository", "Repository settings"],
-  ["/projects/[projectId]/settings/members", "Project member settings"],
   ["/projects/[projectId]/settings/verification", "Verification settings"],
   ["/projects/[projectId]/settings/audit", "Settings history"],
   ["/projects/[projectId]/settings/invitations", "Project invitations"],
@@ -151,7 +149,9 @@ export function navigationFor(pathname: string) {
     : [];
   const targets = [...(children.length ? children : siblings),
     ...(relatedRoutes[current[0]] ?? []).map(pattern => scaffoldRoutes.find(([route]) => route === pattern)!)];
-  const unique = [...new Map(targets.map(route => [route[0], route])).values()];
+  // Project pages need a real project, so they are offered only from inside one.
+  const reachable = targets.filter(([pattern]) => params.projectId || !pattern.includes("[projectId]"));
+  const unique = [...new Map(reachable.map(route => [route[0], route])).values()];
   /** Builds a route link using captured IDs, labeling any substitutions of example IDs. */
   const toLink = ([pattern, label]: (typeof scaffoldRoutes)[number]) => {
     let example = false;

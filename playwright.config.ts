@@ -52,8 +52,10 @@ export default defineConfig({
         BETTER_AUTH_DATABASE_URL: "",
         DATABASE_CA_CERT: "",
         BETTER_AUTH_API_KEY: "",
-        GITHUB_CLIENT_ID: "",
-        GITHUB_CLIENT_SECRET: "",
+        // Dummy values enable the GitHub provider, so a stored GitHub token can be read back.
+        // Nothing is sent to GitHub: tests stub the sign-in redirect and use scripts/test-github.mjs.
+        GITHUB_CLIENT_ID: "test-github-client-id",
+        GITHUB_CLIENT_SECRET: "test-github-client-secret",
         GOOGLE_CLIENT_ID: "",
         GOOGLE_CLIENT_SECRET: "",
         EMAIL_DELIVERY: "log",

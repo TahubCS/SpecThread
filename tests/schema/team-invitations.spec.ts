@@ -20,7 +20,7 @@ test.beforeAll(async () => {
     ('wrong','Wrong','wrong@example.invalid',true,now(),now()),('unverified','Unverified','unverified@example.invalid',false,now(),now());
     INSERT INTO user_onboarding(user_id,completed_at) VALUES ('owner',now()),('admin',now()),('member',now());`);
   const url = new URL(database.connectionString);
-  api = await startApi(5109, { Auth__Issuer: issuer, ConnectionStrings__Database:
+  api = await startApi(5118, { Auth__Issuer: issuer, ConnectionStrings__Database:
     `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}` });
 });
 test.afterAll(async () => { api?.stop(); await database?.stop(); });

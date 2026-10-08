@@ -1,6 +1,45 @@
-import { ScaffoldPage } from "@/components/scaffold-page";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api";
+import { Box } from "lucide-react";
+import { formatDate, parseProjects } from "@/lib/projects";
 
-/** Renders the "Projects" placeholder with scaffold navigation and no connected product data or actions. */
-export default function Page() {
-  return <ScaffoldPage title="Projects" description="Browse your personal projects and projects shared through teams." />;
+export const metadata: Metadata = { title: "Projects" };
+
+/** Lists the active projects of the signed-in user's teams from the API. A failed request reaches the error page. */
+export default async function Page() {
+  const response = await apiFetch("/projects");
+  if (!response.ok) throw new Error(`List projects returned ${response.status}.`);
+  const projects = parseProjects(await response.json());
+
+  return (
+    <section className="scaffold-page" aria-labelledby="page-title">
+      <header className="scaffold-heading has-action">
+        <div>
+          <h1 id="page-title">Projects</h1>
+          <p>Projects in your teams.</p>
+        </div>
+        <Link className="button" href="/projects/new">New project</Link>
+      </header>
+      {projects.length === 0 ? (
+        <p className="notice">Your teams have no projects yet. Create one to start adding requirements.</p>
+      ) : (
+        <>
+          <p className="project-count">{projects.length === 1 ? "1 project" : `${projects.length} projects`}</p>
+          <ul className="row-list" aria-label="Your projects">
+            {projects.map(project => (
+              <li key={project.id}>
+                <Link className="row" href={`/projects/${project.id}`}>
+                  <Box size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span className="row-title">{project.name}</span>
+                  <span className="row-detail">{project.teamName}</span>
+                  <time className="row-meta" dateTime={project.createdAt}>Created {formatDate(project.createdAt)}</time>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
 }

@@ -6,7 +6,7 @@ using SpecThread.Api.Teams;
 
 namespace SpecThread.Api.Projects;
 
-// Access and management follow the containing team's membership and roles (ADR-027).
+// Access and management follow the containing team's membership and roles (ADR-040).
 internal static class ProjectEndpoints
 {
     internal static readonly ProducesResponseTypeMetadata Unauthorized = new(StatusCodes.Status401Unauthorized, typeof(void));

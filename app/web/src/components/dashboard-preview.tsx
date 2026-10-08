@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  ArrowDownUp, ArrowRight, Check, ChevronDown, Circle, FileText,
+  ArrowDownUp, Check, ChevronDown, Circle, FileText,
   GitPullRequest, ListFilter, Plus, Tag, UserRoundCheck,
 } from "lucide-react";
 
@@ -64,38 +64,51 @@ const groups: readonly { id: GroupId; title: string }[] = [
 const threadIcons = [FileText, Circle, GitPullRequest, Check, Tag, UserRoundCheck] as const;
 
 /**
- * Renders a sample requirement's evidence states and note with a link to an example thread.
+ * Renders a sample requirement's evidence as a checklist with its note.
  * Steps use the requirement, issue, pull request, checks, release, and review icon order.
  */
 function EvidencePreview({ requirement }: { requirement: PreviewRequirement }) {
   return (
     <div className="evidence-preview" id={`thread-${requirement.id}`}>
-      <div className="evidence-preview-heading">Evidence thread</div>
-      <div className="evidence-preview-content">
-        <ol className="evidence-steps" aria-label={`Evidence path for ${requirement.id}`}>
-          {requirement.steps.map((step, index) => {
-            const Icon = threadIcons[index];
-            return (
-              <li key={`${step.label}-${index}`} className={`evidence-step ${step.state}`}>
-                <span className="evidence-node"><Icon size={15} strokeWidth={1.65} aria-hidden="true" /></span>
-                <span>{step.label}</span>
-              </li>
-            );
-          })}
-        </ol>
-        <Link className="evidence-open" href={`/projects/example-project/requirements/${requirement.id.toLowerCase()}/evidence`}>
-          Open example thread <ArrowRight size={15} aria-hidden="true" />
-        </Link>
+      <div className="evidence-preview-header">
+        <span className="evidence-preview-heading">Evidence</span>
+        <p className="evidence-note">{requirement.note}</p>
       </div>
-      <p className="evidence-note">{requirement.note}</p>
+      <ol className="evidence-list" aria-label={`Evidence path for ${requirement.id}`}>
+        {requirement.steps.map((step, index) => {
+          const Icon = threadIcons[index];
+          return (
+            <li key={`${step.label}-${index}`} className={step.state}>
+              <Icon size={15} strokeWidth={1.75} aria-hidden="true" />
+              <span className="evidence-item-label">{step.label}</span>
+              <span className="evidence-item-state">{step.state === "linked" ? "Linked" : "Not linked"}</span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
+  );
+}
+
+/** Renders how many of a sample requirement's evidence steps are linked, as a ring and a count. */
+function EvidenceProgress({ steps }: { steps: readonly Step[] }) {
+  const linked = steps.filter(step => step.state === "linked").length;
+  return (
+    <span className="dashboard-progress">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" />
+        <circle cx="8" cy="8" r="6" pathLength={steps.length} strokeDasharray={`${linked} ${steps.length}`} />
+      </svg>
+      <span aria-hidden="true">{linked}/{steps.length}</span>
+      <span className="sr-only">{linked} of {steps.length} evidence steps linked.</span>
+    </span>
   );
 }
 
 /**
  * Renders sample requirements with local view, filtering, ordering, and expansion controls.
  * The action filter excludes the recent group; ordering reverses rows within each group.
- * Links open example routes, and interactions do not persist changes to product data.
+ * Interactions do not persist changes to product data.
  */
 export function DashboardPreview() {
   const [tab, setTab] = useState<TabId>("attention");
@@ -112,11 +125,10 @@ export function DashboardPreview() {
     <section className="dashboard-preview" aria-labelledby="dashboard-heading">
       <header className="dashboard-header">
         <div>
-          <p className="dashboard-preview-label">Preview · Sample requirements, no project data connected</p>
           <h1 id="dashboard-heading">Your work</h1>
+          <p className="dashboard-preview-label">Preview · Sample requirements, no project data connected</p>
         </div>
-        <Link className="dashboard-create" href="/projects/example-project/requirements/new"
-          title="Open the example requirement route"><Plus size={17} aria-hidden="true" /> New requirement</Link>
+        <Link className="button" href="/projects/new"><Plus size={16} aria-hidden="true" /> New project</Link>
       </header>
       <div className="dashboard-toolbar">
         <div className="dashboard-tabs" role="tablist" aria-label="Dashboard view">
@@ -164,8 +176,9 @@ export function DashboardPreview() {
                     <span className={`dashboard-status-dot ${item.group}`} aria-hidden="true" />
                     <span className="dashboard-id">{item.id}</span>
                     <span className="dashboard-title">{item.title}</span>
-                    <span className="dashboard-project">{item.project}</span>
+                    <EvidenceProgress steps={item.steps} />
                     <span className="dashboard-summary">{item.summary}</span>
+                    <span className="dashboard-project">{item.project}</span>
                     <span className="dashboard-date">{item.updated}</span>
                   </button>
                   {selected === item.id && <EvidencePreview requirement={item} />}

@@ -380,6 +380,57 @@ namespace SpecThread.Api.Migrations
                     b.ToTable("project_members", "public");
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectRepository", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("ConnectedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("connected_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("ConnectedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("connected_by");
+
+                    b.Property<long>("InstallationId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("installation_id");
+
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_private");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("owner");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.HasKey("ProjectId");
+
+                    b.HasIndex("ConnectedBy");
+
+                    b.ToTable("project_repositories", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_project_repositories_ids", "installation_id > 0 AND repository_id > 0");
+
+                            t.HasCheckConstraint("ck_project_repositories_name", "length(btrim(owner)) > 0 AND length(btrim(name)) > 0");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.Requirement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -441,6 +492,242 @@ namespace SpecThread.Api.Migrations
                             t.HasCheckConstraint("ck_requirements_title", "length(btrim(title)) > 0");
 
                             t.HasCheckConstraint("ck_requirements_version", "version > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int?>("Additions")
+                        .HasColumnType("integer")
+                        .HasColumnName("additions");
+
+                    b.Property<string>("Author")
+                        .HasColumnType("text")
+                        .HasColumnName("author");
+
+                    b.Property<int?>("ChangedFiles")
+                        .HasColumnType("integer")
+                        .HasColumnName("changed_files");
+
+                    b.Property<int?>("CheckCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("check_count");
+
+                    b.Property<string>("Checks")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("checks");
+
+                    b.Property<DateTime?>("ChecksReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checks_read_at");
+
+                    b.Property<int?>("CommitCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("commit_count");
+
+                    b.Property<string>("Commits")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("commits");
+
+                    b.Property<string>("Contains")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("contains");
+
+                    b.Property<int?>("Deletions")
+                        .HasColumnType("integer")
+                        .HasColumnName("deletions");
+
+                    b.Property<DateTime?>("GitHubClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("github_closed_at");
+
+                    b.Property<DateTime>("GitHubCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("github_created_at");
+
+                    b.Property<DateTime>("GitHubUpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("github_updated_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("linked_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("LinkedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("linked_by");
+
+                    b.Property<string>("MergeSha")
+                        .HasColumnType("text")
+                        .HasColumnName("merge_sha");
+
+                    b.Property<int?>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<bool?>("Prerelease")
+                        .HasColumnType("boolean")
+                        .HasColumnName("prerelease");
+
+                    b.Property<DateTime>("RefreshedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("refreshed_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.Property<string>("RepositoryName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("repository_name");
+
+                    b.Property<string>("RepositoryOwner")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("repository_owner");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<string>("Sha")
+                        .HasColumnType("text")
+                        .HasColumnName("sha");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("manual")
+                        .HasColumnName("source");
+
+                    b.Property<string>("State")
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<string>("Tag")
+                        .HasColumnType("text")
+                        .HasColumnName("tag");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LinkedBy");
+
+                    b.HasIndex("RequirementId", "RepositoryId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("RequirementId", "RepositoryId", "Sha")
+                        .IsUnique()
+                        .HasFilter("kind = 'commit'");
+
+                    b.HasIndex("RequirementId", "RepositoryId", "Tag")
+                        .IsUnique()
+                        .HasFilter("kind = 'release'");
+
+                    b.ToTable("requirement_evidence", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_evidence_changes", "COALESCE(additions, 0) >= 0 AND COALESCE(deletions, 0) >= 0 AND COALESCE(changed_files, 0) >= 0 AND COALESCE(commit_count, 0) >= 0");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_checks", "COALESCE(check_count, 0) >= 0");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_identity", "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL AND tag IS NULL) OR (kind IN ('issue', 'pull_request') AND number IS NOT NULL AND number > 0 AND state IS NOT NULL AND tag IS NULL) OR (kind = 'release' AND tag IS NOT NULL AND length(btrim(tag)) > 0 AND number IS NULL AND state IS NULL)");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_repository", "repository_id > 0");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_source", "source IN ('manual', 'suggested')");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_state", "state IS NULL OR state IN ('open', 'closed', 'merged')");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("DecidedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DecidedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("decided_by");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("decision");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("evidence");
+
+                    b.Property<string>("Note")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("note");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<int>("RequirementVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("requirement_version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedBy");
+
+                    b.HasIndex("RequirementId", "DecidedAt");
+
+                    b.ToTable("requirement_reviews", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_reviews_decision", "decision IN ('accepted', 'rejected', 'more_evidence')");
+
+                            t.HasCheckConstraint("ck_requirement_reviews_evidence", "jsonb_typeof(evidence) = 'array'");
+
+                            t.HasCheckConstraint("ck_requirement_reviews_note", "decision = 'accepted' OR length(btrim(note)) > 0");
+
+                            t.HasCheckConstraint("ck_requirement_reviews_version", "requirement_version > 0");
                         });
                 });
 
@@ -683,6 +970,21 @@ namespace SpecThread.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectRepository", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Project", null)
+                        .WithOne()
+                        .HasForeignKey("SpecThread.Api.Data.ProjectRepository", "ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.Requirement", b =>
                 {
                     b.HasOne("SpecThread.Api.Data.AuthUser", null)
@@ -694,6 +996,36 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidence", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementReview", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

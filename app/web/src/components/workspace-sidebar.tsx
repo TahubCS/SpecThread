@@ -60,7 +60,6 @@ export function WorkspaceSidebar() {
             <div className="app-create-options">
               <Link href="/projects/new">New project</Link>
               <Link href="/teams/new">New team</Link>
-              <Link href="/projects/example-project/requirements/new">New requirement (example)</Link>
             </div>
           </details>
         </div>

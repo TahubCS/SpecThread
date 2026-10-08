@@ -9,6 +9,9 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Requirement> Requirements => Set<Requirement>();
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
+    public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
+    public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
+    public DbSet<RequirementReview> RequirementReviews => Set<RequirementReview>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<UserOnboarding> UserOnboardings => Set<UserOnboarding>();
@@ -156,5 +159,100 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         criterion.Property(x => x.Position).HasColumnName("position");
         criterion.HasIndex(x => new { x.RequirementId, x.Position }).IsUnique();
         criterion.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+
+        var repository = model.Entity<ProjectRepository>();
+        repository.ToTable("project_repositories", table =>
+        {
+            table.HasCheckConstraint("ck_project_repositories_ids", "installation_id > 0 AND repository_id > 0");
+            table.HasCheckConstraint("ck_project_repositories_name", "length(btrim(owner)) > 0 AND length(btrim(name)) > 0");
+        });
+        repository.HasKey(x => x.ProjectId);
+        repository.Property(x => x.ProjectId).HasColumnName("project_id").ValueGeneratedNever();
+        repository.Property(x => x.InstallationId).HasColumnName("installation_id");
+        repository.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        repository.Property(x => x.Owner).HasColumnName("owner");
+        repository.Property(x => x.Name).HasColumnName("name");
+        repository.Property(x => x.IsPrivate).HasColumnName("is_private");
+        repository.Property(x => x.ConnectedBy).HasColumnName("connected_by");
+        repository.Property(x => x.ConnectedAt).HasColumnName("connected_at").HasDefaultValueSql("now()");
+        repository.HasOne<Project>().WithOne().HasForeignKey<ProjectRepository>(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        repository.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.ConnectedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var evidence = model.Entity<RequirementEvidence>();
+        evidence.ToTable("requirement_evidence", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_evidence_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
+            table.HasCheckConstraint("ck_requirement_evidence_state", "state IS NULL OR state IN ('open', 'closed', 'merged')");
+            table.HasCheckConstraint("ck_requirement_evidence_repository", "repository_id > 0");
+            // A commit is identified by its SHA; an issue or pull request by its number, and it has a
+            // state; a release by its tag.
+            table.HasCheckConstraint("ck_requirement_evidence_identity",
+                "(kind = 'commit' AND sha IS NOT NULL AND sha ~ '^[0-9a-f]{40}$' AND number IS NULL AND state IS NULL AND tag IS NULL) OR " +
+                "(kind IN ('issue', 'pull_request') AND number IS NOT NULL AND number > 0 AND state IS NOT NULL AND tag IS NULL) OR " +
+                "(kind = 'release' AND tag IS NOT NULL AND length(btrim(tag)) > 0 AND number IS NULL AND state IS NULL)");
+            table.HasCheckConstraint("ck_requirement_evidence_source", "source IN ('manual', 'suggested')");
+            table.HasCheckConstraint("ck_requirement_evidence_checks", "COALESCE(check_count, 0) >= 0");
+            table.HasCheckConstraint("ck_requirement_evidence_changes",
+                "COALESCE(additions, 0) >= 0 AND COALESCE(deletions, 0) >= 0 AND COALESCE(changed_files, 0) >= 0 AND COALESCE(commit_count, 0) >= 0");
+        });
+        evidence.HasKey(x => x.Id);
+        evidence.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        evidence.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        evidence.Property(x => x.Kind).HasColumnName("kind");
+        evidence.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        evidence.Property(x => x.RepositoryOwner).HasColumnName("repository_owner");
+        evidence.Property(x => x.RepositoryName).HasColumnName("repository_name");
+        evidence.Property(x => x.Number).HasColumnName("number");
+        evidence.Property(x => x.Sha).HasColumnName("sha");
+        evidence.Property(x => x.MergeSha).HasColumnName("merge_sha");
+        evidence.Property(x => x.Tag).HasColumnName("tag");
+        evidence.Property(x => x.Prerelease).HasColumnName("prerelease");
+        evidence.Property(x => x.Contains).HasColumnName("contains").HasColumnType("jsonb");
+        evidence.Property(x => x.Additions).HasColumnName("additions");
+        evidence.Property(x => x.Deletions).HasColumnName("deletions");
+        evidence.Property(x => x.ChangedFiles).HasColumnName("changed_files");
+        evidence.Property(x => x.CommitCount).HasColumnName("commit_count");
+        evidence.Property(x => x.Commits).HasColumnName("commits").HasColumnType("jsonb");
+        evidence.Property(x => x.Checks).HasColumnName("checks").HasColumnType("jsonb");
+        evidence.Property(x => x.CheckCount).HasColumnName("check_count");
+        evidence.Property(x => x.ChecksReadAt).HasColumnName("checks_read_at");
+        evidence.Property(x => x.Source).HasColumnName("source").HasDefaultValue("manual");
+        evidence.Property(x => x.Title).HasColumnName("title");
+        evidence.Property(x => x.State).HasColumnName("state");
+        evidence.Property(x => x.Author).HasColumnName("author");
+        evidence.Property(x => x.Url).HasColumnName("url");
+        evidence.Property(x => x.GitHubCreatedAt).HasColumnName("github_created_at");
+        evidence.Property(x => x.GitHubUpdatedAt).HasColumnName("github_updated_at");
+        evidence.Property(x => x.GitHubClosedAt).HasColumnName("github_closed_at");
+        evidence.Property(x => x.LinkedBy).HasColumnName("linked_by");
+        evidence.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+        evidence.Property(x => x.RefreshedAt).HasColumnName("refreshed_at").HasDefaultValueSql("now()");
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Number }).IsUnique();
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Sha }).IsUnique().HasFilter("kind = 'commit'");
+        evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Tag }).IsUnique().HasFilter("kind = 'release'");
+        evidence.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        evidence.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var review = model.Entity<RequirementReview>();
+        review.ToTable("requirement_reviews", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_reviews_decision", "decision IN ('accepted', 'rejected', 'more_evidence')");
+            table.HasCheckConstraint("ck_requirement_reviews_version", "requirement_version > 0");
+            // Rejecting or asking for more has to say why.
+            table.HasCheckConstraint("ck_requirement_reviews_note", "decision = 'accepted' OR length(btrim(note)) > 0");
+            table.HasCheckConstraint("ck_requirement_reviews_evidence", "jsonb_typeof(evidence) = 'array'");
+        });
+        review.HasKey(x => x.Id);
+        review.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        review.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        review.Property(x => x.Decision).HasColumnName("decision");
+        review.Property(x => x.Note).HasColumnName("note").HasDefaultValue("");
+        review.Property(x => x.RequirementVersion).HasColumnName("requirement_version");
+        review.Property(x => x.Evidence).HasColumnName("evidence").HasColumnType("jsonb");
+        review.Property(x => x.DecidedBy).HasColumnName("decided_by");
+        review.Property(x => x.DecidedAt).HasColumnName("decided_at").HasDefaultValueSql("now()");
+        review.HasIndex(x => new { x.RequirementId, x.DecidedAt });
+        review.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        review.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.DecidedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -1,8 +1,8 @@
 .landing {
-  --bg: #0b0b0d; --surface: #111114; --surface2: #18181c;
+  --bg: #090909; --surface: #111111; --surface2: #181818;
   --line: rgba(255, 255, 255, .07); --line2: rgba(255, 255, 255, .13);
-  --fg: #ededf0; --muted: #a1a1aa; --faint: #6b6b74;
-  --accent: #ab9ff7; --accent-ink: #0b0b0d;
+  --fg: #ededed; --muted: #a2a2a2; --faint: #7c7c7c;
+  --accent: #f5f5f5; --accent-ink: #090909;
   --ok: #62c68d; --warn: #d9b25e; --bad: #e57a72;
   --shadow: 0 40px 120px rgba(0, 0, 0, .55);
   --mono: var(--font-geist-mono), "Geist Mono", monospace;
@@ -51,7 +51,7 @@
 .landing-lead { max-width: 640px; margin: 24px 0 0; font-size: 17px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
 .landing-body { margin: 10px 0 0; font-size: 15px; line-height: 1.6; color: var(--muted); text-wrap: pretty; }
 .landing .landing-primary { padding: 12px 22px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 500; }
-.landing .landing-primary:hover { background: #c0b6ff; }
+.landing .landing-primary:hover { background: #ffffff; }
 .landing-ghost-button { display: inline-flex; flex: none; align-items: center; gap: 7px; padding: 7px 14px; border: 1px solid var(--line2); border-radius: 999px; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .landing-ghost-button:hover { border-color: var(--accent); color: var(--fg); }
 .landing-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 56px; margin-top: 80px; }

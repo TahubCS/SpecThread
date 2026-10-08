@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startApi } from "../support/api-process";
 
-// The product API (ADR-027) against a disposable PostgreSQL database. Tokens come from
+// The product API (ADR-040) against a disposable PostgreSQL database. Tokens come from
 // the test JWKS issuer that Playwright starts for every run (scripts/start-test-jwks.mjs).
 const issuer = "http://127.0.0.1:5101";
 let database: Awaited<ReturnType<typeof startTestDatabase>>;

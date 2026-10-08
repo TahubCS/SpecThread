@@ -31,12 +31,25 @@ internal static class RequirementEndpoints
     {
         if (!await db.ProjectsFor(user.CallerId()).AnyAsync(p => p.Id == projectId, cancel)) return TypedResults.NotFound();
 
-        var items = await db.Requirements
+        var requirements = await db.Requirements.AsNoTracking()
             .Where(r => r.ProjectId == projectId && r.ArchivedAt == null)
             .OrderBy(r => r.CreatedAt).ThenBy(r => r.Id)
-            .Select(r => new RequirementSummary(r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt))
             .ToListAsync(cancel);
-        return TypedResults.Ok(items);
+
+        // The latest decision on each requirement, and whether it still describes what is there (ADR-038).
+        var ids = requirements.ConvertAll(r => r.Id);
+        var reviews = (await db.RequirementReviews.AsNoTracking().Where(v => ids.Contains(v.RequirementId)).ToListAsync(cancel))
+            .GroupBy(v => v.RequirementId)
+            .ToDictionary(group => group.Key, group => group.OrderByDescending(v => v.DecidedAt).ThenByDescending(v => v.Id).First());
+        var evidence = (await db.RequirementEvidence.AsNoTracking().Where(e => ids.Contains(e.RequirementId))
+                .Select(e => new { e.RequirementId, e.Id }).ToListAsync(cancel))
+            .ToLookup(e => e.RequirementId, e => e.Id);
+
+        return TypedResults.Ok(requirements.ConvertAll(r => new RequirementSummary(
+            r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, evidence[r.Id].Count(),
+            reviews.TryGetValue(r.Id, out var review)
+                ? new ReviewSummary(review.Decision, review.DecidedBy, review.DecidedAt, ReviewEndpoints.IsOutdated(review, r.Version, evidence[r.Id]))
+                : null)));
     }
 
     private static async Task<Results<Created<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Create(
@@ -188,7 +201,7 @@ internal sealed record RequirementRequest(string? Title, string? Description, Li
 internal sealed record UpdateRequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria, int? Version);
 
 internal sealed record RequirementSummary(
-    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt);
+    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, int Version,

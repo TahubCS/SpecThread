@@ -15,7 +15,7 @@ test.beforeAll(async () => {
     ('outsider','Outsider','outsider@example.invalid',true,now(),now());
     INSERT INTO user_onboarding(user_id,completed_at) SELECT id,now() FROM public."user";`);
   const url = new URL(database.connectionString);
-  api = await startApi(5108, { Auth__Issuer: issuer,
+  api = await startApi(5117, { Auth__Issuer: issuer,
     ConnectionStrings__Database: `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}` });
 });
 test.afterAll(async () => { api?.stop(); await database?.stop(); });

@@ -12,6 +12,7 @@ export default async function Page({ params }: { params: Promise<{ teamId: strin
     <div className={styles.sectionContent}>
       <header className={styles.header}>
         <h1>Projects</h1>
+        {team.role !== "member" && <Link href={`/projects/new?team=${teamId}`} className={styles.secondary}>New project</Link>}
         <Link href={`/teams/${teamId}/archive`} className={styles.secondary}>Open archive</Link>
       </header>
       <TeamProjectTable projects={projects} teamName={team.name} />

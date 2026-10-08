@@ -5,7 +5,7 @@ using SpecThread.Api.Data;
 
 namespace SpecThread.Api.Projects;
 
-// Team membership grants access to every project and requirement inside it (ADR-027).
+// Team membership grants access to every project and requirement inside it (ADR-040).
 internal static class ProjectAccess
 {
     // The fallback authorization policy guarantees a subject on every product endpoint.

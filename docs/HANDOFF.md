@@ -1,6 +1,531 @@
 # Shared handoff
 
-## Current task: Revised Teams implementation (2026-10-08)
+## Current task: Merge main (teams) into feature/project-ui (2026-10-08)
+
+- Branch: `feature/project-ui`, merging `origin/main` at `0e6077b` (PR #14, teams).
+  The merge is resolved in the working tree and **not committed**; `git commit`
+  completes it. PR into `main` afterwards.
+- Completed (ADR-041):
+  - The 14 conflicted files are resolved. The EF model snapshot was stitched from
+    both sides and EF reports no pending model changes.
+  - Things Git did not flag but the merge broke: repository connect and disconnect
+    called a permission helper main removed (now the team's Owner or an Admin, as
+    for renaming a project); creating a project needs a team (the form has a Team
+    field, offers only teams the user owns or administers, and
+    `/projects/new?team=<id>` preselects one; the team's project list links to it);
+    project pages decide what to show from `teamRole`; both branches had added a
+    browser-test API on port 5106 (one kept, with main's readiness wait); the teams
+    API tests used ports 5107 to 5109, which this branch's test proxy and GitHub
+    stand-ins already use (moved to 5116 to 5118).
+  - main's decisions ADR-026 and ADR-027 are renumbered ADR-039 and ADR-040,
+    because this branch had used those numbers. References in main's code, tests,
+    and docs follow.
+  - This branch's tests create a team before a project and add people to the team
+    instead of to the project (`createTestTeam`, `addTestTeamMember` in
+    tests/e2e/fixtures.ts).
+- Changed beyond the conflicted files: `app/api/GitHub/RepositoryEndpoints.cs`,
+  `app/web/src/lib/projects.ts`, `app/web/src/app/projects/{actions,repository-actions}.ts`,
+  `app/web/src/app/projects/{page,new/page}.tsx`,
+  `app/web/src/app/projects/[projectId]/{page,settings/page,settings/repository/page}.tsx`,
+  `app/web/src/components/project-form.tsx`, `app/web/src/app/app-shell.css`,
+  `app/web/src/app/teams/[teamId]/projects/page.tsx` (New project link),
+  the six project, requirement, repository, evidence, and review browser specs,
+  `tests/schema/{evidence,reviews,github-repository}.spec.ts`,
+  `tests/api/project-data.spec.ts`, and the ADR references noted above.
+- Checks, all after the last code change: every schema-project spec passed (76),
+  including both branches' API and migration tests run together; every browser test
+  plus the parser tests passed (207). `dotnet build app/api --configuration Release`,
+  `dotnet format app/api --verify-no-changes --no-restore`, `npm run lint`, and
+  `npm run typecheck` passed. `dotnet ef migrations has-pending-model-changes`
+  reported none. Run with a temporary config because the dev API held port 5100, so
+  the api-project tests that need that port (health, JWT, OpenAPI) were not run.
+- Known issues and risks:
+  - **Setup**: `dotnet ef database update --project app/api` with the API stopped
+    applies whichever migrations the database lacks (docs/DATABASE.md, "Combined
+    migration order"). TeamProjects turns each existing project into its own team.
+  - Team pages use their own styles (teams.module.css) and are not yet in the
+    black-and-white system. Not changed here.
+  - Not verified against the live database or the real GitHub.
+- Next step: commit the merge, push, and let the PR's checks run. Then the AI slice
+  under ADR-036.
+
+## Previous task: Evidence count on requirement lists (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, together with the reorder entry below
+  unless that has been committed since.
+- Completed: each row on the Requirements tab and the overview's recent requirements
+  says "No evidence", "1 evidence link", or "N evidence links", before the review
+  badge. `GET /projects/{projectId}/requirements` returns `evidenceCount` per
+  requirement, counted from the evidence IDs that endpoint already loaded. No
+  database or migration change.
+- Changed files: `app/api/Requirements/RequirementEndpoints.cs`,
+  `app/web/src/lib/{projects,requirements,evidence}.ts`,
+  `app/web/src/components/requirement-rows.tsx`, `app/web/src/app/app-shell.css`,
+  `tests/schema/reviews.spec.ts`, `tests/e2e/{evidence,reviews}.spec.ts`,
+  `tests/api/project-data.spec.ts`, `docs/{API,TESTING}.md`, and this file. No ADR.
+- Differences from the plan: `reviewedText` in `lib/reviews.ts` keeps its own
+  wording ("with no evidence links") instead of sharing the new helper, because the
+  two sentences read differently at zero.
+- Checks: after the last code change, all browser tests plus
+  `tests/schema/{evidence,github-repository}.spec.ts` passed (191), including the
+  session test that failed under load in the previous entry. Before that,
+  `tests/schema/reviews.spec.ts`, `tests/api/project-data.spec.ts`, and the evidence
+  and review browser tests passed together (47). `npm run lint`,
+  `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed. Run with a
+  temporary config because the dev API held port 5100; the api-project tests on
+  that port and the older schema specs were not rerun.
+- Known issues and risks:
+  - **Setup**: restart or redeploy the API with this build. The web now requires
+    `evidenceCount`; against an older API the requirement lists show the error page.
+  - The count says how much is linked, not whether it is enough or passing.
+- Next step: the AI slice under ADR-036 (suggestions only; a person decides). It
+  needs a plan and decisions first: provider, what is sent to it, and where
+  suggestions appear.
+
+## Previous task: Reorder acceptance criteria (2026-10-08)
+
+- Branch: `feature/project-ui`. Review decisions are committed (`643f36a`). This
+  entry is uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed: on the create and edit requirement forms each criterion has "Move
+  criterion N up" and "Move criterion N down" buttons. The order on screen is the
+  order saved. Web only: the API already stores criteria in the order sent, so there
+  is no API, database, or migration change and nothing to set up.
+- Changed files: `app/web/src/components/requirement-form.tsx`,
+  `app/web/src/lib/requirements.ts` (`moveItem`), `app/web/src/app/app-shell.css`,
+  `tests/e2e/requirements.spec.ts`, `tests/api/project-data.spec.ts`,
+  `docs/TESTING.md`, and this file. No ADR: no product rule or boundary changed.
+- Decisions and differences from the plan:
+  - A button that cannot move its row is `aria-disabled`, not `disabled`, and does
+    nothing when pressed. That keeps keyboard focus on it when a row reaches the top
+    or bottom, so no focus is moved by code (the plan had focus jump to the other
+    button).
+  - A message about one criterion is now shown on the row that was sent at that
+    position, so it follows the row when rows are moved or removed. Before, it
+    stayed at the position and could sit beside the wrong row after a removal.
+  - A hidden `role="status"` line says where a moved criterion now is.
+- Checks: `tests/e2e/requirements.spec.ts` and `tests/api/project-data.spec.ts`
+  passed (42). All browser tests, run twice after the last code change: 170 of 171
+  passed each time. The one failure both times was "a session that ended sends the
+  user to sign in instead of creating a project" (`project-failures.spec.ts`), which
+  does not touch the requirement form; it passed 3 of 3 when run alone, and is the
+  test already known to be slow under a full parallel run. `npm run lint` and
+  `npm run typecheck` passed. Run with a temporary config because the dev API held
+  port 5100; the api-project tests on that port and the schema specs were not rerun
+  (no API or schema change).
+- Known issues and risks: no drag and drop; a long move takes one press per step.
+  Saving a new order raises the requirement's version, so a recorded decision shows
+  as outdated (ADR-038), as for any edit. Screen-reader output was not checked with
+  a screen reader.
+- Next step: the evidence count on requirement lists. The AI slice follows ADR-036.
+
+## Previous task: Review decisions on a requirement (2026-10-08)
+
+- Branch: `feature/project-ui`. Evidence slice 5 is committed (`d102562`). Committed
+  as `643f36a`. The approved plan was in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed (ADR-038): a requirement page has a Review section. A project member
+  who did not create the requirement records Accept, Reject, or Request more
+  evidence with a note (required unless accepting). The page shows the current
+  decision, who made it and when, the version and evidence links that were reviewed,
+  a notice when the requirement or its links have changed since, and earlier
+  decisions on demand. The author sees why they cannot review. Requirement lists show
+  each requirement's latest decision, "Not reviewed", or "..., outdated".
+- Changed files:
+  - API: `app/api/Requirements/{ReviewEndpoints,RequirementEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, `app/api/Program.cs`,
+    migration `20261008092413_RequirementReviews` and the model snapshot.
+  - Schema: `scripts/generate-requirement-reviews.mjs`,
+    `docs/schema/requirement-reviews{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{reviews,projects,requirements,project-data}.ts`,
+    `app/web/src/app/projects/review-actions.ts`,
+    `app/web/src/components/{review-panel,requirement-rows}.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/test-database.mjs`, `tests/e2e/reviews.spec.ts`,
+    `tests/schema/{reviews,evidence,github-repository}.spec.ts`,
+    `tests/api/{project-data,products}.spec.ts`.
+  - Docs: DECISIONS (ADR-038), API, DATABASE, TESTING, and this file.
+- Differences from the plan: `review` is on the requirement list only, not on the
+  single-requirement response, because the page reads the full list of decisions.
+  The migration tests in the older schema specs were not reordered; the reviews
+  migration stays applied there and their history counts went up by one.
+- Checks: the full suite (`npx playwright test`: browser, api, and schema projects)
+  passed, 267 tests, with no code change after it. `npm run lint`,
+  `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - **Setup**: apply the RequirementReviews migration
+    (`dotnet ef database update --project app/api`, API stopped) and restart or
+    redeploy the API. Until then requirement lists and pages fail.
+  - **A project with one member cannot record a decision.** There is no members
+    screen (ADR-031). To try it, add a second account with
+    `POST /projects/{projectId}/members` (owner, `{ email }`) or in the database.
+  - No reviewer assignment, notifications, or evidence policy. "My reviews" and
+    Inbox are still previews.
+  - A refresh that changes a link's state (a pull request merged after acceptance)
+    does not mark the decision outdated; only an edit or a change of links does.
+  - Not verified against the live database or by a manual two-account run.
+- Next step: reorder acceptance criteria. Then the evidence count on requirement
+  lists. The AI slice follows ADR-036.
+
+## Previous task: Evidence slice 5, releases and what they contain (2026-10-08)
+
+- Branch: `feature/project-ui`. Slice 4 is committed (`088593d`). This entry is
+  uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed (ADR-037): a release can be linked to a requirement by tag or address.
+  Each release shows "Contains N of M linked changes" and lists every linked commit
+  and pull request as Included, Not included, Not merged, or Not checked, from
+  GitHub's history. Commits and merged pull requests show "In release <tag>".
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008090129_EvidenceReleases` and the model snapshot.
+  - Schema: `scripts/generate-evidence-releases.mjs`,
+    `docs/schema/evidence-releases{,-rollback}.sql`.
+  - Web: `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github,test-database}.mjs`, `tests/support/github.ts`,
+    `tests/e2e/evidence.spec.ts`, `tests/schema/{evidence,github-repository}.spec.ts`,
+    `tests/api/project-data.spec.ts`.
+  - Docs: DECISIONS (ADR-037), API, DATABASE, TESTING, and this file.
+- Differences from the plan: the link endpoint's message for an unreadable reference
+  now mentions release tags. `evidence-actions.ts` needed no change, as expected.
+- Checks: the evidence API, unit, and evidence browser tests passed together (46).
+  The full run of all browser tests plus the GitHub API tests then passed (179), and
+  no code changed after it. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed. Run
+  with a temporary config without the test API on port 5100.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub. Two details come from GitHub's documentation only: resolving a tag
+    through `commits/tags/<tag>`, and the compare statuses.
+  - **Setup**: apply the EvidenceReleases migration
+    (`dotnet ef database update --project app/api`) and restart or redeploy the API.
+  - Refresh makes one more GitHub call per release and per release-change pair.
+  - "Included" is ancestry: a reverted change still counts.
+- Next step: the review decision (accept, reject, request more evidence, with a
+  note). Then reordering criteria and the evidence count on lists. The AI slice
+  follows ADR-036.
+
+## Previous task: Evidence slice 4, check results and link source (2026-10-08)
+
+- Branch: `feature/project-ui`. Slices 1 to 3 are committed (`94759df`). This entry is
+  uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed:
+  - Check results (ADR-035): a linked pull request or commit shows a line such as
+    "5 of 6 checks passed, 1 failed" that opens to each check with its result in words.
+    Refresh re-reads them.
+  - Link source (ADR-036): every evidence link is stored as `manual` or `suggested`.
+    Nothing creates `suggested` yet. The ADR sets the rules for the later AI work.
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008084108_EvidenceChecks` and the model snapshot.
+  - Schema: `scripts/generate-evidence-checks.mjs`,
+    `docs/schema/evidence-checks{,-rollback}.sql`.
+  - Web: `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github,test-database}.mjs`, `tests/support/github.ts`,
+    `tests/e2e/{evidence,project-failures}.spec.ts`,
+    `tests/schema/{evidence,github-repository}.spec.ts`, `tests/api/project-data.spec.ts`.
+  - Docs: DECISIONS (ADR-035, ADR-036), API, DATABASE, TESTING, and this file.
+- Differences from the plan: none in behavior. A check's link is kept only when it
+  is on github.com, as planned, which means statuses from outside CI services are
+  listed without a link.
+- Checks: the evidence API, unit, and evidence browser tests passed together (42).
+  In the full run of all browser tests plus the GitHub API tests, 174 passed and one
+  failed: "a session that ended sends the user to sign in". That test waits for a
+  multi-step redirect and timed out after 5 seconds under load; its wait was raised
+  to 15 seconds and its file then passed three times in a row. The full run was not
+  repeated after that change. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed. Run
+  with a temporary config without the test API on port 5100.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub.
+  - **Setup**: apply the EvidenceChecks migration
+    (`dotnet ef database update --project app/api`) and restart or redeploy the API
+    before the requirement page works.
+  - Refresh makes more GitHub calls than before and slows down as links grow.
+- Next step: releases (link a release tag). Then the review decision, reordering
+  criteria, and the evidence count on lists. The AI slice follows ADR-036.
+
+## Previous task: Evidence slice 3, commits as evidence (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, together with slice 2 below.
+- Completed (ADR-034): a commit can be linked to a requirement by SHA or address and
+  shows its message, author, date, and lines and files changed. A linked pull request
+  shows its totals and lists its commits on demand.
+- Changed files beyond slice 2: `app/api/GitHub/{GitHubClient,EvidenceEndpoints}.cs`,
+  `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+  `20261008082151_EvidenceCommits` and the model snapshot,
+  `scripts/generate-evidence-commits.mjs`, `docs/schema/evidence-commits{,-rollback}.sql`,
+  `app/web/src/lib/evidence.ts`, `app/web/src/components/evidence-panel.tsx`,
+  `app/web/src/app/app-shell.css`, `scripts/{test-github,test-database}.mjs`,
+  `tests/support/github.ts`, `tests/e2e/evidence.spec.ts`,
+  `tests/schema/{evidence,github-repository}.spec.ts`, `tests/api/project-data.spec.ts`,
+  and docs/{DECISIONS,API,DATABASE,TESTING,HANDOFF}.md.
+- Checks: 155 browser tests and the 15 evidence and repository API tests passed in one
+  run; the project-data unit tests passed in the run before the last database-rule
+  fix, which did not touch them. Run with a temporary config without the test API on
+  port 5100. `npm run lint`, `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub.
+  - **Setup**: apply the pending migrations (RequirementEvidence, then
+    EvidenceCommits; `dotnet ef database update --project app/api` does both) and
+    restart or redeploy the API before the requirement page works.
+  - A test found that the first version of the new check constraint allowed a commit
+    with no SHA and an issue with no number; the constraint was corrected before the
+    migration was ever applied.
+- Next step: check results for a linked pull request, then releases. After evidence,
+  the three follow-ups listed below (review decision, reordering criteria, evidence
+  count on lists).
+
+## Previous task: Evidence slice 2, linking issues and pull requests (2026-10-08)
+
+- Branch: `feature/project-ui`. Slice 1 below is committed (`b062d13`). This entry is
+  uncommitted.
+- Completed (ADR-033): a requirement page has an Evidence section. Members link an
+  issue or pull request from the connected repository by number or address, see the
+  items as a timeline with state and author as GitHub reported them, refresh them from
+  GitHub, and remove a link.
+- Changed files:
+  - API: `app/api/GitHub/{EvidenceEndpoints,GitHubClient,RepositoryEndpoints}.cs`,
+    `app/api/Program.cs`, `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`,
+    migration `20261008073621_RequirementEvidence` and the model snapshot.
+  - Schema: `scripts/generate-requirement-evidence.mjs`,
+    `docs/schema/requirement-evidence{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{evidence,project-data}.ts`,
+    `app/web/src/app/projects/evidence-actions.ts`,
+    `app/web/src/components/{evidence-panel,repository-connect}.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `tests/e2e/{evidence,repository}.spec.ts`, `tests/schema/{evidence,github-repository}.spec.ts`,
+    `tests/api/project-data.spec.ts`, `tests/support/{github,api-process}.ts`,
+    `scripts/{test-github,test-database}.mjs`.
+  - Docs: DECISIONS (ADR-033), API, DATABASE, TESTING, and this file.
+- Checks: 154 browser tests and the 13 evidence and repository API tests passed in one
+  run, and the project-data unit tests passed, with a temporary config that left out
+  the test API on port 5100, which the user's dev API held. `npm run lint`,
+  `npm run typecheck`, the Release API build, and `dotnet format app/api
+  --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100, the older schema specs, and the real
+    GitHub. The user connected a real repository in slice 1; linking has only been
+    tried against the stand-in.
+  - **Setup before it works locally or in production**: apply the RequirementEvidence
+    migration (docs/DATABASE.md), then restart or redeploy the API. Until then a
+    requirement page shows not-found (old API) or the error page (missing table).
+  - Evidence does not update on its own; someone presses Refresh.
+  - Two fixes found by tests: a refused repository connect no longer clears the chosen
+    repository, and test API instances no longer pick up a developer's user-secrets.
+- Next step: slice 3, commits and check results for a linked pull request, then
+  slice 4, releases. After evidence, the three follow-ups listed below (review
+  decision, reordering criteria, evidence count on lists).
+
+## Previous task: Evidence slice 1, connecting a GitHub repository (2026-10-08)
+
+- Branch: `feature/project-ui`. Uncommitted, on top of the uncommitted requirements
+  work and members removal described below.
+- Completed (ADR-032): the owner connects one GitHub repository to a project in
+  Settings > Repository, through the GitHub App, and can disconnect it. The connection
+  shows in the project's details panel and Settings.
+- Changed files:
+  - API: `app/api/GitHub/{GitHubClient,RepositoryEndpoints}.cs`, `app/api/Program.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, migration
+    `20261008070130_ProjectRepositories` and the model snapshot.
+  - Schema: `scripts/generate-project-repositories.mjs`,
+    `docs/schema/project-repositories{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{repositories,github-data}.ts`,
+    `app/web/src/app/projects/repository-actions.ts`,
+    `app/web/src/components/repository-connect.tsx`,
+    `app/web/src/app/projects/[projectId]/settings/{page,repository/page}.tsx`,
+    `app/web/src/app/projects/[projectId]/page.tsx`, `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/{test-github.mjs,test-github.d.mts,start-test-web.mjs,test-database.mjs}`,
+    `tests/support/github.ts`, `tests/e2e/repository.spec.ts`,
+    `tests/schema/github-repository.spec.ts`, `tests/api/{project-data,products}.spec.ts`,
+    `playwright.config.ts` (dummy GitHub client values for the test web app).
+  - Docs: DECISIONS (ADR-032), API, DATABASE, DEPLOYMENT, TESTING, and this file.
+- Checks: all 144 browser tests, the 7 repository API tests, and the project-data unit
+  tests passed, run with a temporary config that left out the test API on port 5100,
+  which the user's dev API held. `npm run lint`, `npm run typecheck`, the Release API
+  build, and `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - Not run: the api tests that need port 5100 (including the edited
+    `tests/api/products.spec.ts`), the other schema specs, and the real GitHub.
+  - **Local and production setup is needed before project pages work again**: apply the
+    ProjectRepositories migration, restart or redeploy the API, and set the GitHub
+    settings (docs/DEPLOYMENT.md). Until then project pages show not-found, because the
+    running API has no repository endpoint.
+  - Codex's teams branch will add its own migration; the two need ordering when the
+    branches meet.
+- Next step: slice 2, linking issues and pull requests to a requirement. Then the
+  three follow-ups listed in the next entry.
+
+## Previous task: Requirements in the project workspace (2026-10-08)
+
+- Branch: `feature/project-ui`, fast-forwarded to `feature/visual-polish` at `4fc3492`
+  and pushed. The two branches are the same up to that commit. The changes in this
+  entry are uncommitted. No PR is open.
+- Completed (ADR-030):
+  - The Requirements tab has "New requirement". Create and edit share one form for
+    title, description, and ordered acceptance criteria.
+  - A requirement page shows the description, criteria, version, and author, with Edit
+    and a confirmed Archive.
+  - A save is refused when someone else saved first, and the message says so.
+  - Archived requirements and archived projects are read-only.
+- Changed files:
+  - Web: `app/web/src/lib/{requirements,project-data,projects}.ts`,
+    `app/web/src/app/projects/requirement-actions.ts`,
+    `app/web/src/app/projects/[projectId]/requirements/{page,new/page}.tsx`,
+    `.../requirements/[requirementId]/{page,edit/page}.tsx`,
+    `app/web/src/components/{requirement-form,requirement-archive}.tsx`,
+    `app/web/src/app/app-shell.css`, and `app/web/src/app/projects/actions.ts`
+    (`isProjectId` renamed to `isUuid`).
+  - Tests: `tests/e2e/requirements.spec.ts` (new, 24 tests),
+    `tests/api/project-data.spec.ts`, `tests/e2e/scaffold.spec.ts`.
+  - Docs: DECISIONS (ADR-030), TESTING, and this file.
+- Checks: all 119 browser tests passed, run with a temporary config that started only
+  the test web server because the user's dev API held port 5100. `npm run lint` and
+  `npm run typecheck` passed. Inspected screenshots of the form and the detail page.
+- Known issues and risks:
+  - The full `npm test` was not run as configured. In the temporary run the api and
+    schema tests that need the test token issuer on port 5101 could not start; the new
+    unit tests in `tests/api/project-data.spec.ts` did run and passed.
+  - Criteria cannot be reordered. Text typed before the page finishes loading is reset.
+  - A mistaken text replace touched files in `app/web/.next`; the build cache was
+    cleared. If `npm run dev` misbehaves, stop it, delete `app/web/.next`, and restart.
+  - The project Members tab and pages were removed at the user's request (ADR-031):
+    projects will belong to teams, and team onboarding is being built with Codex on a
+    separate branch.
+  - In one full browser run, two tests failed once ("Try again recovers" and "a member
+    creates a requirement") and then passed in two repeated runs of those files. They
+    look timing-sensitive under load and were not changed.
+- Next step: the evidence slice with a real GitHub connection, chosen by the user. Its
+  design needs the user's approval and GitHub App details before any code. After
+  evidence, the user asked for these three, one prompt at a time:
+  1. A review decision on a requirement (accept, reject, or request more evidence, with
+     a note).
+  2. Reordering acceptance criteria in the form.
+  3. An evidence count on the requirement lists.
+
+## Previous task: Black-and-white public pages and failure tests (2026-10-08)
+
+- Branch: `feature/visual-polish`, committed as `4fc3492`.
+- Completed:
+  - The landing, sign-in, password, sign-in error, and policy pages now use the black
+    and white palette (ADR-027). The brand mark is shown in white.
+  - Planned pages are unchanged and still labeled as previews.
+  - Failure handling (ADR-029): "Try again" fetches again, a failing project section
+    keeps the project frame, and a form submitted after the session ended goes to
+    sign-in.
+  - A test-only API proxy lets browser tests make the API fail for one user, with 22
+    new failure tests.
+- Changed files: `app/web/src/app/{landing,public-pages,app-shell}.css`,
+  `app/web/src/app/error.tsx`, `app/web/src/app/projects/[projectId]/error.tsx` (new),
+  `scripts/{test-api-proxy,start-test-web}.mjs`, `tests/support/api-faults.ts` (new),
+  `tests/e2e/project-failures.spec.ts` (new), and docs/{DECISIONS,TESTING,HANDOFF}.md.
+- Checks: all 95 browser tests passed, run with a temporary config that started only
+  the test web server because the user's dev API held port 5100. `npm run lint` and
+  `npm run typecheck` passed. Inspected screenshots of the landing, login, and sign-in
+  error pages.
+- Known issues and risks:
+  - The full `npm test` (api and schema projects) was not run in this session.
+  - The browser icon is still the lavender mark.
+  - The public pages were recolored by replacing color values; their hover and focus
+    states were not inspected one by one.
+- Next step: the user reviews. Then build creating and editing requirements inside the
+  Requirements tab.
+
+## Previous task: Black-and-white redesign and the project workspace (2026-10-08)
+
+- Branch: `feature/visual-polish`, created from `feature/project-ui` at `b47ce88`.
+  Changes are uncommitted. It should merge after `feature/project-ui`. The user asked
+  for design and the project workspace together, so both are on this branch.
+- Completed:
+  - Visual system (ADR-027): near-black with white as the accent, the sidebar on the
+    page background, and the content in an inset rounded panel. Pills for view switches
+    and tabs, white primary buttons, one row-list style, dark form fields.
+  - Dashboard: the row of evidence circles is replaced by a progress ring with a count
+    and a checklist in the opened row. Its header action is now "New project". It still
+    shows labeled sample data.
+  - Project workspace (ADR-028): a layout with breadcrumb and tabs for every
+    `/projects/{id}` page. Overview, Requirements, and Members read real data. Settings
+    lets the owner rename and archive. Creating a project opens it.
+  - Example-project links are removed from the sidebar, the dashboard, and planned-page
+    navigation.
+- Changed files:
+  - Web styles and shell: `app/web/src/app/app-shell.css`,
+    `app/web/src/components/{app-frame,workspace-sidebar,dashboard-preview,scaffold-page,account-panel,project-form}.tsx`,
+    `app/web/src/app/{error,not-found}.tsx`.
+  - Project workspace: `app/web/src/app/projects/[projectId]/{layout,loading,page}.tsx`,
+    `.../[projectId]/{requirements,members,settings}/page.tsx`,
+    `app/web/src/components/{project-tabs,project-settings,requirement-rows}.tsx`,
+    `app/web/src/lib/{project-data,projects,scaffold-routes}.ts`,
+    `app/web/src/app/projects/{page,loading,actions}.ts(x)`, `app/web/src/app/projects/new/page.tsx`.
+  - Tests: `tests/e2e/{projects,scaffold,home}.spec.ts`, `tests/e2e/fixtures.ts`
+    (adds `runTestSql`), `tests/api/project-data.spec.ts`.
+  - Docs: DECISIONS (ADR-027, ADR-028), TESTING, and this file.
+- Decisions and assumptions: ADR-027 and ADR-028. No API, schema, or package change.
+- Checks: all 74 browser tests and the 7 project-data and API-config unit tests passed,
+  run with a temporary config that started only the test web server because the user's
+  dev API held port 5100. `npm run lint`, `npm run typecheck`, and `git diff --check`
+  passed. Inspected desktop and 390px screenshots of the dashboard, project overview,
+  members, settings, and a planned section.
+- Known issues and risks:
+  - The full `npm test` was not run; the rest of the api project and the schema project
+    were not re-run. No file they cover changed.
+  - The sidebar's "Example team" links and the dashboard rows are still sample content.
+  - Requirement rows link to the requirement page, which is still a planned placeholder.
+  - A project's not-found page is sent with HTTP 200 (ADR-028).
+- Next step: the user reviews the look and the workspace. Then build creating and
+  editing requirements inside the Requirements tab.
+
+## Current task: Projects list and create-project pages (2026-10-07)
+
+- Branch: `feature/project-ui`, created from `main` at `11285c2`. Changes are uncommitted.
+- Scope agreed with the user: projects only (list, create, then an overview with rename
+  and archive), built in slices that the user confirms. This entry covers the first slice.
+- Completed:
+  - `/projects` lists the signed-in user's active projects from the API, with an empty
+    state and a link to create one.
+  - `/projects/new` creates a personal project through a server action and returns to
+    the list. A rejected name shows a message next to the field.
+  - Browser tests now run against a real API: `scripts/start-test-web.mjs` starts one on
+    port 5106 with the web test database and the test web app as token issuer.
+- Changed files:
+  - Web: `app/web/src/lib/projects.ts`, `app/web/src/app/projects/{page,loading,actions}.ts(x)`,
+    `app/web/src/app/projects/new/page.tsx`, `app/web/src/components/project-form.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/start-test-web.mjs`, `tests/e2e/projects.spec.ts` (new),
+    `tests/api/project-data.spec.ts` (new), `tests/e2e/scaffold.spec.ts`.
+  - Docs: DECISIONS (ADR-026), TESTING, and this file.
+- Decisions and assumptions: ADR-026. Creating a project has no team choice because the
+  API has no teams. After creating, the user returns to the list, because the overview
+  page is still a placeholder. The scaffold test for the personal/team project
+  descriptions was removed with those placeholders. No API, schema, or package change.
+- Checks: `npm test` (131 passed), `npm run lint`, and `npm run typecheck` passed.
+  Inspected desktop and mobile screenshots of the list and the form error.
+- Known issues and risks:
+  - Not exercised: an unreachable API, a non-400 failure from the create call, and the
+    loading state.
+  - Project rows link to `/projects/{id}`, which is still a placeholder.
+  - The dashboard and the sidebar's "Example team" still show sample data.
+  - Production needs `SPECTHREAD_API_URL` in Vercel and a Render deploy of the merged
+    `main` before these pages work there. Neither was checked. The deployment notes in
+    the next entry still apply.
+- Next step: the user reviews this slice. Then build the project overview at
+  `/projects/{id}` with rename and archive, and send the create form there.
+
+## Previous task: Revised Teams implementation (branch feature/teams, merged as PR #14) (2026-10-08)
 
 - Branch: `feature/teams` in `/workspace/SpecThread`, based on `11285c2`.
   Cloud workspace. The user explicitly authorized committing each slice and
@@ -15,7 +540,7 @@
 - Claude owns `feature/visual-polish`, global `/projects` pages, and project
   creation/deletion forms. This branch leaves those web files untouched and owns
   Teams UI, team-specific project/archive tables, and C# team access contracts.
-- Confirmed and implemented (ADR-027 supersedes earlier navigation/personal projects):
+- Confirmed and implemented (ADR-040 supersedes earlier navigation/personal projects):
   - Your teams: independently expandable groups with account-saved state,
     Home/Projects links, personal favorites first, and a real native team menu.
     Menu: Favorite/Unfavorite, Settings, Copy URL, Open archive, Leave team.
@@ -119,8 +644,7 @@
 
 ## Previous task: Fix timestamp precision in API write responses (2026-10-02)
 
-- Branch: `fix/archive-timestamp-precision`, created from `main` at `f41acc2`. Changes
-  are uncommitted.
+- Branch: `fix/archive-timestamp-precision`, merged into `main` through PR #13.
 - Problem: CI failed in `tests/schema/product-api.spec.ts` because the first archive
   response carried `DateTime.UtcNow` at 100 ns precision, while a repeat request
   returned the stored value, which PostgreSQL keeps at microsecond precision.
@@ -137,9 +661,8 @@
   - Passed after the fix: `npm test` (125 passed), `npm run lint`, `npm run typecheck`,
     `dotnet build app/api --configuration Release`,
     `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check`.
-- Known issues and risks: the CI run for this branch has not been observed. `joinedAt`
-  uses the same clock but has no assertion comparing the add response with the list.
-- Next step: review the diff and commit with approval, then open a PR to `main`.
+- Known issues and risks: `joinedAt` uses the same clock but has no assertion comparing
+  the add response with the list.
 
 ## Previous task: Projects and requirements API with member management (2026-10-01)
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ArrowLeft, Bell, House, Menu, Settings, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Bell, Menu } from "lucide-react";
 import { frameFor, isInvitationPath } from "@/lib/app-navigation";
 import { SettingsSidebar } from "./settings-sidebar";
 import { WorkspaceSidebar, workspaceTitleFor } from "./workspace-sidebar";
@@ -14,12 +14,10 @@ import teamStyles from "./teams/teams.module.css";
  * Wraps page content in a sidebar with a mobile drawer and a top bar showing the section title.
  * Following any link inside the sidebar, including search results and menus, closes the drawer.
  */
-function AppShell({ sidebar, title, icon: Icon, children, hideTopbar = false }: {
+function AppShell({ sidebar, title, children }: {
   sidebar: ReactNode;
-  title: string;
-  icon: LucideIcon;
+  title: string | null;
   children: ReactNode;
-  hideTopbar?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -40,10 +38,12 @@ function AppShell({ sidebar, title, icon: Icon, children, hideTopbar = false }: 
         {sidebar}
       </aside>
       <div className="app-content">
-        {!hideTopbar && <header className="app-topbar">
-          <span className="app-breadcrumb"><Icon size={16} aria-hidden="true" /> {title}</span>
-          <Link className="icon-button" href="/notifications" aria-label="Inbox"><Bell size={18} aria-hidden="true" /></Link>
-        </header>}
+        {title && (
+          <header className="app-topbar">
+            <span className="app-breadcrumb">{title}</span>
+            <Link className="icon-button" href="/notifications" aria-label="Inbox"><Bell size={17} aria-hidden="true" /></Link>
+          </header>
+        )}
         <main id="main-content" tabIndex={-1} className="app-main">{children}</main>
       </div>
     </div>
@@ -61,11 +61,13 @@ export function AppFrame({ children }: { children: ReactNode }) {
   if (pathname === "/onboarding" || isInvitationPath(pathname)) return <main id="main-content" tabIndex={-1} className={teamStyles.onboardingMain}>{children}</main>;
   const frame = frameFor(pathname);
   if (frame === "settings") {
-    return <AppShell sidebar={<SettingsSidebar />} title="Settings" icon={Settings}>{children}</AppShell>;
+    return <AppShell sidebar={<SettingsSidebar />} title="Settings">{children}</AppShell>;
   }
   if (frame === "workspace") {
-    return <AppShell sidebar={<WorkspaceSidebar />} title={workspaceTitleFor(pathname)} icon={House}
-      hideTopbar={/^\/teams\/[\da-f-]{36}(?:\/|$)/i.test(pathname)}>{children}</AppShell>;
+    // A project's pages bring their own bar with the project name (projects/[projectId]/layout.tsx),
+    // and a team's pages their own header.
+    const ownBar = /^\/projects\/(?!new$)[^/]+/.test(pathname) || /^\/teams\/[\da-f-]{36}(?:\/|$)/i.test(pathname);
+    return <AppShell sidebar={<WorkspaceSidebar />} title={ownBar ? null : workspaceTitleFor(pathname)}>{children}</AppShell>;
   }
   if (["/", "/login", "/signup"].includes(pathname)) return <>{children}</>;
   return (

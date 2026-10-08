@@ -452,7 +452,374 @@ keep their created_by. Invitations for people without accounts (the /invites
 scaffold), ownership transfer, and rate limiting of member lookups remain future
 work. No schema change was needed.
 
-ADR-026: Teams foundation with member-only reads and one owner
+ADR-026: Product pages read through server components and write through server actions
+
+Status: Accepted
+
+Context: The projects list and create-project pages are the first pages that use the
+API. ADR-024 requires that browsers never call the API directly. ADR-018 described
+/projects as covering personal and team-owned projects, but the API has no teams.
+
+Decision: A page loads its data in an async server component with `apiFetch` and
+validates the response shape before rendering (app/web/src/lib/projects.ts). A failed
+load throws, so the shared error page offers a retry; a route `loading.tsx` covers the
+wait. Forms post to a server action and use React's `useActionState`. The action
+validates input with the same limits as the API, shows the API's 400 field message
+next to the field, and shows one general message for any other failure, which is
+logged on the server. No form or validation library is added. Creating a project
+makes a personal project owned by the caller; the form has no team choice until the
+API supports teams.
+
+Consequences: Product pages render on every request and need the API to be reachable.
+Session expiry during a form submit shows the general failure message, not a sign-in
+prompt. Browser tests need a real API, so the test web server starts one (docs/TESTING.md).
+
+ADR-027: Black-and-white visual system for the signed-in app
+
+Status: Accepted
+
+Context: The signed-in pages used dozens of one-off grays, mixed corner shapes, gray
+primary buttons, and uppercase labels above headings. The user rejected the gray and
+lavender look, compared rendered alternatives, and chose near-black with white as the
+accent, with a shell modeled on the Linear screenshots they supplied.
+
+Decision: `.app-shell` in app/web/src/app/app-shell.css defines the colors, lines, and
+text levels for every signed-in page, and rules there use those variables instead of
+literal colors. The sidebar sits on the page background and the content is an inset
+panel with a border and rounded corners. White marks the one primary action on a
+page. Color is reserved for status: amber for "needs review", red for "missing
+evidence" and destructive actions, green for "active". Each status color appears next
+to a text label. View switches and project tabs are pills. Requirement IDs use Geist
+Mono. One `.row-list` style serves project, requirement, and member lists. The
+dashboard shows each sample requirement's evidence as a progress ring with a count,
+and as a checklist when the row is opened; the row of connected circles is removed.
+The uppercase label above page headings is removed from signed-in pages.
+
+The landing, sign-in, password, sign-in error, and policy pages use the same black,
+white, and neutral grays: the lavender values in landing.css, public-pages.css, and
+the unscoped `.scaffold-*` rules were replaced, and the lavender brand image is shown
+in white through a CSS filter.
+
+Consequences: New signed-in UI should use the variables. The public pages still use
+literal colors and the landing page's own variables, not the `.app-shell` variables.
+The browser icon keeps the original lavender mark. This replaces the visual reference
+in ADR-020 and the palette in ADR-022.
+
+ADR-028: A project is a framed workspace with tabs
+
+Status: Accepted
+
+Context: The project pages were unconnected placeholders that accepted any ID. The
+user asked for a project working environment that is easy to extend.
+
+Decision: app/web/src/app/projects/[projectId]/layout.tsx loads the project once per
+request and frames every page under it with a breadcrumb and the tabs Overview,
+Requirements, Members, and Settings. A project the user does not belong to, an unknown
+ID, or an ID that is not a UUID shows the not-found page for every sub-route, matching
+the API's 404 for non-members (ADR-024). IDs are checked for UUID shape before they
+are placed in an API path. Loaders in app/web/src/lib/project-data.ts are cached per
+request so the layout and its pages share calls. Overview shows the five most recently
+changed requirements and a details panel. Requirements and Members are read-only
+lists. Settings lets the owner rename the project and archive it after an explicit
+confirmation, because the API has no unarchive. Creating a project now opens it
+(this changes ADR-026, which returned to the list). The remaining planned project
+pages render inside the same frame. Links to example projects are removed from the
+sidebar, the dashboard, and the planned-page navigation, because they would now show
+not-found.
+
+Consequences: A new project section is a new folder under `[projectId]` plus one tab
+entry. The not-found page for a project is sent with HTTP 200 because the loading
+state has already started the response. Creating and editing requirements, managing
+members, and the evidence views are still to be built. The owner's name comes from
+the members list. The Activity panel shows only the creation event, the one event
+the API can supply.
+
+ADR-029: Failed API calls keep the user's place, and tests can make the API fail
+
+Status: Accepted
+
+Context: The project pages had no tests for a failing API, and testing them showed two
+gaps: "Try again" on the error page re-rendered the failed result without asking the
+API again, and a form submitted after the session ended showed the error page
+instead of asking the user to sign in.
+
+Decision: A failed page load shows the shared error page, and "Try again" uses Next's
+`retry()` so the data is fetched again. A failing project section shows that error
+inside the project frame; a failing project load shows it without the frame. A failed
+create, rename, or archive keeps what the user typed and shows one message next to
+the form: the API's field message for 400, an owner-only message for 403, an archived
+message for 409 on rename, and a general message otherwise. When the error page
+appears and the browser has no session, the user is sent to `/login` with `next` set
+to the page they were on (this changes ADR-026). Browser tests reach the API through
+scripts/test-api-proxy.mjs on port 5107, which forwards requests unless a test has
+registered a fault for its own user: a status and body, a dropped connection, or a
+delay. The proxy runs only in the test harness.
+
+Consequences: The sign-in redirect needs one extra session request whenever an error
+page is shown. Text typed into a form is lost when the session has ended. The proxy
+reads the user ID from the token without verifying it, which is acceptable because
+it only selects test faults and the API still verifies every token.
+
+ADR-030: Requirements are created, edited, and archived inside the project's Requirements tab
+
+Status: Accepted
+
+Context: The API already supported requirements with ordered acceptance criteria and
+versioned updates (ADR-024), but no page used it.
+
+Decision: The Requirements tab lists a project's requirements and links to a create
+page, a detail page, and an edit page, all inside the project frame (ADR-028). One
+form component serves create and edit. Criteria are a list of text fields that can
+be added and removed; a blank criterion is an error, not silently dropped, so the
+position in an API field message always matches the field on screen. The edit form
+sends the version it was loaded with. When the API refuses a save with 409, the
+action reads the requirement again to say whether it was archived, changed by someone
+else, or belongs to an archived project. Archiving a requirement asks for
+confirmation because the API has no unarchive. Archived requirements and
+requirements of archived projects stay readable and show no edit or archive
+controls. A requirement opened under a different project's address shows not-found.
+The author's name comes from the project's member list; someone no longer a member
+is shown as "a former member".
+
+Consequences: Criteria cannot be reordered except by removing and re-adding them.
+After a conflict the user must reload and re-enter their change; there is no merge.
+Every save gives the criteria new IDs (ADR-024). The planned evidence, review, and
+history pages under a requirement are still previews and are not linked from the
+detail page.
+
+ADR-031: Projects have no members page; membership will belong to teams
+
+Status: Accepted
+
+Context: The user decided that every project must belong to a team, that only a team
+configures a project, and that membership is managed on the team. Onboarding that
+creates a user's first team is being built on a separate branch.
+
+Decision: The project Members tab and the `/projects/{id}/members` and
+`/projects/{id}/settings/members` pages are removed, along with the member count in
+the project's details panel. This changes ADR-028. The API's member endpoints
+(ADR-025) are unchanged and are still read for the owner's and authors' names.
+
+Consequences: Until teams exist in the API, project membership can only be changed
+through the API directly. Project ownership, the project list, and the owner-only
+rules will need to change when projects move under teams.
+
+ADR-032: A project connects one GitHub repository through the GitHub App
+
+Status: Accepted
+
+Context: The user chose a real GitHub connection for evidence. The GitHub App
+`specthread` is also the app used for GitHub sign-in, so a signed-in GitHub user has
+a token issued by it. An installation ID alone must not be trusted: anyone can guess
+one.
+
+Decision: A project has at most one repository, stored in `project_repositories`
+(migration ProjectRepositories). The owner connects it in project Settings. The web
+app reads the owner's GitHub token from their linked GitHub account through Better
+Auth and sends it to the API for that one request; it is never stored by the API,
+logged, or sent to the browser. The API lists repositories with
+`GET /user/installations` and `GET /user/installations/{id}/repositories`, so GitHub
+decides what the user can reach. Before saving, the API finds the chosen repository
+in that installation with the user's token and confirms it can act as the app there
+by creating an installation token. All GitHub calls go through `IGitHubClient`
+(app/api/GitHub). New settings: `GitHub:AppId`, `GitHub:PrivateKey` (PEM; literal
+`\n` accepted), `GitHub:AppSlug`, and optional `GitHub:ApiBaseUrl` for tests. No
+Setup URL or webhook is used. Members read the connection; only the owner connects
+or disconnects; archived projects cannot change it. GitHub being unreachable is 502,
+missing or rejected app credentials 503, and a token or repository GitHub does not
+accept 400 on the field.
+
+Consequences: A user who signed up by email must link GitHub before connecting. The
+web app's GitHub client ID must be this GitHub App's. The repository's name is a
+snapshot from connection time and is not updated if it is renamed. Listing stops at
+500 repositories. The API must be deployed with the migration applied before the web
+app that calls it: against an older API, project pages show not-found. Linking
+issues and pull requests, checks, releases, and webhooks are later slices.
+
+ADR-033: Issues and pull requests are linked to a requirement as stored GitHub snapshots
+
+Status: Accepted
+
+Context: With a repository connected (ADR-032), a requirement needs the issues and
+pull requests that implement it. The product must keep inspectable evidence
+(ADR-004), and no webhook exists yet.
+
+Decision: `requirement_evidence` (migration RequirementEvidence) stores one row per
+linked issue or pull request: its kind, number, title, state (open, closed, or
+merged), author, GitHub link, GitHub's created, updated, and closed times, the
+repository it came from, who linked it, and when it was last read. Any project member
+links an item by number, `#number`, or its github.com address, which must be in the
+project's connected repository. The API reads the item from GitHub as the app
+(installation token) before saving, so only items that exist can be linked. A
+requirement holds at most 50 links and each item once. "Refresh" reads every linked
+item of the connected repository again and saves only if all reads succeed; an item
+GitHub no longer has keeps its last snapshot. Unlinking removes the row only.
+Archived requirements and projects are read-only. Without a connected repository,
+existing links stay readable but cannot change. A missing item is 400 on
+`reference`; a duplicate, the limit, no repository, or an uninstalled app is 409 with
+the reason in `detail`.
+
+Consequences: Evidence is as fresh as the last refresh; nothing updates on its own
+until webhooks exist. An installation token is created for every GitHub read and is
+not cached. Commits, check results, and releases are not shown yet. Reconnecting a
+different repository leaves earlier links as unrefreshable snapshots.
+
+ADR-034: Commits are evidence, linked directly and shown inside pull requests
+
+Status: Accepted
+
+Context: The user's purpose for the product is that the changes made in commits
+count as evidence, not only issues and pull requests.
+
+Decision: A commit of the connected repository can be linked to a requirement by its
+SHA (7 to 40 hex digits) or its github.com address, including the address of a commit
+opened inside a pull request. The API reads it from GitHub as the app and stores the
+full SHA, the first line of the message (at most 300 characters), the author
+(GitHub account, otherwise the name written in the commit), the commit date, and the
+lines added, lines removed, and files changed. A linked pull request now also stores
+its totals (commits, lines added and removed, files changed), its latest commit's
+SHA, and its first 100 commits as a JSON array, shown on demand. Migration
+EvidenceCommits changes `requirement_evidence`: `number` and `state` become optional,
+and `sha`, `additions`, `deletions`, `changed_files`, `commit_count`, and `commits`
+are added. A check constraint requires a commit to have a SHA and no number or state,
+and an issue or pull request to have a number and a state. A commit can be linked
+once per requirement. Text made only of digits is read as an issue number. Refresh
+reads issues and pull requests again but not commits, because a commit does not
+change.
+
+Consequences: A commit whose SHA is all digits and seven or more long must be linked
+by its address. Files changed in a commit is the number GitHub lists, which it caps
+for very large commits. Rolling the migration back deletes commit links. Check
+results and releases are still to come; the pull request's latest commit SHA is
+stored so check results can be read for it later.
+
+ADR-035: Check results are stored with the commit or pull request they ran on
+
+Status: Accepted
+
+Context: A reviewer must be able to see which automated checks ran and what they
+reported (docs/PROJECT.md). Linked pull requests already store their latest commit's
+SHA (ADR-034).
+
+Decision: When a pull request or commit is linked or refreshed, the API reads that
+commit's check runs and its older-style commit statuses from GitHub as the app and
+stores them on the evidence row (`checks`, `check_count`, `checks_read_at`; migration
+EvidenceChecks). Each is normalized to a name, a result, a link, a completion time,
+and whether it is a check run or a status. The result is one of: passed (success),
+failed (failure, timed out, action required, error), running (not completed, pending),
+skipped, cancelled, or neutral (anything else). "Passed" means only that a recorded
+check reported success. The first 100 are stored, sorted by name, with GitHub's
+total. A link is kept only when it points at github.com, so a status from an outside
+CI service is listed without one. If GitHub will not let the app read either kind
+(403 or 404), `checks` is stored as null and the item is still linked or refreshed;
+if it can read one kind, that kind is shown. Any other GitHub failure stops the link
+or the refresh as before. Refresh now also visits commits, for their checks only. The
+GitHub client keeps an installation token for the length of one API request.
+
+Consequences: A refresh makes more GitHub calls (five for a pull request, two for a
+commit) and gets slower as links grow. Results are a snapshot: a running check stays
+"running" until someone refreshes. A missing Checks or Commit statuses permission
+shows as "Check results could not be read", not as an error. Reusing the token within
+a request is not covered by a test.
+
+ADR-036: Every evidence link records its source, and AI may only suggest
+
+Status: Accepted
+
+Context: The user plans AI summaries and recommendations. The product boundary
+(AGENTS.md) is that AI may suggest relationships or summaries while people inspect
+the evidence and make the acceptance decision.
+
+Decision: `requirement_evidence.source` is `manual` or `suggested` (default `manual`;
+migration EvidenceChecks). `linked_by` is always a person: for a suggested link, the
+person who confirmed it. The link endpoint ignores any `source` a caller sends and
+writes `manual`; only a future "confirm a suggestion" endpoint will write
+`suggested`. The requirement page names who confirmed a suggested link. Rules for
+the AI work that follows: suggestions are kept in their own store and enter
+`requirement_evidence` only when a project member confirms them; AI never records a
+review decision; every core flow works with AI unavailable or switched off; and AI
+output shown to users is labeled as a suggestion and tied to the evidence it refers to.
+
+Consequences: No AI code, provider, or suggestions table exists yet, and nothing can
+create a `suggested` row except a direct database write. Rolling the migration back
+loses the marker. Which model or provider to use is undecided.
+
+ADR-037: Releases are evidence, and GitHub's history says which linked changes they contain
+
+Status: Accepted
+
+Context: The remaining evidence question in docs/PROJECT.md is whether a change was
+associated with a release. The user chose to have SpecThread ask GitHub which linked
+changes a release contains, so the answer does not rest on someone asserting it.
+
+Decision: A published release of the connected repository can be linked to a
+requirement by its tag or its github.com address. The API reads the release as the
+app, resolves its tag to a commit, and stores the tag, name, pre-release flag,
+author, publish date, link, and that commit's SHA. For every linked commit and merged
+pull request it asks GitHub's compare endpoint whether that change is an ancestor of
+the release's commit and stores the answers on the release row (`contains`, a map of
+evidence ID to true or false). A commit is compared by its SHA. A merged pull request
+is compared by its merge commit, now stored as `merge_sha`, because after a squash or
+rebase merge the commit on its branch is not in the target branch's history. An
+unmerged pull request is not compared. A commit GitHub no longer has is not included.
+The comparison runs when a release is linked, when a commit or pull request is linked
+while releases exist, and for everything on refresh. Migration EvidenceReleases adds
+`tag`, `prerelease`, `merge_sha`, and `contains`, allows `kind = 'release'`, requires
+a release to have a tag and no number or state, and allows each tag once per
+requirement. A reference is read in this order: a number, a commit SHA, a github.com
+link to an issue, pull request, commit, or release, and otherwise any text without
+spaces up to 100 characters as a release tag. Releases have no check results.
+
+Consequences: "Included" means the commit is in the history of the release's tag; a
+change reverted before the release still counts. A tag made only of digits, or one
+that looks like a SHA, must be linked by its address. Mistyped text is now answered
+with "GitHub has no release tagged ..." where it used to be rejected as a format
+error. Draft releases cannot be linked. One release costs two GitHub calls plus one
+per linked commit and merged pull request, on link and on every refresh. Deployments
+are not covered: the app lacks that permission. How a tag is resolved to a commit and
+the compare statuses follow GitHub's documentation and have not been confirmed
+against the real GitHub. Rolling the migration back deletes release links.
+
+ADR-038: A person other than the author records the decision on a requirement
+
+Status: Accepted
+
+Context: docs/PROJECT.md asks for "recording a human review decision and note" and
+for an answer to "Who accepted or rejected the available evidence, and when?" It is
+also the human checkpoint that later AI assistance depends on (ADR-036). The user
+chose that any project member except the requirement's author may decide, and that
+a decision stays and is shown as outdated when the requirement changes afterwards.
+
+Decision: A decision is `accepted`, `rejected`, or `more_evidence`, with a note of
+up to 2,000 characters that is required unless the decision accepts. Any project
+member may record one except the person who created the requirement, who gets 403
+with the reason. An archived requirement or project takes none (409). The request
+carries the requirement `version` the reviewer saw, and a different current version
+is refused with 409, so nobody decides on text they have not read (the pattern of
+ADR-030). Each decision is a new row in `requirement_reviews` (migration
+RequirementReviews); rows are never changed or deleted through the API, and the
+newest is the requirement's current status. A row stores the version reviewed and a
+snapshot of the evidence links at that moment: each link's ID, kind, label (`#9`,
+short SHA, or tag), title, and state. "Outdated" is computed, not stored: the
+current version differs from the reviewed one, or the set of current evidence link
+IDs differs from the snapshot. Refreshing evidence from GitHub keeps the IDs and so
+does not make a decision outdated. The requirement list carries each requirement's
+latest decision with `outdated`; the requirement itself does not, because its page
+reads the full list of decisions. On screen "Accepted" means a person approved the
+requirement; nothing says verified or proven.
+
+Consequences: A project whose team has one member cannot record any decision; a
+second person joins the team by invitation (ADR-040, ADR-041). The author rule
+looks only at who created the requirement, not at who edited it last. A decision
+can be made with no evidence linked. Nothing is locked after acceptance: an edit or
+a changed link marks the decision outdated and waits for a new one. There is no
+assignment of reviewers, no notification, and no evidence policy; "My reviews" and
+Inbox stay previews. The snapshot does not record check results or release
+contents, and a refresh that changes a link's state does not mark the decision
+outdated. The list endpoint reads every decision of the listed requirements to find
+the latest. Rolling the migration back deletes every recorded decision.
+
+ADR-039: Teams foundation with member-only reads and one owner
 
 Status: Accepted
 
@@ -480,13 +847,13 @@ access require user choices in their respective slices. No team membership chang
 existing project permissions. Team-specific styling uses existing app tokens and a
 CSS module; the shared sidebar patch changes its data rather than the visual system.
 
-ADR-027: Team navigation, required first-team onboarding, and team-owned projects
+ADR-040: Team navigation, required first-team onboarding, and team-owned projects
 
 Status: Accepted
 
 Context: The user clarified the desired navigation using screenshots, paused changes,
 chose the detailed behavior, and explicitly approved resuming the revised Teams plan.
-This supersedes ADR-018's personal-project model and ADR-026's six-section Team Home.
+This supersedes ADR-018's personal-project model and ADR-039's six-section Team Home.
 
 Decision: Your teams has independently expandable groups, with Home and Projects
 links and account-saved expansion preferences. Favorites are personal and sort first
@@ -555,6 +922,39 @@ signup preserve that destination. Token previews are public but grant no access;
 only acceptance by the verified matching account completes setup. Unavailable links
 and wrong accounts do not bypass onboarding. Accepted links cannot rejoin a removed
 member. Only SHA-256 hashes of random 32-byte invitation secrets are stored.
+
+ADR-041: After the merge with teams, project work follows team roles
+
+Status: Accepted
+
+Context: The projects, requirements, evidence, and review work (ADR-026 to ADR-038)
+and the teams work (ADR-039, ADR-040) were built on separate branches from the same
+commit. The first assumed a project has one owner and its own members; the second
+made every project belong to a team, with access from team membership and
+management by the team's Owner and Admins. The user's decision is that a project is
+always owned by a team and a user always has a team from onboarding.
+
+Decision: Team rules win wherever the two met. A project is created in a team the
+user owns or administers: the create form asks for the team, offers only those
+teams, and can be opened for one team with `/projects/new?team=<id>`, which the
+team's project list links to. Connecting or disconnecting a project's GitHub
+repository needs the team's Owner or an Admin, like renaming and archiving a
+project (this changes ADR-032, which allowed only the project's creator). The web
+decides what to show from the project's `teamRole`, not from `ownerUserId`, which
+is now only who created the project. Review decisions are unchanged: any member of
+the project's team except the requirement's author (ADR-038). The decision numbers
+of the teams work were changed from 026 and 027 to 039 and 040 because both
+branches had used 026 and 027.
+
+Consequences: A second reviewer now joins by accepting a team invitation;
+`POST /projects/{projectId}/members` answers 410, so the workaround named in ADR-038
+is gone. A team Member cannot create a project or connect a repository and is told
+why. The two branches' migrations interleave by timestamp; EF applies them in that
+order and each applies cleanly because the evidence and review tables only refer to
+projects and requirements. TeamProjects turns each existing project into its own
+team, so projects created before the merge appear as one team per project. The
+team pages keep the styles they were built with and have not been brought into the
+black-and-white system of ADR-027.
 
 ADR-NNN: Title
 

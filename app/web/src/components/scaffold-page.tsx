@@ -10,7 +10,6 @@ export function ScaffoldPage({ title, description }: ScaffoldPageProps) {
   return (
     <section className="scaffold-page" aria-labelledby="page-title">
       <header className="scaffold-heading">
-        <p className="scaffold-kicker">SpecThread / Planned workspace</p>
         <h1 id="page-title">{title}</h1>
         <p>{description}</p>
       </header>

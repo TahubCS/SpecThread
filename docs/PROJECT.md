@@ -24,7 +24,7 @@ A user may belong to multiple teams, and every project belongs to one team.
 The combined projects view groups accessible projects by team; a team's
 projects view shows only that team's projects. Every team member can access
 its projects and work on requirements. Only the team's Owner and Admins create
-projects or manage their names, settings, and archive/restore actions (ADR-027).
+projects or manage their names, settings, and archive/restore actions (ADR-040).
 
 After the first verified sign-in, required onboarding asks for the initial team's
 name and optional description. The creator becomes its Owner. Completion is saved

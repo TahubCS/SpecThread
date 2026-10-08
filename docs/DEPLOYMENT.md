@@ -90,6 +90,27 @@ The team's current GitHub App is private: GitHub returns 404 at
 settings > Advanced > Make public) or use an OAuth App before others sign in or
 link GitHub.
 
+### GitHub repository connection (ADR-032)
+
+The GitHub App used for sign-in also reads repositories. Its repository permissions
+must be read-only for Metadata, Issues, Pull requests, Contents, Checks, and Commit
+statuses. Leave "Request user authorization (OAuth) during installation" off, the
+Setup URL empty, and the webhook inactive. The web app's `GITHUB_CLIENT_ID` and
+`GITHUB_CLIENT_SECRET` must be this app's.
+
+The API needs the app's ID, private key, and public name. Locally:
+
+```powershell
+dotnet user-secrets set "GitHub:AppId" "<app id>" --project app/api
+dotnet user-secrets set "GitHub:PrivateKey" (Get-Content "<path>.pem" -Raw) --project app/api
+dotnet user-secrets set "GitHub:AppSlug" "specthread" --project app/api
+```
+
+On Render set `GitHub__AppId`, `GitHub__PrivateKey`, and `GitHub__AppSlug`. Order:
+apply the ProjectRepositories migration (docs/DATABASE.md), deploy the API, then
+deploy the web app. Against an API without the repository endpoints, project pages
+show not-found.
+
 ### Google OAuth Configuration (ADR-016)
 In Google Cloud Console > APIs & Services > Credentials, create an **OAuth client
 ID** of type **Web application**, after configuring the OAuth consent screen:
