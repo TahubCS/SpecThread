@@ -43,6 +43,8 @@ export async function startTestDatabase() {
     await pool.query("CREATE ROLE anon; CREATE ROLE authenticated; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;");
     await pool.query(await readSql("docs/schema/initial.sql"));
     await pool.query(await readSql("docs/schema/auth-rate-limits.sql"));
+    await pool.query(await readSql("docs/schema/teams.sql"));
+    await pool.query(await readSql("docs/schema/team-navigation.sql"));
     return { name, connectionString, pool, stop };
   } catch (error) {
     await stop();

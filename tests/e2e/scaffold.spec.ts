@@ -4,13 +4,10 @@ import path from "node:path";
 import { navigationFor, scaffoldRoutes } from "../../app/web/src/lib/scaffold-routes";
 
 const routes = [
-  ["/teams", "Teams"],
-  ["/teams/team-1/projects", "Team projects"],
   ["/projects", "Projects"],
   ["/projects/project-1/settings/repository", "Repository settings"],
   ["/projects/project-1/requirements/requirement-1/evidence", "Evidence thread"],
   ["/projects/project-1/requirements/requirement-1/review", "Review requirement"],
-  ["/invites/example-token", "Invitation"],
   ["/projects/project-1/matrix", "Traceability matrix"],
 ] as const;
 
@@ -19,7 +16,7 @@ test("scaffold navigation reaches the main product areas", async ({ page }, test
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams" }).click();
   await expect(page).toHaveURL(/\/teams$/);
   await expect(page.getByRole("heading", { name: "Teams", level: 1 })).toBeVisible();
-  await expect(page.getByText("Product data and actions are not connected yet.")).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: "Create team", exact: true }).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("teams-desktop.png"), fullPage: true });
 });
 
@@ -59,11 +56,9 @@ test("standalone search is not part of the route map", async ({ page }) => {
   expect(response?.status()).toBe(404);
 });
 
-test("route navigation connects teams, projects, requirements, evidence, and review", async ({ page }) => {
+test("route navigation connects projects, requirements, evidence, and review", async ({ page }) => {
   await page.goto("/dashboard");
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams", exact: true }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team projects" }).click();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Projects", exact: true }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Project overview (example route)" }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirements" }).click();
   await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirement overview (example route)" }).click();
@@ -82,7 +77,7 @@ test("every reserved page participates in navigation", async () => {
       if (entry.isDirectory()) return pagesIn(fullPath);
       if (entry.name !== "page.tsx") return [];
       const contents = await readFile(fullPath, "utf8");
-      if (!contents.includes("ScaffoldPage") && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
+      if (!contents.includes("ScaffoldPage") && !fullPath.startsWith(path.join(root, "teams") + path.sep) && !fullPath.startsWith(path.join(root, "invites") + path.sep) && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
           !fullPath.endsWith(`${path.sep}settings${path.sep}account${path.sep}page.tsx`)) return [];
       return [`/${path.relative(root, directory).split(path.sep).join("/")}`];
     }));

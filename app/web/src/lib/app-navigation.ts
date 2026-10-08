@@ -36,6 +36,7 @@ const settingsPrefixes = ["/settings", "/account", "/help", "/welcome", "/onboar
  * unknown routes, uses the workspace sidebar, so no new route can gain the top header.
  */
 export function frameFor(pathname: string): Frame {
+  if (pathname === "/onboarding") return "public";
   if (isPublicPath(pathname)) return "public";
   if (settingsPrefixes.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))) return "settings";
   return "workspace";

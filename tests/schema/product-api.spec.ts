@@ -19,6 +19,7 @@ test.beforeAll(async () => {
     ('second','Second','second@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now()),
     ('unverified','Unverified','unverified@example.invalid',false,now(),now())`);
+  await database.pool.query(`INSERT INTO user_onboarding (user_id,completed_at) SELECT id,now() FROM public."user" WHERE "emailVerified"`);
   const url = new URL(database.connectionString);
   const connection = `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}`;
   api = await startApi(5105, { ConnectionStrings__Database: connection, Auth__Issuer: issuer });

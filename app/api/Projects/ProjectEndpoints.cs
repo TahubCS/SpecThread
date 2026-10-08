@@ -18,7 +18,7 @@ internal static class ProjectEndpoints
 
         projects.MapGet("/", List).WithName("ListProjects");
         projects.MapPost("/", Create).WithName("CreateProject")
-            .ProducesProblem(StatusCodes.Status403Forbidden);
+            .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status409Conflict);
         projects.MapGet("/{projectId:guid}", Get).WithName("GetProject");
         projects.MapPatch("/{projectId:guid}", Rename).WithName("RenameProject")
             .ProducesProblem(StatusCodes.Status403Forbidden).ProducesProblem(StatusCodes.Status409Conflict);
@@ -49,6 +49,10 @@ internal static class ProjectEndpoints
         {
             return TypedResults.Problem("The signed-in user has no account record.", statusCode: StatusCodes.Status403Forbidden);
         }
+
+        if (!await db.UserOnboardings.AnyAsync(o => o.UserId == userId, cancel))
+            return TypedResults.Problem("Name your first team before creating projects.", statusCode: StatusCodes.Status409Conflict,
+                extensions: new Dictionary<string, object?> { ["code"] = "onboarding_required" });
 
         var project = new Project { Id = Guid.NewGuid(), Name = name!, OwnerUserId = userId, CreatedAt = Clock.UtcNow() };
         db.Projects.Add(project);

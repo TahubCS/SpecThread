@@ -1,6 +1,7 @@
-import { ScaffoldPage } from "@/components/scaffold-page";
+import { TeamList } from "@/components/teams/team-list";
+import { getTeams } from "@/lib/teams";
 
-/** Renders the "Teams" placeholder with scaffold navigation and no connected product data or actions. */
-export default function Page() {
-  return <ScaffoldPage title="Teams" description="Browse the teams you belong to and their projects." />;
+/** Lists the signed-in user's real team memberships. */
+export default async function Page() {
+  return <TeamList teams={await getTeams()} />;
 }

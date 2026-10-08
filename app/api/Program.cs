@@ -5,6 +5,7 @@ using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
 using SpecThread.Api.Projects;
 using SpecThread.Api.Requirements;
+using SpecThread.Api.Teams;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,6 +47,7 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
 app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
+app.MapTeamEndpoints();
 
 app.Run();
 

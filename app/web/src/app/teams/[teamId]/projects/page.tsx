@@ -1,6 +1,4 @@
-import { ScaffoldPage } from "@/components/scaffold-page";
-
-/** Renders the "Team projects" placeholder with scaffold navigation and no connected product data or actions. */
-export default function Page() {
-  return <ScaffoldPage title="Team projects" description="Browse projects owned by this team." />;
+import { TeamPlannedSection } from "@/components/teams/team-planned-section";
+export default function Page(props: { params: Promise<{ teamId: string }> }) {
+  return <TeamPlannedSection {...props} title="Team projects" />;
 }
