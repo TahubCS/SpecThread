@@ -9,6 +9,7 @@ import {
 } from "./projects";
 import { parseEvidenceList, type Evidence } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
+import { parseReviews, type Review } from "./reviews";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
 async function read(path: `/${string}`): Promise<unknown | null> {
@@ -66,4 +67,11 @@ export const listEvidence = cache(async (requirementId: string): Promise<Evidenc
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence`) : null;
   if (body === null) notFound();
   return parseEvidenceList(body);
+});
+
+/** Lists the decisions recorded on a requirement, newest first. Call after `requireRequirement`. */
+export const listReviews = cache(async (requirementId: string): Promise<Review[]> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/reviews`) : null;
+  if (body === null) notFound();
+  return parseReviews(body);
 });

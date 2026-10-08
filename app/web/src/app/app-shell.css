@@ -336,6 +336,31 @@ a.row:focus-visible { outline-offset: -2px; }
 .evidence-link-row .button { min-height: 36px; }
 .requirement-section > .notice { margin-top: 12px; }
 .requirement-section .muted a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+/* Review decisions */
+.review-badge > span:first-child { width: 7px; height: 7px; margin-right: 6px; border: 1.5px solid var(--app-text-3); border-radius: 50%; }
+.review-badge.is-accepted > span:first-child { border-color: var(--app-ok); background: var(--app-ok); }
+.review-badge.is-rejected > span:first-child { border-color: var(--app-danger); background: var(--app-danger); }
+.review-badge.is-outdated { border-style: dashed; color: var(--app-text-3); }
+.review-current { display: grid; gap: 8px; }
+.review-decision { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 13px; }
+.review-note { line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.review-current .evidence-commits { color: var(--app-text-2); font-size: 13px; }
+.review-current .evidence-commits p { margin-top: 8px; }
+.review-history { margin-top: 12px; color: var(--app-text-2); font-size: 13px; }
+.review-history summary { width: fit-content; cursor: pointer; }
+.review-history summary:hover { color: var(--app-text); }
+.review-history ol { display: grid; gap: 0; margin: 8px 0 0; padding: 0; border: 1px solid var(--app-line); border-radius: 10px; list-style: none; }
+.review-history li { display: grid; gap: 6px; padding: 10px 14px; }
+.review-history li + li { border-top: 1px solid var(--app-line); }
+.review-history .review-note { color: var(--app-text); }
+.review-form { display: grid; gap: 14px; margin-top: 20px; }
+.review-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.review-form legend { margin-bottom: 8px; padding: 0; font-size: 13px; font-weight: 500; }
+.review-choices { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.review-choices label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.review-choices input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--app-text); }
+.review-form fieldset > .notice-error { margin-top: 8px; padding: 0; border: 0; background: none; color: var(--app-danger); font-size: 13px; }
+.review-form .field textarea { min-height: 84px; }
 
 /* Repository connection */
 .settings-link { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; padding: 12px 14px; border: 1px solid var(--app-line); border-radius: 10px; color: var(--app-text); }

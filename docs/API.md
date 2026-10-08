@@ -58,6 +58,8 @@ to the project; non-members get 404 as if the project did not exist.
 | POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
 | POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
 | DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
+| GET | `/requirements/{requirementId}/reviews` | member | | 200 `Review[]` (newest first) |
+| POST | `/requirements/{requirementId}/reviews` | member, not the requirement's author | `{ decision, note?, version }` | 201 `Review` |
 
 `reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
 40 hex digits, a release tag, or the github.com address of any of them, in the
@@ -97,8 +99,18 @@ type Project = { id: string; name: string; ownerUserId: string; createdAt: strin
 type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null;
+  // The latest decision, or null. Only on the list; a requirement's page reads /reviews.
+  review: { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean } | null;
 };
-type Requirement = RequirementSummary & {
+type Decision = "accepted" | "rejected" | "more_evidence";
+type Review = {
+  id: string; requirementId: string; decision: Decision; note: string;
+  requirementVersion: number; // the version the reviewer saw
+  // The evidence links as they were when the decision was made. label is "#9", a short SHA, or a tag.
+  evidence: { id: string; kind: string; label: string; title: string; state: string | null }[];
+  decidedBy: string; decidedAt: string;
+};
+type Requirement = Omit<RequirementSummary, "review"> & {
   description: string; createdBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];
 };
@@ -134,6 +146,14 @@ type Evidence = {
 };
 ```
 
+Review decisions (ADR-038): `note` may have up to 2,000 characters and is required
+for `rejected` and `more_evidence`. `version` is the requirement version the
+reviewer was shown; any other current version is refused with 409. The requirement's
+author gets 403, and an archived requirement or project 409. Decisions are only
+added: there is no update or delete. A decision is `outdated` when the requirement's
+version, or the set of its evidence link IDs, differs from what was reviewed;
+refreshing evidence does not change that.
+
 Timestamps are ISO 8601 UTC strings. Text is trimmed before saving.
 
 ## Errors
@@ -144,7 +164,7 @@ Errors are problem details (`application/problem+json`) with `title`, `status`, 
 |---|---|---|
 | 400 | Validation failed; `errors` maps fields such as `title` or `acceptanceCriteria[2]` to messages | Show the messages next to the fields |
 | 401 | Missing or invalid token | Send the user to sign in |
-| 403 | Owner-only action (including removing another member), or the account record is missing | Explain that only the owner can do this |
+| 403 | Owner-only action (including removing another member), a decision by the requirement's author, or the account record is missing | Show the `detail` |
 | 404 | Not found, or not a member | Show a not-found state |
 | 409 | Archived item, stale `version`, duplicate member, or removing the owner | Offer to reload |
 

@@ -211,6 +211,30 @@ docs/schema/evidence-releases.sql in the Supabase SQL editor. Rollback:
 `dotnet ef database update EvidenceChecks --project app/api`, or the rollback script.
 It deletes every release link and the stored merge commits of pull requests.
 
+## Requirement reviews migration
+
+RequirementReviews creates public.requirement_reviews (ADR-038): one row per decision
+on a requirement, with `decision` (`accepted`, `rejected`, or `more_evidence`),
+`note` (required unless accepted), `requirement_version`, `evidence` (a jsonb array,
+the evidence links as they were), `decided_by`, and `decided_at`. Foreign keys to the
+requirement and the user restrict deletion. RLS is enabled with no policies, and
+grants to `PUBLIC`, `anon`, and `authenticated` are revoked.
+
+```sh
+dotnet ef migrations add RequirementReviews --project app/api --configuration Release
+node scripts/generate-requirement-reviews.mjs
+```
+
+The second command generates docs/schema/requirement-reviews.sql and
+requirement-reviews-rollback.sql and adds the RLS and grant statements.
+
+Apply it after EvidenceReleases: with the API stopped,
+`dotnet ef database update --project app/api`, or run
+docs/schema/requirement-reviews.sql in the Supabase SQL editor. Until it is applied,
+requirement lists and requirement pages fail. Rollback:
+`dotnet ef database update EvidenceReleases --project app/api`, or the rollback
+script. It drops the table, and with it every recorded decision.
+
 ## Supabase tooling
 
 ```sh

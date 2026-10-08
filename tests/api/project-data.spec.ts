@@ -10,6 +10,7 @@ import {
   releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
+import { parseReview, parseReviews, parseReviewSummary, reviewedText, reviewError, reviewOutdated } from "../../app/web/src/lib/reviews";
 
 const project = { id: "p1", name: "Billing", ownerUserId: "u1", createdAt: "2026-10-01T10:00:00.123456Z", archivedAt: null };
 
@@ -49,8 +50,13 @@ test("only UUID-shaped project IDs are sent to the API", () => {
 
 test("requirement and member lists are accepted only in the documented shape", () => {
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", version: 2,
-    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null };
+    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, review: null };
   expect(parseRequirementSummaries([{ ...requirement, description: "ignored" }])).toEqual([requirement]);
+  const review = { decision: "more_evidence", decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z", outdated: true };
+  expect(parseRequirementSummaries([{ ...requirement, review: { ...review, note: "ignored" } }])).toEqual([{ ...requirement, review }]);
+  for (const value of [undefined, "accepted", {}, { ...review, decision: "verified" }, { ...review, outdated: "no" }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 1 }]) {
+    expect(() => parseRequirementSummaries([{ ...requirement, review: value }]), JSON.stringify(value)).toThrow("unexpected review");
+  }
   for (const value of [null, {}, [null], [{ ...requirement, version: "2" }], [{ ...requirement, updatedAt: "soon" }], [{ ...requirement, title: 1 }]]) {
     expect(() => parseRequirementSummaries(value)).toThrow("unexpected requirement");
   }
@@ -218,4 +224,50 @@ test("evidence is accepted only in the documented shape", () => {
   expect(checkSummary({ kind: "commit", checks: [check("passed")], checkCount: 150 })).toBe("1 of 150 checks passed");
   expect(problemDetail({ detail: "#7 is already linked to this requirement." })).toBe("#7 is already linked to this requirement.");
   for (const problem of [null, "text", {}, { detail: "" }, { detail: 5 }]) expect(problemDetail(problem)).toBeNull();
+});
+
+test("review responses are accepted only in the documented shape", () => {
+  const link = { id: "e1", kind: "issue", label: "#9", title: "Guests cannot pay", state: "open" };
+  const review = { id: "v1", requirementId: "r1", decision: "rejected", note: "Cart is emptied.", requirementVersion: 3,
+    evidence: [link, { ...link, id: "e2", kind: "commit", label: "abc1234", state: null }], decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z" };
+  expect(parseReview({ ...review, extra: 1, evidence: review.evidence.map(entry => ({ ...entry, extra: 1 })) })).toEqual(review);
+  expect(parseReviews([review, { ...review, decision: "accepted", note: "", evidence: [] }])).toHaveLength(2);
+  expect(parseReviewSummary(null)).toBeNull();
+  for (const value of [null, "text", {}, { ...review, decision: "verified" }, { ...review, note: null }, { ...review, requirementVersion: 0 },
+    { ...review, requirementVersion: 1.5 }, { ...review, requirementVersion: "3" }, { ...review, evidence: null }, { ...review, evidence: [null] },
+    { ...review, evidence: [{ ...link, state: 1 }] }, { ...review, evidence: [{ ...link, label: undefined }] }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 2 }]) {
+    expect(() => parseReview(value), JSON.stringify(value)).toThrow("unexpected review");
+  }
+  expect(() => parseReviews({ items: [] })).toThrow("unexpected review list");
+  expect(() => parseReviews([review, {}])).toThrow("unexpected review");
+});
+
+test("a decision needs a known choice and a reason unless it accepts", () => {
+  const reason = { note: "Say what is missing or wrong, so the team knows what to do next." };
+  expect(reviewError("accepted", "")).toBeNull();
+  expect(reviewError("accepted", "x".repeat(2000))).toBeNull();
+  expect(reviewError("rejected", "Because.")).toBeNull();
+  expect(reviewError("more_evidence", "Link the pull request.")).toBeNull();
+  expect(reviewError("rejected", "")).toEqual(reason);
+  expect(reviewError("more_evidence", "")).toEqual(reason);
+  expect(reviewError("accepted", "x".repeat(2001))).toEqual({ note: "Use 2,000 characters or fewer." });
+  for (const decision of ["", "approved", "Accepted", "verified"]) {
+    expect(reviewError(decision, "Because."), decision).toEqual({ decision: "Choose accept, reject, or request more evidence." });
+  }
+});
+
+test("a decision is outdated when the version or the set of evidence links differs from what was reviewed", () => {
+  const link = (id: string) => ({ id, kind: "issue", label: "#1", title: "t", state: "open" });
+  const review = { requirementVersion: 2, evidence: [link("a"), link("b")] };
+  expect(reviewOutdated(review, 2, ["b", "a"])).toEqual({ version: false, evidence: false });
+  expect(reviewOutdated(review, 3, ["a", "b"])).toEqual({ version: true, evidence: false });
+  expect(reviewOutdated(review, 2, ["a"])).toEqual({ version: false, evidence: true });
+  expect(reviewOutdated(review, 2, ["a", "b", "c"])).toEqual({ version: false, evidence: true });
+  expect(reviewOutdated(review, 2, ["a", "c"])).toEqual({ version: false, evidence: true });
+  expect(reviewOutdated(review, 1, [])).toEqual({ version: true, evidence: true });
+  expect(reviewOutdated({ requirementVersion: 1, evidence: [] }, 1, [])).toEqual({ version: false, evidence: false });
+
+  expect(reviewedText({ requirementVersion: 1, evidence: [] })).toBe("Reviewed version 1 with no evidence links");
+  expect(reviewedText({ requirementVersion: 2, evidence: [link("a")] })).toBe("Reviewed version 2 with 1 evidence link");
+  expect(reviewedText(review)).toBe("Reviewed version 2 with 2 evidence links");
 });

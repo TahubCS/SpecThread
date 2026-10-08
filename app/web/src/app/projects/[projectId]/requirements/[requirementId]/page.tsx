@@ -3,8 +3,9 @@ import Link from "next/link";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { EvidencePanel } from "@/components/evidence-panel";
 import { RequirementArchive } from "@/components/requirement-archive";
+import { ReviewPanel } from "@/components/review-panel";
 import { getProjectRepository } from "@/lib/github-data";
-import { listEvidence, listMembers, requireProject, requireRequirement } from "@/lib/project-data";
+import { listEvidence, listMembers, listReviews, requireProject, requireRequirement, viewerId } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
 type Props = PageProps<"/projects/[projectId]/requirements/[requirementId]">;
@@ -14,14 +15,15 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: (await requireRequirement(projectId, requirementId)).title };
 }
 
-/** Shows a requirement's description and ordered acceptance criteria, with edit and archive while it can change. */
+/** Shows a requirement's description, ordered acceptance criteria, evidence, and review decisions, with edit and archive while it can change. */
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   const project = await requireProject(projectId);
   const [requirement, members, repository] = await Promise.all([
     requireRequirement(projectId, requirementId), listMembers(projectId), getProjectRepository(projectId),
   ]);
-  const evidence = await listEvidence(requirement.id);
+  const [evidence, reviews, viewer] = await Promise.all([listEvidence(requirement.id), listReviews(requirement.id), viewerId()]);
+  const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const author = members.find(member => member.userId === requirement.createdBy)?.name ?? "a former member";
   const editable = !project.archivedAt && !requirement.archivedAt;
   const base = `/projects/${project.id}/requirements`;
@@ -61,7 +63,7 @@ export default async function Page({ params }: Props) {
         {repository || evidence.length > 0 ? (
           <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence}
             repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
-            people={Object.fromEntries(members.map(member => [member.userId, member.name]))} />
+            people={people} />
         ) : (
           <p className="muted">
             Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
@@ -74,6 +76,12 @@ export default async function Page({ params }: Props) {
             <Link href={`/projects/${project.id}/settings/repository`}>Connect a repository</Link>
           </p>
         )}
+      </section>
+      <section className="requirement-section" aria-labelledby="review-heading">
+        <h2 id="review-heading">Review</h2>
+        <ReviewPanel projectId={project.id} requirementId={requirement.id} version={requirement.version} reviews={reviews}
+          evidenceIds={evidence.map(link => link.id)} people={people}
+          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
     </article>

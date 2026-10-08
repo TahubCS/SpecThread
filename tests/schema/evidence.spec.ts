@@ -507,7 +507,7 @@ test("the release migration constrains what a release row can be, and its rollba
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'release'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(others);
   expect(await count(columns)).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(6);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(7);
 });
 
 test("the check migration defaults every link to manual, constrains the source, and rolls back without losing links", async () => {
@@ -531,7 +531,7 @@ test("the check migration defaults every link to manual, constrains the source, 
   await database.pool.query(await readFile("docs/schema/evidence-checks-rollback.sql", "utf8"));
   expect(await count(columns)).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(before);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(6);
 });
 
 test("the commit migration constrains what a row can be, and its rollback removes commit links only", async () => {
@@ -557,7 +557,7 @@ test("the commit migration constrains what a row can be, and its rollback remove
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'commit'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE repository_id = 515151")).toBe(2);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(4);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
 });
 
 test("the migration protects the new table and its rollback removes only that table", async () => {
@@ -579,5 +579,5 @@ test("the migration protects the new table and its rollback removes only that ta
   await database.pool.query(await readFile("docs/schema/requirement-evidence-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_evidence'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('project_repositories','requirements')")).toBe(2);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(3);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(4);
 });

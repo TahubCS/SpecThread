@@ -7,7 +7,7 @@ test("OpenAPI describes the product endpoints", async ({ request }) => {
     "/projects", "/projects/{projectId}", "/projects/{projectId}/archive",
     "/projects/{projectId}/requirements", "/requirements/{requirementId}", "/requirements/{requirementId}/archive",
     "/projects/{projectId}/members", "/projects/{projectId}/members/{userId}",
-    "/github/repositories", "/projects/{projectId}/repository",
+    "/github/repositories", "/projects/{projectId}/repository", "/requirements/{requirementId}/reviews",
   ]));
   expect(paths["/requirements/{requirementId}"].put.responses).toEqual(
     expect.objectContaining({ "200": expect.anything(), "400": expect.anything(), "401": expect.anything(), "404": expect.anything(), "409": expect.anything() }));

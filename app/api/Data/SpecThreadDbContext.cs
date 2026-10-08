@@ -11,6 +11,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
     public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
     public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
+    public DbSet<RequirementReview> RequirementReviews => Set<RequirementReview>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -169,5 +170,27 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Tag }).IsUnique().HasFilter("kind = 'release'");
         evidence.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         evidence.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var review = model.Entity<RequirementReview>();
+        review.ToTable("requirement_reviews", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_reviews_decision", "decision IN ('accepted', 'rejected', 'more_evidence')");
+            table.HasCheckConstraint("ck_requirement_reviews_version", "requirement_version > 0");
+            // Rejecting or asking for more has to say why.
+            table.HasCheckConstraint("ck_requirement_reviews_note", "decision = 'accepted' OR length(btrim(note)) > 0");
+            table.HasCheckConstraint("ck_requirement_reviews_evidence", "jsonb_typeof(evidence) = 'array'");
+        });
+        review.HasKey(x => x.Id);
+        review.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        review.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        review.Property(x => x.Decision).HasColumnName("decision");
+        review.Property(x => x.Note).HasColumnName("note").HasDefaultValue("");
+        review.Property(x => x.RequirementVersion).HasColumnName("requirement_version");
+        review.Property(x => x.Evidence).HasColumnName("evidence").HasColumnType("jsonb");
+        review.Property(x => x.DecidedBy).HasColumnName("decided_by");
+        review.Property(x => x.DecidedAt).HasColumnName("decided_at").HasDefaultValueSql("now()");
+        review.HasIndex(x => new { x.RequirementId, x.DecidedAt });
+        review.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        review.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.DecidedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

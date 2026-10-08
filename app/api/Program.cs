@@ -51,6 +51,7 @@ app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
 app.MapRepositoryEndpoints();
 app.MapEvidenceEndpoints();
+app.MapReviewEndpoints();
 
 app.Run();
 

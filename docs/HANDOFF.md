@@ -1,6 +1,56 @@
 # Shared handoff
 
-## Current task: Evidence slice 5, releases and what they contain (2026-10-08)
+## Current task: Review decisions on a requirement (2026-10-08)
+
+- Branch: `feature/project-ui`. Evidence slice 5 is committed (`d102562`). This entry
+  is uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed (ADR-038): a requirement page has a Review section. A project member
+  who did not create the requirement records Accept, Reject, or Request more
+  evidence with a note (required unless accepting). The page shows the current
+  decision, who made it and when, the version and evidence links that were reviewed,
+  a notice when the requirement or its links have changed since, and earlier
+  decisions on demand. The author sees why they cannot review. Requirement lists show
+  each requirement's latest decision, "Not reviewed", or "..., outdated".
+- Changed files:
+  - API: `app/api/Requirements/{ReviewEndpoints,RequirementEndpoints}.cs`,
+    `app/api/Data/{ProductModels,SpecThreadDbContext}.cs`, `app/api/Program.cs`,
+    migration `20261008092413_RequirementReviews` and the model snapshot.
+  - Schema: `scripts/generate-requirement-reviews.mjs`,
+    `docs/schema/requirement-reviews{,-rollback}.sql`.
+  - Web: `app/web/src/lib/{reviews,projects,requirements,project-data}.ts`,
+    `app/web/src/app/projects/review-actions.ts`,
+    `app/web/src/components/{review-panel,requirement-rows}.tsx`,
+    `app/web/src/app/projects/[projectId]/requirements/[requirementId]/page.tsx`,
+    `app/web/src/app/app-shell.css`.
+  - Tests: `scripts/test-database.mjs`, `tests/e2e/reviews.spec.ts`,
+    `tests/schema/{reviews,evidence,github-repository}.spec.ts`,
+    `tests/api/{project-data,products}.spec.ts`.
+  - Docs: DECISIONS (ADR-038), API, DATABASE, TESTING, and this file.
+- Differences from the plan: `review` is on the requirement list only, not on the
+  single-requirement response, because the page reads the full list of decisions.
+  The migration tests in the older schema specs were not reordered; the reviews
+  migration stays applied there and their history counts went up by one.
+- Checks: the full suite (`npx playwright test`: browser, api, and schema projects)
+  passed, 267 tests, with no code change after it. `npm run lint`,
+  `npm run typecheck`, the Release API build, and
+  `dotnet format app/api --verify-no-changes --no-restore` passed.
+- Known issues and risks:
+  - **Setup**: apply the RequirementReviews migration
+    (`dotnet ef database update --project app/api`, API stopped) and restart or
+    redeploy the API. Until then requirement lists and pages fail.
+  - **A project with one member cannot record a decision.** There is no members
+    screen (ADR-031). To try it, add a second account with
+    `POST /projects/{projectId}/members` (owner, `{ email }`) or in the database.
+  - No reviewer assignment, notifications, or evidence policy. "My reviews" and
+    Inbox are still previews.
+  - A refresh that changes a link's state (a pull request merged after acceptance)
+    does not mark the decision outdated; only an edit or a change of links does.
+  - Not verified against the live database or by a manual two-account run.
+- Next step: reorder acceptance criteria. Then the evidence count on requirement
+  lists. The AI slice follows ADR-036.
+
+## Previous task: Evidence slice 5, releases and what they contain (2026-10-08)
 
 - Branch: `feature/project-ui`. Slice 4 is committed (`088593d`). This entry is
   uncommitted. The approved plan is in

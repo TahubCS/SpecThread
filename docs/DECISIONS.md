@@ -780,6 +780,46 @@ are not covered: the app lacks that permission. How a tag is resolved to a commi
 the compare statuses follow GitHub's documentation and have not been confirmed
 against the real GitHub. Rolling the migration back deletes release links.
 
+ADR-038: A person other than the author records the decision on a requirement
+
+Status: Accepted
+
+Context: docs/PROJECT.md asks for "recording a human review decision and note" and
+for an answer to "Who accepted or rejected the available evidence, and when?" It is
+also the human checkpoint that later AI assistance depends on (ADR-036). The user
+chose that any project member except the requirement's author may decide, and that
+a decision stays and is shown as outdated when the requirement changes afterwards.
+
+Decision: A decision is `accepted`, `rejected`, or `more_evidence`, with a note of
+up to 2,000 characters that is required unless the decision accepts. Any project
+member may record one except the person who created the requirement, who gets 403
+with the reason. An archived requirement or project takes none (409). The request
+carries the requirement `version` the reviewer saw, and a different current version
+is refused with 409, so nobody decides on text they have not read (the pattern of
+ADR-030). Each decision is a new row in `requirement_reviews` (migration
+RequirementReviews); rows are never changed or deleted through the API, and the
+newest is the requirement's current status. A row stores the version reviewed and a
+snapshot of the evidence links at that moment: each link's ID, kind, label (`#9`,
+short SHA, or tag), title, and state. "Outdated" is computed, not stored: the
+current version differs from the reviewed one, or the set of current evidence link
+IDs differs from the snapshot. Refreshing evidence from GitHub keeps the IDs and so
+does not make a decision outdated. The requirement list carries each requirement's
+latest decision with `outdated`; the requirement itself does not, because its page
+reads the full list of decisions. On screen "Accepted" means a person approved the
+requirement; nothing says verified or proven.
+
+Consequences: A project with one member cannot record any decision, and there is no
+members screen (ADR-031), so until team membership arrives a second member has to be
+added through `POST /projects/{projectId}/members` or the database. The author rule
+looks only at who created the requirement, not at who edited it last. A decision
+can be made with no evidence linked. Nothing is locked after acceptance: an edit or
+a changed link marks the decision outdated and waits for a new one. There is no
+assignment of reviewers, no notification, and no evidence policy; "My reviews" and
+Inbox stay previews. The snapshot does not record check results or release
+contents, and a refresh that changes a link's state does not mark the decision
+outdated. The list endpoint reads every decision of the listed requirements to find
+the latest. Rolling the migration back deletes every recorded decision.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

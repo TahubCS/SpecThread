@@ -93,3 +93,17 @@ public sealed class RequirementEvidence
     public DateTime LinkedAt { get; set; }
     public DateTime RefreshedAt { get; set; }
 }
+
+// A person's decision on a requirement (ADR-038). Evidence is a JSON array of the evidence links
+// as they were when the decision was made. Rows are only ever added.
+public sealed class RequirementReview
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public required string Decision { get; set; }
+    public required string Note { get; set; }
+    public int RequirementVersion { get; set; }
+    public required string Evidence { get; set; }
+    public required string DecidedBy { get; set; }
+    public DateTime DecidedAt { get; set; }
+}

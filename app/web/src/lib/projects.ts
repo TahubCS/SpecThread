@@ -1,3 +1,5 @@
+import { parseReviewSummary, type ReviewSummary } from "./reviews";
+
 /** A project as returned by the SpecThread API (docs/API.md). */
 export type Project = { id: string; name: string; ownerUserId: string; createdAt: string; archivedAt: string | null };
 
@@ -35,10 +37,10 @@ export function fieldError(problem: unknown, field: string): string | null {
   return Array.isArray(messages) && typeof messages[0] === "string" ? messages[0] : null;
 }
 
-/** A requirement as listed for a project (docs/API.md). */
+/** A requirement as listed for a project (docs/API.md). `review` is its latest decision, or null. */
 export type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
-  createdAt: string; updatedAt: string; archivedAt: string | null;
+  createdAt: string; updatedAt: string; archivedAt: string | null; review: ReviewSummary | null;
 };
 
 /** A project member with the name and email other members may see (docs/API.md). */
@@ -64,6 +66,7 @@ export function parseRequirementSummaries(value: unknown): RequirementSummary[] 
     return {
       id: item.id, projectId: item.projectId, title: item.title, version: item.version,
       createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt,
+      review: parseReviewSummary(item.review),
     };
   });
 }

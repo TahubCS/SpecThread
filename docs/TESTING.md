@@ -171,6 +171,26 @@ currently require network access during the web build.
   rolled back, so their order matters. Not exercised: the real GitHub, a pull request
   with more than 100 commits, and the installation token being reused within one
   request.
+- Review decisions (ADR-038). tests/schema/reviews.spec.ts calls the API on port 5115
+  against Docker Postgres, with evidence links inserted as rows: decisions by two
+  members read newest first, the stored evidence snapshot staying as it was after
+  links change, no update or delete, 403 for the author, 404 for non-members and
+  unknown requirements, 401 anonymous, validation of the choice, note, and version,
+  409 for a stale or future version and for an archived requirement or project, the
+  latest decision and `outdated` on the requirement list (edit, link added, link
+  removed, different link, link re-read, other requirements), and the migration's
+  RLS, grants, constraints, foreign keys, and rollback. tests/e2e/reviews.spec.ts
+  uses two users in separate browser contexts, the second added to the project in
+  the database: the author's message and missing form, each of the three decisions,
+  the required reason, history, the decision on both lists, outdated after an edit
+  and after a link is added but not after a removal that restores the reviewed set
+  or a refresh from the fake GitHub, a requirement changed or archived while the
+  form was open, keyboard use at 390px, every way the API can refuse or fail the
+  action with the entered text kept, and failed or malformed loads with a retry.
+  The parsers, the note rule, and `reviewOutdated` are unit tested in
+  tests/api/project-data.spec.ts. The reviews migration stays applied in the other
+  schema specs, so their migration-history counts include it. Not exercised: two
+  reviewers deciding at the same moment.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,
