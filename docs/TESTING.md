@@ -85,8 +85,9 @@ currently require network access during the web build.
 - Projects (browser, real API on port 5106): the empty list for a new user, creating a
   project and landing on its overview, ordering by name, a blank name rejected with a
   message, keyboard submission, and the narrow layout. Project workspace: the details
-  panel, recent requirements and the Requirements and Members tabs with rows seeded
-  through SQL, a planned section inside the project frame, rename with a rejected blank
+  panel, recent requirements and the Requirements tab with rows seeded through SQL,
+  the absence of a members page (ADR-031), a planned section inside the project frame,
+  rename with a rejected blank
   name, archive after confirmation and the archived read-only state, a non-owner member
   seeing no rename or archive controls, and not-found for non-members, unknown IDs, and
   malformed IDs. The api project checks response parsing for projects, requirements, and
@@ -101,6 +102,19 @@ currently require network access during the web build.
   going to sign-in without creating anything; and a removed member seeing not-found.
   Not exercised: the API being slow enough to hit a platform timeout, and two owners
   renaming at the same moment.
+- Requirements (browser, real API through the test proxy): creating with ordered
+  criteria, removing a criterion, blank title and blank criterion messages, editing
+  with the version rising, a second save refused after someone else saved, archive
+  after confirmation and the archived read-only state, an archived project hiding all
+  change controls and refusing a form that was already open, not-found for other
+  users, wrong-project addresses, and malformed IDs, keyboard entry and the narrow
+  layout. Failures: create, save, and archive each with a 500, a dropped connection,
+  a 404, and a malformed success body, keeping what was typed; API field messages
+  shown next to the title and the right criterion; and a failing requirement page
+  showing the error inside the project frame and recovering. The api project checks
+  requirement parsing, input trimming and limits, and mapping problem details to
+  fields. Not exercised: 50 criteria through the browser, and two saves landing in
+  the same instant.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

@@ -56,7 +56,7 @@ test("projects are listed by name, and other users cannot see or open them", asy
   const otherPage = await other.newPage();
   await otherPage.goto("/projects");
   await expect(otherPage.getByText("You have no projects yet.")).toBeVisible();
-  for (const path of [`/projects/${billing}`, `/projects/${billing}/members`, `/projects/${billing}/settings/repository`, "/projects/not-a-project"]) {
+  for (const path of [`/projects/${billing}`, `/projects/${billing}/requirements`, `/projects/${billing}/settings/repository`, "/projects/not-a-project"]) {
     // The loading state has already started the response, so the status stays 200.
     await otherPage.goto(path);
     await expect(otherPage.getByRole("heading", { name: "Page not found" }), path).toBeVisible();
@@ -91,18 +91,17 @@ test("the create form works with the keyboard and the project fits a narrow scre
   await page.screenshot({ path: testInfo.outputPath("project-overview-mobile.png"), fullPage: true });
 });
 
-test("project tabs show its requirements and members, and planned sections keep the frame", async ({ page }, testInfo) => {
+test("project tabs show its requirements, planned sections keep the frame, and there is no members page", async ({ page }, testInfo) => {
   const projectId = await createProject(page, "Checkout");
-  const member = await createTestSession("Grace Hopper");
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${projectId}','${member.userId}');
-    INSERT INTO public.requirements (project_id,title,description,created_by,updated_at) VALUES
+  await runTestSql(`INSERT INTO public.requirements (project_id,title,description,created_by,updated_at) VALUES
       ('${projectId}','Guest checkout','','${owner.userId}',now() - interval '2 days'),
       ('${projectId}','Saved cards','','${owner.userId}',now());`);
 
   await page.goto(`/projects/${projectId}`);
   await expect(page.getByRole("list", { name: "Recent requirements" }).getByRole("link")).toHaveText([/^Saved cards/, /^Guest checkout/]);
   const details = page.getByRole("complementary", { name: "Project details" });
-  await expect(details.getByRole("link", { name: "2" })).toHaveCount(2);
+  await expect(details.getByRole("link", { name: "2" })).toHaveAttribute("href", `/projects/${projectId}/requirements`);
+  await expect(details.getByText("Members")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("project-overview-data.png"), fullPage: true });
 
   const tabs = page.getByRole("navigation", { name: "Project sections" });
@@ -111,14 +110,10 @@ test("project tabs show its requirements and members, and planned sections keep 
   await expect(tabs.getByRole("link", { name: "Requirements" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("list", { name: "Requirements" }).getByRole("link")).toHaveCount(2);
 
-  await tabs.getByRole("link", { name: "Members" }).click();
-  const members = page.getByRole("list", { name: "Members" }).getByRole("listitem");
-  await expect(members).toHaveCount(2);
-  await expect(members.nth(0)).toContainText("Project tester");
-  await expect(members.nth(0)).toContainText("Owner");
-  await expect(members.nth(1)).toContainText("Grace Hopper");
-  await expect(members.nth(1)).toContainText("Member");
-  await page.screenshot({ path: testInfo.outputPath("project-members.png"), fullPage: true });
+  // Membership will be managed on the team, so a project has no members page.
+  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Requirements", "Settings"]);
+  await page.goto(`/projects/${projectId}/members`);
+  await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}/settings/repository`);
   await expect(page.getByRole("heading", { name: "Repository settings", level: 1 })).toBeVisible();

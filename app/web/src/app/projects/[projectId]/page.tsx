@@ -40,8 +40,6 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
             <dd><span className={`status-dot${project.archivedAt ? "" : " is-active"}`} aria-hidden="true" />{project.archivedAt ? "Archived" : "Active"}</dd>
             <dt>Owner</dt>
             <dd>{owner?.name ?? "Unknown"}</dd>
-            <dt>Members</dt>
-            <dd><Link href={`/projects/${project.id}/members`}>{members.length}</Link></dd>
             <dt>Requirements</dt>
             <dd><Link href={`/projects/${project.id}/requirements`}>{requirements.length}</Link></dd>
             <dt>Created</dt>

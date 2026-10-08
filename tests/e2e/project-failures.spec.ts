@@ -87,7 +87,6 @@ test("a project page shows the error page when any of its API calls fails", asyn
     [`/projects/${projectId}`, `^/projects/${projectId}/requirements$`, unreachable],
     [`/projects/${projectId}`, `^/projects/${projectId}/members$`, { status: 200, body: [{ userId: 1 }] }],
     [`/projects/${projectId}/requirements`, `^/projects/${projectId}/requirements$`, { status: 200, body: [{ id: "r" }] }],
-    [`/projects/${projectId}/members`, `^/projects/${projectId}/members$`, serverError],
     [`/projects/${projectId}/settings`, `^/projects/${projectId}$`, unreachable],
   ] as const) {
     await failApi(owner.userId, { method: "GET", path, ...failure });
@@ -152,11 +151,11 @@ test("slow API calls show a loading message, and a project keeps its frame while
   await expect(page.getByRole("list", { name: "Your projects" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}`);
-  await failApi(owner.userId, { method: "GET", path: `^/projects/${projectId}/members$`, delayMs: 2500 });
-  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Members" }).click();
+  await failApi(owner.userId, { method: "GET", path: `^/projects/${projectId}/requirements$`, delayMs: 2500 });
+  await page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Requirements" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Loading..." })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Checkout" })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Members" })).toBeVisible();
+  await expect(page.getByText("This project has no requirements yet.")).toBeVisible();
 });
 
 test("a session that ended sends the user to sign in instead of creating a project", async ({ page }) => {
@@ -182,7 +181,7 @@ test("a member removed while viewing a project sees not-found on the next page",
   await expect(memberPage.getByRole("heading", { name: "Shared", level: 1 })).toBeVisible();
 
   await runTestSql(`DELETE FROM public.project_members WHERE project_id = '${projectId}' AND user_id = '${member.userId}'`);
-  await memberPage.goto(`/projects/${projectId}/members`);
+  await memberPage.goto(`/projects/${projectId}/requirements`);
   await expect(memberPage.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expect(memberPage.getByText("Shared")).toHaveCount(0);
   await context.close();

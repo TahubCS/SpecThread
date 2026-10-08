@@ -46,8 +46,8 @@ export type ProjectMember = { userId: string; name: string; email: string; joine
 
 const isDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
 
-/** Reports whether a route segment has the shape of a project ID, so other text never reaches an API path. */
-export function isProjectId(value: string): boolean {
+/** Reports whether a route segment has the shape of a project or requirement ID, so other text never reaches an API path. */
+export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 

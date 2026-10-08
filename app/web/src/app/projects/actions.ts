@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { fieldError, isProjectId, parseProject, projectNameError } from "@/lib/projects";
+import { fieldError, isUuid, parseProject, projectNameError } from "@/lib/projects";
 
 export type ProjectFormState = { name: string; error: string | null };
 export type RenameState = ProjectFormState & { saved: boolean };
@@ -41,7 +41,7 @@ export async function renameProject(projectId: string, _previous: RenameState, f
   const name = String(formData.get("name") ?? "").trim();
   const invalid = projectNameError(name);
   if (invalid) return { name, error: invalid, saved: false };
-  if (!isProjectId(projectId)) return { name, error: failed, saved: false };
+  if (!isUuid(projectId)) return { name, error: failed, saved: false };
 
   let saved: string;
   try {
@@ -63,7 +63,7 @@ export async function renameProject(projectId: string, _previous: RenameState, f
 /** Archives a project for its owner, then returns to the project list. Archiving cannot be undone. */
 export async function archiveProject(projectId: string): Promise<ArchiveState> {
   const failed = "The project could not be archived. Please try again.";
-  if (!isProjectId(projectId)) return { error: failed };
+  if (!isUuid(projectId)) return { error: failed };
   try {
     const response = await apiFetch(`/projects/${projectId}/archive`, { method: "POST" });
     if (response.status === 403) return { error: OWNER_ONLY };

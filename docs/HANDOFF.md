@@ -1,9 +1,55 @@
 # Shared handoff
 
-## Current task: Black-and-white public pages and failure tests (2026-10-08)
+## Current task: Requirements in the project workspace (2026-10-08)
 
-- Branch: `feature/visual-polish`. The redesign and project workspace below are committed
-  (`b66c14c`). The changes in this entry are uncommitted.
+- Branch: `feature/project-ui`, fast-forwarded to `feature/visual-polish` at `4fc3492`
+  and pushed. The two branches are the same up to that commit. The changes in this
+  entry are uncommitted. No PR is open.
+- Completed (ADR-030):
+  - The Requirements tab has "New requirement". Create and edit share one form for
+    title, description, and ordered acceptance criteria.
+  - A requirement page shows the description, criteria, version, and author, with Edit
+    and a confirmed Archive.
+  - A save is refused when someone else saved first, and the message says so.
+  - Archived requirements and archived projects are read-only.
+- Changed files:
+  - Web: `app/web/src/lib/{requirements,project-data,projects}.ts`,
+    `app/web/src/app/projects/requirement-actions.ts`,
+    `app/web/src/app/projects/[projectId]/requirements/{page,new/page}.tsx`,
+    `.../requirements/[requirementId]/{page,edit/page}.tsx`,
+    `app/web/src/components/{requirement-form,requirement-archive}.tsx`,
+    `app/web/src/app/app-shell.css`, and `app/web/src/app/projects/actions.ts`
+    (`isProjectId` renamed to `isUuid`).
+  - Tests: `tests/e2e/requirements.spec.ts` (new, 24 tests),
+    `tests/api/project-data.spec.ts`, `tests/e2e/scaffold.spec.ts`.
+  - Docs: DECISIONS (ADR-030), TESTING, and this file.
+- Checks: all 119 browser tests passed, run with a temporary config that started only
+  the test web server because the user's dev API held port 5100. `npm run lint` and
+  `npm run typecheck` passed. Inspected screenshots of the form and the detail page.
+- Known issues and risks:
+  - The full `npm test` was not run as configured. In the temporary run the api and
+    schema tests that need the test token issuer on port 5101 could not start; the new
+    unit tests in `tests/api/project-data.spec.ts` did run and passed.
+  - Criteria cannot be reordered. Text typed before the page finishes loading is reset.
+  - A mistaken text replace touched files in `app/web/.next`; the build cache was
+    cleared. If `npm run dev` misbehaves, stop it, delete `app/web/.next`, and restart.
+  - The project Members tab and pages were removed at the user's request (ADR-031):
+    projects will belong to teams, and team onboarding is being built with Codex on a
+    separate branch.
+  - In one full browser run, two tests failed once ("Try again recovers" and "a member
+    creates a requirement") and then passed in two repeated runs of those files. They
+    look timing-sensitive under load and were not changed.
+- Next step: the evidence slice with a real GitHub connection, chosen by the user. Its
+  design needs the user's approval and GitHub App details before any code. After
+  evidence, the user asked for these three, one prompt at a time:
+  1. A review decision on a requirement (accept, reject, or request more evidence, with
+     a note).
+  2. Reordering acceptance criteria in the form.
+  3. An evidence count on the requirement lists.
+
+## Previous task: Black-and-white public pages and failure tests (2026-10-08)
+
+- Branch: `feature/visual-polish`, committed as `4fc3492`.
 - Completed:
   - The landing, sign-in, password, sign-in error, and policy pages now use the black
     and white palette (ADR-027). The brand mark is shown in white.

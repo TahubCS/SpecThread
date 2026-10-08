@@ -560,6 +560,50 @@ page is shown. Text typed into a form is lost when the session has ended. The pr
 reads the user ID from the token without verifying it, which is acceptable because
 it only selects test faults and the API still verifies every token.
 
+ADR-030: Requirements are created, edited, and archived inside the project's Requirements tab
+
+Status: Accepted
+
+Context: The API already supported requirements with ordered acceptance criteria and
+versioned updates (ADR-024), but no page used it.
+
+Decision: The Requirements tab lists a project's requirements and links to a create
+page, a detail page, and an edit page, all inside the project frame (ADR-028). One
+form component serves create and edit. Criteria are a list of text fields that can
+be added and removed; a blank criterion is an error, not silently dropped, so the
+position in an API field message always matches the field on screen. The edit form
+sends the version it was loaded with. When the API refuses a save with 409, the
+action reads the requirement again to say whether it was archived, changed by someone
+else, or belongs to an archived project. Archiving a requirement asks for
+confirmation because the API has no unarchive. Archived requirements and
+requirements of archived projects stay readable and show no edit or archive
+controls. A requirement opened under a different project's address shows not-found.
+The author's name comes from the project's member list; someone no longer a member
+is shown as "a former member".
+
+Consequences: Criteria cannot be reordered except by removing and re-adding them.
+After a conflict the user must reload and re-enter their change; there is no merge.
+Every save gives the criteria new IDs (ADR-024). The planned evidence, review, and
+history pages under a requirement are still previews and are not linked from the
+detail page.
+
+ADR-031: Projects have no members page; membership will belong to teams
+
+Status: Accepted
+
+Context: The user decided that every project must belong to a team, that only a team
+configures a project, and that membership is managed on the team. Onboarding that
+creates a user's first team is being built on a separate branch.
+
+Decision: The project Members tab and the `/projects/{id}/members` and
+`/projects/{id}/settings/members` pages are removed, along with the member count in
+the project's details panel. This changes ADR-028. The API's member endpoints
+(ADR-025) are unchanged and are still read for the owner's and authors' names.
+
+Consequences: Until teams exist in the API, project membership can only be changed
+through the API directly. Project ownership, the project list, and the owner-only
+rules will need to change when projects move under teams.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

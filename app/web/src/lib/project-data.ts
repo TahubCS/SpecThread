@@ -4,9 +4,10 @@ import { cache } from "react";
 import { apiFetch } from "./api";
 import { auth } from "./auth";
 import {
-  isProjectId, parseMembers, parseProject, parseRequirementSummaries,
+  isUuid, parseMembers, parseProject, parseRequirementSummaries,
   type Project, type ProjectMember, type RequirementSummary,
 } from "./projects";
+import { parseRequirement, type Requirement } from "./requirements";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
 async function read(path: `/${string}`): Promise<unknown | null> {
@@ -22,21 +23,21 @@ async function read(path: `/${string}`): Promise<unknown | null> {
  * layout and its pages share one call.
  */
 export const requireProject = cache(async (projectId: string): Promise<Project> => {
-  const body = isProjectId(projectId) ? await read(`/projects/${projectId}`) : null;
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}`) : null;
   if (body === null) notFound();
   return parseProject(body);
 });
 
 /** Lists a project's active requirements, oldest first. Call after `requireProject`. */
 export const listRequirements = cache(async (projectId: string): Promise<RequirementSummary[]> => {
-  const body = isProjectId(projectId) ? await read(`/projects/${projectId}/requirements`) : null;
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/requirements`) : null;
   if (body === null) notFound();
   return parseRequirementSummaries(body);
 });
 
 /** Lists a project's members, owner first. Call after `requireProject`. */
 export const listMembers = cache(async (projectId: string): Promise<ProjectMember[]> => {
-  const body = isProjectId(projectId) ? await read(`/projects/${projectId}/members`) : null;
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/members`) : null;
   if (body === null) notFound();
   return parseMembers(body);
 });
@@ -45,4 +46,16 @@ export const listMembers = cache(async (projectId: string): Promise<ProjectMembe
 export const viewerId = cache(async (): Promise<string | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   return session?.user.id ?? null;
+});
+
+/**
+ * Loads a requirement of the given project, or shows the not-found page when it does not exist,
+ * the user is not a member, or it belongs to a different project than the address says.
+ */
+export const requireRequirement = cache(async (projectId: string, requirementId: string): Promise<Requirement> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}`) : null;
+  if (body === null) notFound();
+  const requirement = parseRequirement(body);
+  if (requirement.projectId !== projectId) notFound();
+  return requirement;
 });

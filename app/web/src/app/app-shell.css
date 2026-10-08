@@ -120,10 +120,12 @@ img[src$="thread-mark.png"] { filter: grayscale(1) brightness(1.7); }
 .app-main .details dt { color: var(--app-text-2); font-weight: 500; }
 .app-main .method-list > li { padding: 10px 0; border-bottom-color: var(--app-line); }
 .app-main .field label { color: var(--app-text); font-size: 13px; font-weight: 500; }
-.app-main .field input { height: 36px; padding: 0 12px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-inset); color: var(--app-text); font-size: 14px; }
-.app-main .field input:hover { border-color: #444444; }
-.app-main .field input:focus-visible { border-color: #8a8a8a; outline: 2px solid #ffffff26; outline-offset: 0; }
-.app-main .field input[aria-invalid="true"] { border-color: var(--app-danger); }
+.app-main .field :is(input, textarea) { padding: 0 12px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-inset); color: var(--app-text); font: inherit; }
+.app-main .field input { height: 36px; }
+.app-main .field textarea { min-height: 120px; padding: 9px 12px; line-height: 1.5; resize: vertical; }
+.app-main .field :is(input, textarea):hover { border-color: #444444; }
+.app-main .field :is(input, textarea):focus-visible { border-color: #8a8a8a; outline: 2px solid #ffffff26; outline-offset: 0; }
+.app-main .field :is(input, textarea)[aria-invalid="true"] { border-color: var(--app-danger); }
 .app-main .field .notice-error { padding: 0; border: 0; background: none; color: var(--app-danger); font-size: 13px; }
 .app-main .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .status-dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border: 1.5px solid var(--app-text-3); border-radius: 50%; }
@@ -265,9 +267,36 @@ a.row:focus-visible { outline-offset: -2px; }
 .side-activity time { white-space: nowrap; }
 .project-page { max-width: 1000px; padding: 24px var(--app-gutter) 56px; }
 .project-page.is-narrow { max-width: 560px; }
-.project-page-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.project-page-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 16px; }
+.project-page-heading h1 { min-width: 0; overflow-wrap: anywhere; }
+.project-page-heading .button { margin-left: auto; }
+.project-page.is-form { max-width: 720px; }
 .project-page-heading h1 { font-size: 18px; letter-spacing: -.01em; }
 .project-page-heading + .settings-block { margin-top: 0; }
+/* Requirements */
+.back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--app-text-2); font-size: 13px; }
+.back-link:hover { color: var(--app-text); }
+.requirement-meta { margin: -8px 0 0; color: var(--app-text-3); font-size: 13px; }
+.requirement-meta + .notice { margin-top: 16px; }
+.requirement-section { margin-top: 28px; }
+.requirement-section h2 { margin-bottom: 8px; color: var(--app-text-2); font-size: 13.5px; font-weight: 500; }
+.requirement-section p { margin: 0; }
+.requirement-description { line-height: 1.6; overflow-wrap: anywhere; white-space: pre-wrap; }
+.criteria-list { margin: 0; padding: 0; border: 1px solid var(--app-line); border-radius: 10px; counter-reset: criterion; list-style: none; }
+.criteria-list li { display: flex; gap: 12px; padding: 10px 14px; counter-increment: criterion; overflow-wrap: anywhere; }
+.criteria-list li + li { border-top: 1px solid var(--app-line); }
+.criteria-list li::before, .criteria-number { flex: none; width: 20px; color: var(--app-text-3); font-family: var(--app-mono); font-size: 12px; line-height: 20px; }
+.criteria-list li::before { content: counter(criterion); }
+.requirement-form > * + * { margin-top: 20px; }
+.criteria-fieldset { min-width: 0; margin: 20px 0 0; padding: 0; border: 0; }
+.criteria-fieldset legend { padding: 0; font-size: 13px; font-weight: 500; }
+.criteria-fieldset > p.muted { margin: 4px 0 12px; font-size: 13px; }
+.criteria-inputs { display: grid; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.criteria-inputs li { display: flex; align-items: flex-start; gap: 8px; }
+.criteria-inputs .criteria-number { line-height: 36px; text-align: right; }
+.criteria-inputs .field { flex: 1; min-width: 0; }
+.criteria-inputs .icon-button { width: 36px; height: 36px; }
+.project-page .settings-block.is-danger { max-width: none; }
 /* Planned sections inside a project share its frame. */
 .project-tabs ~ .scaffold-page { padding-top: 24px; }
 
