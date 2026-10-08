@@ -10,7 +10,7 @@ export function ProjectForm() {
   const [state, action, pending] = useActionState(createProject, { name: "", error: null });
 
   return (
-    <form className="project-form" action={action} aria-label="Create a project">
+    <form className="settings-block" action={action} aria-label="Create a project">
       <div className="field">
         <label htmlFor="project-name">Project name</label>
         <input id="project-name" name="name" type="text" autoComplete="off" required maxLength={PROJECT_NAME_MAX}
@@ -18,7 +18,7 @@ export function ProjectForm() {
           aria-describedby={state.error ? "project-name-error" : undefined} />
         {state.error && <p id="project-name-error" role="alert" className="notice notice-error">{state.error}</p>}
       </div>
-      <div className="project-form-actions">
+      <div className="form-actions">
         <button className="button" type="submit" disabled={pending}>{pending ? "Creating..." : "Create project"}</button>
         <Link className="button secondary" href="/projects">Cancel</Link>
       </div>

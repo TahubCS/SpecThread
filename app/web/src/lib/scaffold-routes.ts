@@ -150,7 +150,9 @@ export function navigationFor(pathname: string) {
     : [];
   const targets = [...(children.length ? children : siblings),
     ...(relatedRoutes[current[0]] ?? []).map(pattern => scaffoldRoutes.find(([route]) => route === pattern)!)];
-  const unique = [...new Map(targets.map(route => [route[0], route])).values()];
+  // Project pages need a real project, so they are offered only from inside one.
+  const reachable = targets.filter(([pattern]) => params.projectId || !pattern.includes("[projectId]"));
+  const unique = [...new Map(reachable.map(route => [route[0], route])).values()];
   /** Builds a route link using captured IDs, labeling any substitutions of example IDs. */
   const toLink = ([pattern, label]: (typeof scaffoldRoutes)[number]) => {
     let example = false;

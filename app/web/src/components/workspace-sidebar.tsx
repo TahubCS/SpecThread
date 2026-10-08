@@ -30,7 +30,7 @@ export function workspaceTitleFor(pathname: string) {
 /**
  * Renders the sidebar for project and team work, with page search and create shortcuts.
  * Search filters the fixed destination labels, ignoring case and surrounding spaces.
- * The profile menu links to settings and the account; team and requirement links use example IDs.
+ * The profile menu links to settings and the account; team links use an example ID.
  */
 export function WorkspaceSidebar() {
   const pathname = usePathname();
@@ -59,7 +59,6 @@ export function WorkspaceSidebar() {
             <div className="app-create-options">
               <Link href="/projects/new">New project</Link>
               <Link href="/teams/new">New team</Link>
-              <Link href="/projects/example-project/requirements/new">New requirement (example)</Link>
             </div>
           </details>
         </div>
@@ -84,11 +83,6 @@ export function WorkspaceSidebar() {
           <Link className="app-team-name" href="/teams/example-team">Example team <ChevronDown size={13} aria-hidden="true" /></Link>
           {link("/teams/example-team", "Home", House, true, true)}
           {link("/teams/example-team/projects", "Projects", FolderKanban, false, true)}
-          <Link className={`app-nav-link is-nested${pathname === "/projects/example-project/requirements" ? " is-current" : ""}`}
-            href="/projects/example-project/requirements"
-            aria-current={pathname === "/projects/example-project/requirements" ? "page" : undefined}>
-            <FileText size={17} strokeWidth={1.7} aria-hidden="true" /><span>Requirements</span>
-          </Link>
         </div>
       </nav>
       <dialog className="app-search-dialog" ref={searchDialog} aria-label="Search navigation">

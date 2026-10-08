@@ -474,26 +474,60 @@ Consequences: Product pages render on every request and need the API to be reach
 Session expiry during a form submit shows the general failure message, not a sign-in
 prompt. Browser tests need a real API, so the test web server starts one (docs/TESTING.md).
 
-ADR-027: One set of visual tokens for the signed-in app
+ADR-027: Black-and-white visual system for the signed-in app
 
 Status: Accepted
 
-Context: The signed-in pages used dozens of one-off grays, three corner shapes (pills,
-circles, and rectangles), gray primary buttons, and uppercase labels above headings. The
-user asked for a sharper look without changing how the pages work.
+Context: The signed-in pages used dozens of one-off grays, mixed corner shapes, gray
+primary buttons, and uppercase labels above headings. The user rejected the gray and
+lavender look, compared rendered alternatives, and chose near-black with white as the
+accent, with a shell modeled on the Linear screenshots they supplied.
 
 Decision: `.app-shell` in app/web/src/app/app-shell.css defines the colors, lines, and
 text levels for every signed-in page, and rules there use those variables instead of
-literal colors. Controls use a 6px radius and containers 8px. The lavender accent marks
-the one primary action on a page, the current navigation item, and linked evidence.
-Amber and coral mark "needs review" and "missing evidence", always next to a text
-label. Requirement IDs use Geist Mono. Pages share a left edge and a 32px gutter. Each
-dashboard row shows a six-segment summary of its evidence thread. The uppercase label
-above page headings is removed from signed-in pages.
+literal colors. The sidebar sits on the page background and the content is an inset
+panel with a border and rounded corners. White marks the one primary action on a
+page. Color is reserved for status: amber for "needs review", red for "missing
+evidence" and destructive actions, green for "active". Each status color appears next
+to a text label. View switches and project tabs are pills. Requirement IDs use Geist
+Mono. One `.row-list` style serves project, requirement, and member lists. The
+dashboard shows each sample requirement's evidence as a progress ring with a count,
+and as a checklist when the row is opened; the row of connected circles is removed.
+The uppercase label above page headings is removed from signed-in pages.
 
-Consequences: The landing, sign-in, and policy pages keep their own styles; the
-unscoped `.scaffold-*` rules remain for the policy pages. New signed-in UI should use
-the variables. This refines the visual reference in ADR-020 without changing its layout.
+Consequences: The landing, sign-in, and policy pages keep their lavender styles, so
+they no longer match the app until they are recolored; the unscoped `.scaffold-*`
+rules remain for the policy pages. New signed-in UI should use the variables. This
+replaces the visual reference in ADR-020 for signed-in pages.
+
+ADR-028: A project is a framed workspace with tabs
+
+Status: Accepted
+
+Context: The project pages were unconnected placeholders that accepted any ID. The
+user asked for a project working environment that is easy to extend.
+
+Decision: app/web/src/app/projects/[projectId]/layout.tsx loads the project once per
+request and frames every page under it with a breadcrumb and the tabs Overview,
+Requirements, Members, and Settings. A project the user does not belong to, an unknown
+ID, or an ID that is not a UUID shows the not-found page for every sub-route, matching
+the API's 404 for non-members (ADR-024). IDs are checked for UUID shape before they
+are placed in an API path. Loaders in app/web/src/lib/project-data.ts are cached per
+request so the layout and its pages share calls. Overview shows the five most recently
+changed requirements and a details panel. Requirements and Members are read-only
+lists. Settings lets the owner rename the project and archive it after an explicit
+confirmation, because the API has no unarchive. Creating a project now opens it
+(this changes ADR-026, which returned to the list). The remaining planned project
+pages render inside the same frame. Links to example projects are removed from the
+sidebar, the dashboard, and the planned-page navigation, because they would now show
+not-found.
+
+Consequences: A new project section is a new folder under `[projectId]` plus one tab
+entry. The not-found page for a project is sent with HTTP 200 because the loading
+state has already started the response. Creating and editing requirements, managing
+members, and the evidence views are still to be built. The owner's name comes from
+the members list. The Activity panel shows only the creation event, the one event
+the API can supply.
 
 ADR-NNN: Title
 

@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
-import { parseProjects } from "@/lib/projects";
+import { Box } from "lucide-react";
+import { formatDate, parseProjects } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Projects" };
-
-const createdDate = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
 
 /** Lists the signed-in user's active projects from the API. A failed request reaches the error page. */
 export default async function Page() {
@@ -27,12 +26,13 @@ export default async function Page() {
       ) : (
         <>
           <p className="project-count">{projects.length === 1 ? "1 project" : `${projects.length} projects`}</p>
-          <ul className="project-list" aria-label="Your projects">
+          <ul className="row-list" aria-label="Your projects">
             {projects.map(project => (
               <li key={project.id}>
-                <Link href={`/projects/${project.id}`}>
-                  <span>{project.name}</span>
-                  <time dateTime={project.createdAt}>Created {createdDate.format(new Date(project.createdAt))}</time>
+                <Link className="row" href={`/projects/${project.id}`}>
+                  <Box size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span className="row-title">{project.name}</span>
+                  <time className="row-meta" dateTime={project.createdAt}>Created {formatDate(project.createdAt)}</time>
                 </Link>
               </li>
             ))}

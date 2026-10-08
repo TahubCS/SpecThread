@@ -76,15 +76,20 @@ currently require network access during the web build.
   `safeNextPath` rejection of other origins, control characters, over-long values,
   and login/signup loops.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
-  placeholder pages, a useful 404 for an unknown URL, and a route walk
-  from Dashboard through a team, project, requirement, evidence, and review.
+  placeholder pages, a useful 404 for an unknown URL, a route walk through the team
+  pages, and planned-page links that never point at an example project.
   These checks do not imply that product data or authorization are implemented.
 - Projects (browser, real API on port 5106): the empty list for a new user, creating a
-  project and finding it in the list, ordering by name, another user not seeing the
-  project, a blank name rejected with a message, keyboard submission, and the narrow
-  layout. The api project checks project response parsing, name limits, and reading field
-  messages from problem details. An unreachable API, a non-400 failure from the create
-  call, and the loading state are not exercised.
+  project and landing on its overview, ordering by name, a blank name rejected with a
+  message, keyboard submission, and the narrow layout. Project workspace: the details
+  panel, recent requirements and the Requirements and Members tabs with rows seeded
+  through SQL, a planned section inside the project frame, rename with a rejected blank
+  name, archive after confirmation and the archived read-only state, a non-owner member
+  seeing no rename or archive controls, and not-found for non-members, unknown IDs, and
+  malformed IDs. The api project checks response parsing for projects, requirements, and
+  members, name limits, UUID-shaped IDs, date formatting, and reading field messages
+  from problem details. An unreachable API, non-400 failures from the create, rename,
+  and archive calls, and the loading states are not exercised.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

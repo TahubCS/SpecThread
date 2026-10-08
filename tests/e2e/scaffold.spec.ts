@@ -6,11 +6,8 @@ import { navigationFor, scaffoldRoutes } from "../../app/web/src/lib/scaffold-ro
 const routes = [
   ["/teams", "Teams"],
   ["/teams/team-1/projects", "Team projects"],
-  ["/projects/project-1/settings/repository", "Repository settings"],
-  ["/projects/project-1/requirements/requirement-1/evidence", "Evidence thread"],
-  ["/projects/project-1/requirements/requirement-1/review", "Review requirement"],
   ["/invites/example-token", "Invitation"],
-  ["/projects/project-1/matrix", "Traceability matrix"],
+  ["/reviews", "My reviews"],
 ] as const;
 
 test("scaffold navigation reaches the main product areas", async ({ page }, testInfo) => {
@@ -51,24 +48,32 @@ test("standalone search is not part of the route map", async ({ page }) => {
   expect(response?.status()).toBe(404);
 });
 
-test("route navigation connects teams, projects, requirements, evidence, and review", async ({ page }) => {
+test("route navigation walks the team pages and never offers a project that does not exist", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Teams", exact: true }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Team projects" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Project overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirements" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Requirement overview (example route)" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Evidence thread" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Back to Requirement overview" }).click();
-  await page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Review requirement" }).click();
-  await expect(page).toHaveURL(/\/projects\/example-project\/requirements\/example-requirement\/review$/);
+  const pageNavigation = page.getByRole("navigation", { name: "Page navigation" });
+  await pageNavigation.getByRole("link", { name: "Team overview (example route)" }).click();
+  await pageNavigation.getByRole("link", { name: "Team projects" }).click();
+  await expect(page).toHaveURL(/\/teams\/example-team\/projects$/);
+  await expect(pageNavigation.getByRole("link", { name: "Projects", exact: true })).toBeVisible();
+  await expect(pageNavigation.getByRole("link", { name: /Project overview/ })).toHaveCount(0);
+});
+
+test("planned-page links reuse a real project and skip project pages elsewhere", () => {
+  const inside = navigationFor("/projects/p-1/requirements/r-1")!;
+  expect(inside.parent).toEqual({ href: "/projects/p-1/requirements", label: "Requirements" });
+  expect(inside.links).toContainEqual({ href: "/projects/p-1/requirements/r-1/evidence", label: "Evidence thread" });
+  for (const path of ["/teams/t-1/projects", "/reviews", "/onboarding/repository", "/dashboard"]) {
+    expect(navigationFor(path)!.links.filter(link => link.href.includes("example-project")), path).toEqual([]);
+  }
 });
 
 test("every reserved page participates in navigation", async () => {
   const root = path.join(process.cwd(), "app/web/src/app");
   // Pages that no longer use the placeholder stay in the route catalog.
-  const connected = ["dashboard", "settings/account", "projects", "projects/new"].map(route => path.join(root, route, "page.tsx"));
+  const connected = ["dashboard", "settings/account", "projects", "projects/new", "projects/[projectId]",
+    "projects/[projectId]/requirements", "projects/[projectId]/members", "projects/[projectId]/settings",
+  ].map(route => path.join(root, route, "page.tsx"));
   async function pagesIn(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });
     const nested = await Promise.all(entries.map(async entry => {

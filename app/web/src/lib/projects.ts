@@ -34,3 +34,56 @@ export function fieldError(problem: unknown, field: string): string | null {
   const messages = (errors as Record<string, unknown>)[field];
   return Array.isArray(messages) && typeof messages[0] === "string" ? messages[0] : null;
 }
+
+/** A requirement as listed for a project (docs/API.md). */
+export type RequirementSummary = {
+  id: string; projectId: string; title: string; version: number;
+  createdAt: string; updatedAt: string; archivedAt: string | null;
+};
+
+/** A project member with the name and email other members may see (docs/API.md). */
+export type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean };
+
+const isDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
+
+/** Reports whether a route segment has the shape of a project ID, so other text never reaches an API path. */
+export function isProjectId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** Validates a requirement list from an API response. Throws when the shape is not the documented one. */
+export function parseRequirementSummaries(value: unknown): RequirementSummary[] {
+  if (!Array.isArray(value)) throw new Error("The API returned an unexpected requirement list.");
+  return value.map((entry: unknown) => {
+    const item = entry as Record<string, unknown> | null;
+    if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
+        typeof item.title !== "string" || typeof item.version !== "number" || !isDate(item.createdAt) ||
+        !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string")) {
+      throw new Error("The API returned an unexpected requirement.");
+    }
+    return {
+      id: item.id, projectId: item.projectId, title: item.title, version: item.version,
+      createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt,
+    };
+  });
+}
+
+/** Validates a member list from an API response. Throws when the shape is not the documented one. */
+export function parseMembers(value: unknown): ProjectMember[] {
+  if (!Array.isArray(value)) throw new Error("The API returned an unexpected member list.");
+  return value.map((entry: unknown) => {
+    const item = entry as Record<string, unknown> | null;
+    if (typeof item !== "object" || item === null || typeof item.userId !== "string" || typeof item.name !== "string" ||
+        typeof item.email !== "string" || !isDate(item.joinedAt) || typeof item.isOwner !== "boolean") {
+      throw new Error("The API returned an unexpected project member.");
+    }
+    return { userId: item.userId, name: item.name, email: item.email, joinedAt: item.joinedAt, isOwner: item.isOwner };
+  });
+}
+
+const mediumDate = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
+
+/** Formats an API timestamp as a short UTC date, such as "Oct 8, 2026". */
+export function formatDate(value: string): string {
+  return mediumDate.format(new Date(value));
+}

@@ -21,7 +21,7 @@ test("home offers sign up and the dashboard preview renders", async ({ page }, t
   await page.goto("/dashboard");
   await expect(page.getByText("Preview · Sample requirements, no project data connected")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "New requirement" })).toHaveAttribute("href", "/projects/example-project/requirements/new");
+  await expect(page.getByRole("main").getByRole("link", { name: "New project" })).toHaveAttribute("href", "/projects/new");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: testInfo.outputPath("dashboard-desktop.png"), fullPage: true });
   expect(errors).toEqual([]);
