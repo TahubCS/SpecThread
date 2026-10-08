@@ -120,12 +120,14 @@ img[src$="thread-mark.png"] { filter: grayscale(1) brightness(1.7); }
 .app-main .details dt { color: var(--app-text-2); font-weight: 500; }
 .app-main .method-list > li { padding: 10px 0; border-bottom-color: var(--app-line); }
 .app-main .field label { color: var(--app-text); font-size: 13px; font-weight: 500; }
-.app-main .field :is(input, textarea) { padding: 0 12px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-inset); color: var(--app-text); font: inherit; }
-.app-main .field input { height: 36px; }
+.app-main .field :is(input, textarea, select) { padding: 0 12px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-inset); color: var(--app-text); font: inherit; }
+.app-main .field :is(input, select) { height: 36px; }
+.app-main .field select { width: 100%; }
+.app-main .field-help { margin: 0; color: var(--app-text-3); font-size: 13px; }
 .app-main .field textarea { min-height: 120px; padding: 9px 12px; line-height: 1.5; resize: vertical; }
-.app-main .field :is(input, textarea):hover { border-color: #444444; }
-.app-main .field :is(input, textarea):focus-visible { border-color: #8a8a8a; outline: 2px solid #ffffff26; outline-offset: 0; }
-.app-main .field :is(input, textarea)[aria-invalid="true"] { border-color: var(--app-danger); }
+.app-main .field :is(input, textarea, select):hover { border-color: #444444; }
+.app-main .field :is(input, textarea, select):focus-visible { border-color: #8a8a8a; outline: 2px solid #ffffff26; outline-offset: 0; }
+.app-main .field :is(input, textarea, select)[aria-invalid="true"] { border-color: var(--app-danger); }
 .app-main .field .notice-error { padding: 0; border: 0; background: none; color: var(--app-danger); font-size: 13px; }
 .app-main .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .status-dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border: 1.5px solid var(--app-text-3); border-radius: 50%; }

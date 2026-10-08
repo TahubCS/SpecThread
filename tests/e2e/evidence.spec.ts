@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 import {
   clearGitHubFaults, failGitHub, githubId, setGitHubChecks, setGitHubCommits, setGitHubItems, setGitHubReleases, setGitHubUser, sha,
@@ -12,6 +12,7 @@ let owner: Awaited<ReturnType<typeof createTestSession>>;
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   owner = await createTestSession("Evidence tester");
+  await createTestTeam(owner.userId);
   await context.addCookies([owner.cookie]);
 });
 test.afterEach(async () => {

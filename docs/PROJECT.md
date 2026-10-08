@@ -20,10 +20,19 @@ Developers and reviewers who need direct links to technical evidence.
 
 Project ownership
 
-A user may have personal projects and may belong to teams that own projects.
-The projects view combines projects the user can access, while a team's
-projects view shows that team's projects. Exact membership and transfer rules
-will be defined with the corresponding backend work.
+A user may belong to multiple teams, and every project belongs to one team.
+The combined projects view groups accessible projects by team; a team's
+projects view shows only that team's projects. Every team member can access
+its projects and work on requirements. Only the team's Owner and Admins create
+projects or manage their names, settings, and archive/restore actions (ADR-040).
+
+After the first verified sign-in, required onboarding asks for the initial team's
+name and optional description. The creator becomes its Owner. Completion is saved
+on the server; leaving the browser or visiting another app page resumes incomplete
+onboarding. Verified users arriving through an invitation can instead accept it,
+join the invited team, and complete onboarding without naming a separate team.
+Every new membership requires acceptance; Owners invite Admins/Members, and Admins
+invite Members. Invitations use email plus copyable links and expire after seven days.
 
 Core workflow
 
@@ -43,7 +52,7 @@ MVP scope
 
 The first usable version should support:
 
-personal projects and teams that can own projects;
+multiple team memberships and projects owned by teams;
 
 creating, viewing, editing, and archiving requirements;
 

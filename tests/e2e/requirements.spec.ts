@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 
 // Creating, reading, editing, and archiving requirements inside a project, and how those
@@ -8,6 +8,7 @@ let owner: Awaited<ReturnType<typeof createTestSession>>;
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   owner = await createTestSession("Requirement tester");
+  await createTestTeam(owner.userId);
   await context.addCookies([owner.cookie]);
 });
 test.afterEach(() => clearApiFaults(owner.userId));

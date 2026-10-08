@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { addTestTeamMember, createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi, type ApiFault } from "../support/api-faults";
 
 // How the project pages behave when the API fails. Faults are registered with the test API
@@ -8,6 +8,7 @@ let owner: Awaited<ReturnType<typeof createTestSession>>;
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   owner = await createTestSession("Failure tester");
+  await createTestTeam(owner.userId);
   await context.addCookies([owner.cookie]);
 });
 test.afterEach(() => clearApiFaults(owner.userId));
@@ -34,7 +35,7 @@ test("the project list shows an error page, and Try again recovers once the API 
 
   await clearApiFaults(owner.userId);
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.getByText("You have no projects yet.")).toBeVisible();
+  await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
 });
 
 for (const [label, failure] of [
@@ -105,7 +106,7 @@ for (const [label, failure, message] of [
   ["fails", serverError, "The name could not be saved. Please try again."],
   ["is unreachable", unreachable, "The name could not be saved. Please try again."],
   ["no longer finds the project", { status: 404 }, "The name could not be saved. Please try again."],
-  ["says the user is not the owner", { status: 403, body: { detail: "Only the project owner can do this." } }, "Only the project owner can do this."],
+  ["says the user is not the owner", { status: 403, body: { detail: "Only the team Owner or an Admin can do this." } }, "Only the team Owner or an Admin can do this."],
   ["says the project is archived", { status: 409, body: { detail: "Archived items cannot be changed." } }, "This project is archived and can't be renamed."],
   ["rejects the name", { status: 400, body: { errors: { name: ["That name is not allowed."] } } }, "That name is not allowed."],
 ] as const) {
@@ -126,7 +127,7 @@ for (const [label, failure, message] of [
 for (const [label, failure, message] of [
   ["fails", serverError, "The project could not be archived. Please try again."],
   ["is unreachable", unreachable, "The project could not be archived. Please try again."],
-  ["says the user is not the owner", { status: 403, body: { detail: "Only the project owner can do this." } }, "Only the project owner can do this."],
+  ["says the user is not the owner", { status: 403, body: { detail: "Only the team Owner or an Admin can do this." } }, "Only the team Owner or an Admin can do this."],
 ] as const) {
   test(`archiving leaves the project active and explains the failure when the API ${label}`, async ({ page }) => {
     const projectId = await createProject(page, "Keep me");
@@ -174,14 +175,14 @@ test("a session that ended sends the user to sign in instead of creating a proje
 test("a member removed while viewing a project sees not-found on the next page", async ({ page, browser }) => {
   const projectId = await createProject(page, "Shared");
   const member = await createTestSession("Grace Hopper");
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${projectId}','${member.userId}')`);
+  await addTestTeamMember(projectId, member.userId);
   const context = await browser.newContext();
   await context.addCookies([member.cookie]);
   const memberPage = await context.newPage();
   await memberPage.goto(`/projects/${projectId}`);
   await expect(memberPage.getByRole("heading", { name: "Shared", level: 1 })).toBeVisible();
 
-  await runTestSql(`DELETE FROM public.project_members WHERE project_id = '${projectId}' AND user_id = '${member.userId}'`);
+  await runTestSql(`DELETE FROM public.team_members WHERE user_id = '${member.userId}'`);
   await memberPage.goto(`/projects/${projectId}/requirements`);
   await expect(memberPage.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expect(memberPage.getByText("Shared")).toHaveCount(0);

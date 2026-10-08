@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { archiveProject, renameProject } from "@/app/projects/actions";
 import { PROJECT_NAME_MAX } from "@/lib/projects";
 
-/** Renders the owner's rename form and the archive action, which asks for confirmation first. */
+/** Renders a manager's rename form and the archive action, which asks for confirmation first. */
 export function ProjectSettings({ projectId, name }: { projectId: string; name: string }) {
   const [rename, renameAction, renaming] = useActionState(renameProject.bind(null, projectId), { name, error: null, saved: false });
   const [archive, archiveAction, archiving] = useActionState(archiveProject.bind(null, projectId), { error: null });

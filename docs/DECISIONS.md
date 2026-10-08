@@ -808,9 +808,8 @@ latest decision with `outdated`; the requirement itself does not, because its pa
 reads the full list of decisions. On screen "Accepted" means a person approved the
 requirement; nothing says verified or proven.
 
-Consequences: A project with one member cannot record any decision, and there is no
-members screen (ADR-031), so until team membership arrives a second member has to be
-added through `POST /projects/{projectId}/members` or the database. The author rule
+Consequences: A project whose team has one member cannot record any decision; a
+second person joins the team by invitation (ADR-040, ADR-041). The author rule
 looks only at who created the requirement, not at who edited it last. A decision
 can be made with no evidence linked. Nothing is locked after acceptance: an edit or
 a changed link marks the decision outdated and waits for a new one. There is no
@@ -819,6 +818,143 @@ Inbox stay previews. The snapshot does not record check results or release
 contents, and a refresh that changes a link's state does not mark the decision
 outdated. The list endpoint reads every decision of the listed requirements to find
 the latest. Rolling the migration back deletes every recorded decision.
+
+ADR-039: Teams foundation with member-only reads and one owner
+
+Status: Accepted
+
+Context: The user requested complete Teams implementation in successive vertical
+slices on `feature/teams`, coordinating with Claude Code's `feature/visual-polish`.
+The user selected compact team rows, a dedicated creation page, team-section tabs,
+real sidebar links now, and Owner/Admin/Member roles with one owner.
+
+Decision: The first slice exposes authenticated GET/POST `/teams` and GET
+`/teams/{id}`. Creating a team saves the creator's membership in the same transaction.
+Only a member can find or read a team; other callers get 404. The team has one
+`owner_user_id`, and other membership roles are `admin` and `member`; the API derives
+the owner's role from that single field. Names and descriptions reuse the existing
+project/requirement text limits. EF's Teams migration adds `teams` and `team_members`,
+with RLS enabled and browser-role grants revoked. No live migration or startup
+migration is performed. Web pages use server-only API calls with Better Auth JWTs.
+The sidebar reads a same-origin, session-checked endpoint. The layout and section
+pages both verify membership so later navigation does not depend on a cached layout.
+
+Consequences: Team creation, list/search, overview, and sidebar navigation use real
+data. `/teams/new` opens the created team, whose tabs use the existing section URLs.
+Admins are represented but cannot yet be appointed through an endpoint. Member
+management, invitations, settings/activity, ownership transfer, and team project
+access require user choices in their respective slices. No team membership changes
+existing project permissions. Team-specific styling uses existing app tokens and a
+CSS module; the shared sidebar patch changes its data rather than the visual system.
+
+ADR-040: Team navigation, required first-team onboarding, and team-owned projects
+
+Status: Accepted
+
+Context: The user clarified the desired navigation using screenshots, paused changes,
+chose the detailed behavior, and explicitly approved resuming the revised Teams plan.
+This supersedes ADR-018's personal-project model and ADR-039's six-section Team Home.
+
+Decision: Your teams has independently expandable groups, with Home and Projects
+links and account-saved expansion preferences. Favorites are personal and sort first
+within Your teams. Each team's menu contains Favorite/Unfavorite, Team settings,
+Copy URL, Open archive, and Leave team. The archive contains that team's archived
+projects. Owners/Admins restore from an archive row after confirmation naming the
+project and team; Members see the archive without restore controls. Team Home has Overview and Members tabs; Overview shows name/description
+in the main area and members/quick links on the right. Documents is separate future
+work. The combined Projects view remains and groups accessible projects by team.
+
+After the first verified sign-in, /onboarding requires a team name and optional
+description in a focused page without workspace navigation. Successful creation
+atomically saves the team, its Owner membership, and onboarding completion, then
+opens Team Home. Completion lives in user_onboarding, not cookies or local storage.
+The page proxy redirects incomplete accounts from protected pages, and the API
+rejects project creation until completion. Duplicate initial submissions cannot
+create two teams: the unique account completion key makes the losing transaction
+roll back. Existing team members are backfilled as completed by the migration.
+Completion survives loss of membership; invitation acceptance records it in the
+same transaction as joining the invited team.
+
+All projects belong to teams. Every team member can access those projects and
+edit requirements. Only the team Owner and Admins create projects and manage project
+names, settings, and archive/restore. This replaces per-project access membership;
+TeamProjects adds a required project team foreign key and backfills one team per
+legacy project. Access to projects and requirements is inherited from current team
+membership. Legacy project membership writes return 410; member reads reflect the
+team. Project responses include team ID/name, caller role, and active requirement
+count; the historical ownerUserId remains creator provenance, not a permission. No shared database migration or deployment happens in this task.
+
+Consequences: TeamNavigationOnboarding adds private member preferences and an RLS-
+protected completion table without modifying Better Auth's schema. Member data is
+read through membership-checked C# endpoints. Member controls and settings use the
+agreed rules below. Archive restoration and invitation choices are recorded here.
+Claude's visual-polish work remains separate.
+
+Coordination refinement: Claude also owns the global `/projects` pages and
+project creation/deletion UI. Teams work implements the team-specific compact
+Projects table and C# team ownership/access contracts, leaving those web pages
+untouched. Before applying the ownership migration, any existing project becomes
+its own team, retaining its owner and members as that team's Owner and Members.
+This preserves access without combining unrelated collaborators.
+
+Membership refinement: Existing and new accounts join only after invitation
+acceptance. Admins remove regular Members; only the Owner removes Admins. Nobody
+removes the Owner. The Owner alone appoints/demotes Admins, using a role dropdown
+and explicit Save button in each member row. Removing a member or leaving uses a
+confirmation dialog naming the person/team and an explicit Remove/Leave button.
+The Owner must transfer ownership before leaving. Transfer can select any existing
+member, requires confirmation naming the team and recipient, and makes the previous
+Owner an Admin. Settings is one page: name/description with Save, then ownership
+transfer and Leave team. Owners/Admins edit name and description; transfer is
+Owner-only. Invitations are designed in their own slice.
+
+Invitation refinement: Invite people opens an email/role dialog from Members; View
+invitations opens a compact table with email, role, inviter, expiry, status, Resend,
+and Revoke. Only Owners/Admins access management; Owners manage Admin/Member
+invitations and Admins manage Member invitations. Delivery uses the existing email
+service and offers immediate Copy link. Links last seven days. Resend rotates the
+secret and invalidates the previous link. Acceptance requires the inviter's current
+permission, a verified account matching the invited email, and completes onboarding
+atomically with membership. New accounts accepting an invite do not name a separate
+initial team. Acceptance uses a focused full-page screen matching onboarding,
+showing team name, inviter, invited email, role, and Accept invitation. Sign-in and
+signup preserve that destination. Token previews are public but grant no access;
+only acceptance by the verified matching account completes setup. Unavailable links
+and wrong accounts do not bypass onboarding. Accepted links cannot rejoin a removed
+member. Only SHA-256 hashes of random 32-byte invitation secrets are stored.
+
+ADR-041: After the merge with teams, project work follows team roles
+
+Status: Accepted
+
+Context: The projects, requirements, evidence, and review work (ADR-026 to ADR-038)
+and the teams work (ADR-039, ADR-040) were built on separate branches from the same
+commit. The first assumed a project has one owner and its own members; the second
+made every project belong to a team, with access from team membership and
+management by the team's Owner and Admins. The user's decision is that a project is
+always owned by a team and a user always has a team from onboarding.
+
+Decision: Team rules win wherever the two met. A project is created in a team the
+user owns or administers: the create form asks for the team, offers only those
+teams, and can be opened for one team with `/projects/new?team=<id>`, which the
+team's project list links to. Connecting or disconnecting a project's GitHub
+repository needs the team's Owner or an Admin, like renaming and archiving a
+project (this changes ADR-032, which allowed only the project's creator). The web
+decides what to show from the project's `teamRole`, not from `ownerUserId`, which
+is now only who created the project. Review decisions are unchanged: any member of
+the project's team except the requirement's author (ADR-038). The decision numbers
+of the teams work were changed from 026 and 027 to 039 and 040 because both
+branches had used 026 and 027.
+
+Consequences: A second reviewer now joins by accepting a team invitation;
+`POST /projects/{projectId}/members` answers 410, so the workaround named in ADR-038
+is gone. A team Member cannot create a project or connect a repository and is told
+why. The two branches' migrations interleave by timestamp; EF applies them in that
+order and each applies cleanly because the evidence and review tables only refer to
+projects and requirements. TeamProjects turns each existing project into its own
+team, so projects created before the merge appear as one team per project. The
+team pages keep the styles they were built with and have not been brought into the
+black-and-white system of ADR-027.
 
 ADR-NNN: Title
 

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { addTestTeamMember, createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
+import { clearApiFaults, failApi } from "../support/api-faults";
 
 // Each test signs in as its own new user, so the project list starts empty. The users are
 // not removed afterwards: a user who owns a project cannot be deleted, and the database is disposable.
@@ -7,8 +8,10 @@ let owner: Awaited<ReturnType<typeof createTestSession>>;
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   owner = await createTestSession("Project tester");
+  await createTestTeam(owner.userId);
   await context.addCookies([owner.cookie]);
 });
+test.afterEach(() => clearApiFaults(owner.userId));
 
 /** Creates a project through the form and returns its ID from the overview address. */
 async function createProject(page: Page, name: string) {
@@ -22,7 +25,7 @@ async function createProject(page: Page, name: string) {
 test("a new user sees no projects, creates one, and lands on its overview", async ({ page }, testInfo) => {
   await page.goto("/projects");
   await expect(page.getByRole("heading", { name: "Projects", level: 1 })).toBeVisible();
-  await expect(page.getByText("You have no projects yet.")).toBeVisible();
+  await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
 
   await page.getByRole("main").getByRole("link", { name: "New project" }).click();
   await expect(page).toHaveURL(/\/projects\/new$/);
@@ -34,7 +37,7 @@ test("a new user sees no projects, creates one, and lands on its overview", asyn
   await expect(page.getByRole("navigation", { name: "Project sections" }).getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   const details = page.getByRole("complementary", { name: "Project details" });
   await expect(details.getByText("Active")).toBeVisible();
-  await expect(details.getByText("Project tester", { exact: true })).toBeVisible();
+  await expect(details.getByRole("link", { name: "Test team" })).toBeVisible();
   await expect(details.getByText("Project tester created the project")).toBeVisible();
   await expect(page.getByText("This project has no requirements yet.")).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("project-overview-desktop.png"), fullPage: true });
@@ -55,7 +58,7 @@ test("projects are listed by name, and other users cannot see or open them", asy
   await other.addCookies([(await createTestSession("Other user")).cookie]);
   const otherPage = await other.newPage();
   await otherPage.goto("/projects");
-  await expect(otherPage.getByText("You have no projects yet.")).toBeVisible();
+  await expect(otherPage.getByText("Your teams have no projects yet.")).toBeVisible();
   for (const path of [`/projects/${billing}`, `/projects/${billing}/requirements`, `/projects/${billing}/settings/verification`, "/projects/not-a-project"]) {
     // The loading state has already started the response, so the status stays 200.
     await otherPage.goto(path);
@@ -76,14 +79,19 @@ test("a blank project name is rejected with a message and nothing is created", a
   await page.screenshot({ path: testInfo.outputPath("project-form-error.png"), fullPage: true });
   await expect(page).toHaveURL(/\/projects\/new$/);
   await page.getByRole("link", { name: "Cancel" }).click();
-  await expect(page.getByText("You have no projects yet.")).toBeVisible();
+  await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
 });
 
 test("the create form works with the keyboard and the project fits a narrow screen", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/projects/new");
+  // Wait for the form to become interactive: text typed into it earlier would be reset.
+  await page.goto("/projects/new", { waitUntil: "networkidle" });
   await page.getByLabel("Project name").focus();
   await page.keyboard.type("Mobile onboarding");
+  await page.keyboard.press("Tab");
+  await expect(page.getByLabel("Team", { exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Create project" })).toBeFocused();
   await page.keyboard.press("Enter");
 
   await expect(page.getByRole("heading", { name: "Mobile onboarding", level: 1 })).toBeVisible();
@@ -151,7 +159,7 @@ test("the owner archives a project only after confirming", async ({ page }) => {
   await page.getByRole("button", { name: "Archive project" }).click();
   await page.getByRole("button", { name: "Yes, archive this project" }).click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByText("You have no projects yet.")).toBeVisible();
+  await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
 
   await page.goto(`/projects/${projectId}`);
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Archived")).toBeVisible();
@@ -164,7 +172,7 @@ test("the owner archives a project only after confirming", async ({ page }) => {
 test("a member who is not the owner can read the project but not change it", async ({ page, browser }) => {
   const projectId = await createProject(page, "Shared");
   const member = await createTestSession("Grace Hopper");
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${projectId}','${member.userId}')`);
+  await addTestTeamMember(projectId, member.userId);
 
   const context = await browser.newContext();
   await context.addCookies([member.cookie]);
@@ -172,8 +180,88 @@ test("a member who is not the owner can read the project but not change it", asy
   await memberPage.goto(`/projects/${projectId}`);
   await expect(memberPage.getByRole("heading", { name: "Shared", level: 1 })).toBeVisible();
   await memberPage.goto(`/projects/${projectId}/settings`);
-  await expect(memberPage.getByText("Only the project owner can rename or archive this project.")).toBeVisible();
+  await expect(memberPage.getByText("Only the team Owner or an Admin can rename or archive this project.")).toBeVisible();
   await expect(memberPage.getByLabel("Project name")).toHaveCount(0);
   await expect(memberPage.getByRole("button", { name: "Archive project" })).toHaveCount(0);
   await context.close();
 });
+
+test("a project is created in the chosen team, and only teams the user manages are offered", async ({ page }, testInfo) => {
+  const second = await createTestTeam(owner.userId, "Payments team");
+  // A team where this user is only a member is not offered.
+  const other = await createTestSession("Other owner");
+  const foreign = await createTestTeam(other.userId, "Another owner team");
+  await runTestSql(`INSERT INTO public.team_members (team_id,user_id) VALUES ('${foreign}','${owner.userId}')`);
+
+  await page.goto("/projects/new");
+  const team = page.getByLabel("Team", { exact: true });
+  await expect(team.getByRole("option")).toHaveText(["Payments team", "Test team"]);
+  await page.getByLabel("Project name").fill("Refunds");
+  await team.selectOption({ label: "Test team" });
+  // A rejected attempt keeps the chosen team.
+  await page.getByLabel("Project name").fill("   ");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Enter a project name." })).toBeVisible();
+  await expect(team.getByRole("option", { selected: true })).toHaveText("Test team");
+  await page.screenshot({ path: testInfo.outputPath("project-form-team.png"), fullPage: true });
+
+  // The address can choose the team to start with, as the team's own project list does.
+  await page.goto(`/teams/${second}/projects`);
+  await page.getByRole("main").getByRole("link", { name: "New project" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/new\\?team=${second}$`));
+  await expect(team.getByRole("option", { selected: true })).toHaveText("Payments team");
+  await page.getByLabel("Project name").fill("Refunds");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("heading", { name: "Refunds", level: 1 })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Project details" }).getByRole("link", { name: "Payments team" })).toHaveAttribute("href", `/teams/${second}`);
+  await page.goto(`/teams/${second}/projects`);
+  await expect(page.getByRole("table").getByRole("link", { name: "Refunds" })).toBeVisible();
+  await page.goto("/projects");
+  await expect(page.getByRole("list", { name: "Your projects" }).getByRole("listitem")).toContainText("Payments team");
+});
+
+test("a user who manages no team is told why they cannot create a project", async ({ page, browser }) => {
+  const projectId = await createProject(page, "Shared");
+  const member = await createTestSession("Grace Hopper");
+  await addTestTeamMember(projectId, member.userId);
+  const context = await browser.newContext();
+  await context.addCookies([member.cookie]);
+  const memberPage = await context.newPage();
+  await memberPage.goto("/projects/new");
+  await expect(memberPage.getByText("Only a team's Owner or an Admin can create a project.")).toBeVisible();
+  await expect(memberPage.getByLabel("Project name")).toHaveCount(0);
+  await expect(memberPage.getByRole("main").getByRole("link", { name: "Create a team" })).toHaveAttribute("href", "/teams/new");
+  await context.close();
+
+  // An Admin may create one.
+  const admin = await createTestSession("Admin user");
+  await addTestTeamMember(projectId, admin.userId, "admin");
+  const adminContext = await browser.newContext();
+  await adminContext.addCookies([admin.cookie]);
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto("/projects/new");
+  await adminPage.getByLabel("Project name").fill("By an admin");
+  await adminPage.getByRole("button", { name: "Create project" }).click();
+  await expect(adminPage.getByRole("heading", { name: "By an admin", level: 1 })).toBeVisible();
+  // And manage it: the settings form is there for an Admin, who did not create the first project.
+  await adminPage.goto(`/projects/${projectId}/settings`);
+  await expect(adminPage.getByLabel("Project name")).toHaveValue("Shared");
+  await adminContext.close();
+});
+
+for (const [label, failure, message] of [
+  ["says the user does not manage the team", { status: 403, body: { detail: "Only the team Owner or an Admin can do this." } }, "Only the team Owner or an Admin can create a project in this team."],
+  ["no longer finds the team", { status: 404 }, "That team could not be found. Choose another."],
+  ["rejects the team", { status: 400, body: { errors: { teamId: ["Choose a team."] } } }, "Choose a team."],
+] as const) {
+  test(`creating a project explains it next to the team when the API ${label}`, async ({ page }) => {
+    await failApi(owner.userId, { method: "POST", path: "^/projects$", ...failure });
+    await page.goto("/projects/new");
+    await page.getByLabel("Project name").fill("Checkout");
+    await page.getByRole("button", { name: "Create project" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: message })).toBeVisible();
+    await expect(page.getByLabel("Team", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByLabel("Project name")).toHaveValue("Checkout");
+    await clearApiFaults(owner.userId);
+  });
+}

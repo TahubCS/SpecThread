@@ -1,10 +1,11 @@
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Data;
 
 namespace SpecThread.Api.Projects;
 
-// Membership rules shared by product endpoints. See ADR-024.
+// Team membership grants access to every project and requirement inside it (ADR-040).
 internal static class ProjectAccess
 {
     // The fallback authorization policy guarantees a subject on every product endpoint.
@@ -14,7 +15,11 @@ internal static class ProjectAccess
     // Projects the user belongs to, archived or not. Non-members never see a project,
     // so endpoints answer 404 rather than revealing that it exists.
     public static IQueryable<Project> ProjectsFor(this SpecThreadDbContext db, string userId) =>
-        db.Projects.Where(p => db.ProjectMembers.Any(m => m.ProjectId == p.Id && m.UserId == userId));
+        db.Projects.Where(p => db.TeamMembers.Any(m => m.TeamId == p.TeamId && m.UserId == userId));
+
+    public static Task<bool> CanManageTeam(this SpecThreadDbContext db, Guid teamId, string userId, CancellationToken cancel) =>
+        db.Teams.AnyAsync(t => t.Id == teamId && db.TeamMembers.Any(m => m.TeamId == t.Id && m.UserId == userId &&
+            (t.OwnerUserId == userId || m.Role == "admin")), cancel);
 }
 
 // Boundary validation for user-supplied text. Limits are recorded in ADR-024.

@@ -12,13 +12,15 @@ import {
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
 import { parseReview, parseReviews, parseReviewSummary, reviewedText, reviewError, reviewOutdated } from "../../app/web/src/lib/reviews";
 
-const project = { id: "p1", name: "Billing", ownerUserId: "u1", createdAt: "2026-10-01T10:00:00.123456Z", archivedAt: null };
+const project = { id: "p1", name: "Billing", ownerUserId: "u1", createdAt: "2026-10-01T10:00:00.123456Z", archivedAt: null,
+  teamId: "t1", teamName: "Payments", teamRole: "admin" };
 
 test("project responses are accepted only in the documented shape", () => {
   expect(parseProject({ ...project, extra: true })).toEqual(project);
   expect(parseProjects([project, { ...project, archivedAt: "2026-10-02T00:00:00Z" }])).toHaveLength(2);
   for (const value of [null, "text", {}, { ...project, id: 1 }, { ...project, name: undefined },
-    { ...project, createdAt: "yesterday" }, { ...project, archivedAt: 0 }]) {
+    { ...project, createdAt: "yesterday" }, { ...project, archivedAt: 0 }, { ...project, teamId: undefined }, { ...project, teamName: 1 },
+    { ...project, teamRole: "viewer" }, { ...project, teamRole: undefined }]) {
     expect(() => parseProject(value)).toThrow("unexpected project");
   }
   expect(() => parseProjects({ items: [] })).toThrow("unexpected project list");

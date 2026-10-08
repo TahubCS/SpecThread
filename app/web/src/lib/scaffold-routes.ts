@@ -24,6 +24,7 @@ export const scaffoldRoutes = [
   ["/teams/[teamId]/settings", "Team settings"],
   ["/teams/[teamId]/invitations", "Team invitations"],
   ["/teams/[teamId]/activity", "Team activity"],
+  ["/teams/[teamId]/archive", "Team archive"],
   ["/projects", "Projects"],
   ["/projects/new", "Create project"],
   ["/projects/[projectId]", "Project overview"],

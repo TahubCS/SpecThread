@@ -1,7 +1,18 @@
 import { parseReviewSummary, type ReviewSummary } from "./reviews";
 
-/** A project as returned by the SpecThread API (docs/API.md). */
-export type Project = { id: string; name: string; ownerUserId: string; createdAt: string; archivedAt: string | null };
+/**
+ * A project as returned by the SpecThread API (docs/API.md). It belongs to a team; `teamRole`
+ * is the signed-in user's role there, and `ownerUserId` is who created the project.
+ */
+export type Project = {
+  id: string; name: string; ownerUserId: string; createdAt: string; archivedAt: string | null;
+  teamId: string; teamName: string; teamRole: "owner" | "admin" | "member";
+};
+
+/** Reports whether the signed-in user may rename or archive the project or change its repository: the team's Owner and Admins. */
+export function canManageProject(project: Pick<Project, "teamRole">): boolean {
+  return project.teamRole !== "member";
+}
 
 export const PROJECT_NAME_MAX = 200;
 
@@ -10,10 +21,14 @@ export function parseProject(value: unknown): Project {
   const item = value as Record<string, unknown> | null;
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.name !== "string" ||
       typeof item.ownerUserId !== "string" || typeof item.createdAt !== "string" || Number.isNaN(Date.parse(item.createdAt)) ||
-      (item.archivedAt !== null && typeof item.archivedAt !== "string")) {
+      (item.archivedAt !== null && typeof item.archivedAt !== "string") || typeof item.teamId !== "string" ||
+      typeof item.teamName !== "string" || (item.teamRole !== "owner" && item.teamRole !== "admin" && item.teamRole !== "member")) {
     throw new Error("The API returned an unexpected project.");
   }
-  return { id: item.id, name: item.name, ownerUserId: item.ownerUserId, createdAt: item.createdAt, archivedAt: item.archivedAt };
+  return {
+    id: item.id, name: item.name, ownerUserId: item.ownerUserId, createdAt: item.createdAt, archivedAt: item.archivedAt,
+    teamId: item.teamId, teamName: item.teamName, teamRole: item.teamRole,
+  };
 }
 
 /** Validates a project list from an API response. Throws when it is not an array of projects. */

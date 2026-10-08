@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { addTestTeamMember, createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 import { clearGitHubFaults, failGitHub, githubId, linkGitHubAccount, setGitHubUser, type FakeInstallation } from "../support/github";
 
@@ -10,6 +10,7 @@ let token: string;
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   owner = await createTestSession("Repository tester");
+  await createTestTeam(owner.userId);
   await context.addCookies([owner.cookie]);
 });
 test.afterEach(async () => {
@@ -116,7 +117,7 @@ test("members who are not the owner, and archived projects, see the connection b
   await expect(page.getByRole("link", { name: /acme\/web-shop/ })).toBeVisible();
 
   const member = await createTestSession("Grace Hopper");
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${projectId}','${member.userId}')`);
+  await addTestTeamMember(projectId, member.userId);
   const context = await browser.newContext();
   await context.addCookies([member.cookie]);
   const memberPage = await context.newPage();
@@ -131,12 +132,12 @@ test("members who are not the owner, and archived projects, see the connection b
   await expect(page.getByRole("button", { name: "Disconnect repository" })).toHaveCount(0);
 
   const otherProject = await createProject(page, "Other");
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${otherProject}','${member.userId}')`);
+  await addTestTeamMember(otherProject, member.userId);
   const second = await browser.newContext();
   await second.addCookies([member.cookie]);
   const secondPage = await second.newPage();
   await secondPage.goto(`/projects/${otherProject}/settings/repository`);
-  await expect(secondPage.getByText("No repository is connected. Only the project owner can connect one.")).toBeVisible();
+  await expect(secondPage.getByText("No repository is connected. Only the team Owner or an Admin can connect one.")).toBeVisible();
   await second.close();
 });
 
@@ -204,7 +205,7 @@ for (const [label, bearer, fault, message] of [
 for (const [label, method, failure, message] of [
   ["the API fails while connecting", "PUT", { status: 500 }, "The repository could not be connected. Please try again."],
   ["the API is unreachable while connecting", "PUT", { close: true }, "The repository could not be connected. Please try again."],
-  ["the API says the user is not the owner", "PUT", { status: 403, body: { detail: "Only the project owner can do this." } }, "Only the project owner can do this."],
+  ["the API says the user is not the owner", "PUT", { status: 403, body: { detail: "Only the team Owner or an Admin can do this." } }, "Only the team Owner or an Admin can do this."],
   ["the API says the project is archived", "PUT", { status: 409, body: { detail: "Archived items cannot be changed." } }, "This project is archived, so its repository can't be changed."],
   ["the API answers with something that is not a connection", "PUT", { status: 200, body: { repository: null } }, "The repository could not be connected. Please try again."],
 ] as const) {
@@ -222,7 +223,7 @@ for (const [label, method, failure, message] of [
 for (const [label, failure, message] of [
   ["fails", { status: 500 }, "The repository could not be disconnected. Please try again."],
   ["is unreachable", { close: true }, "The repository could not be disconnected. Please try again."],
-  ["says the user is not the owner", { status: 403, body: { detail: "Only the project owner can do this." } }, "Only the project owner can do this."],
+  ["says the user is not the owner", { status: 403, body: { detail: "Only the team Owner or an Admin can do this." } }, "Only the team Owner or an Admin can do this."],
 ] as const) {
   test(`disconnecting keeps the connection and explains the failure when the API ${label}`, async ({ page }) => {
     const projectId = await createProject(page, "Checkout");

@@ -7,7 +7,7 @@ using SpecThread.Api.Projects;
 namespace SpecThread.Api.GitHub;
 
 // Connects one GitHub repository to a project (ADR-032). Any member reads the connection;
-// only the owner changes it, and only with a repository GitHub confirms they can reach.
+// only the team's Owner or an Admin changes it, and only with a repository GitHub confirms they can reach.
 internal static class RepositoryEndpoints
 {
     private const int MaxTokenLength = 1_000;
@@ -65,7 +65,7 @@ internal static class RepositoryEndpoints
         var userId = user.CallerId();
         var project = await db.ProjectsFor(userId).AsNoTracking().SingleOrDefaultAsync(p => p.Id == projectId, cancel);
         if (project is null) return TypedResults.NotFound();
-        if (project.OwnerUserId != userId) return ProjectEndpoints.OwnerOnly();
+        if (!await db.CanManageTeam(project.TeamId, userId, cancel)) return ProjectEndpoints.ManagersOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
         // GitHub decides whether this user can reach the repository through this installation.
@@ -118,7 +118,7 @@ internal static class RepositoryEndpoints
         var userId = user.CallerId();
         var project = await db.ProjectsFor(userId).AsNoTracking().SingleOrDefaultAsync(p => p.Id == projectId, cancel);
         if (project is null) return TypedResults.NotFound();
-        if (project.OwnerUserId != userId) return ProjectEndpoints.OwnerOnly();
+        if (!await db.CanManageTeam(project.TeamId, userId, cancel)) return ProjectEndpoints.ManagersOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
         // Idempotent: disconnecting a project with no repository succeeds.

@@ -1,5 +1,5 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
-import { createTestSession, expect, runTestSql, test } from "./fixtures";
+import { addTestTeamMember, createTestSession, createTestTeam, expect, runTestSql, test } from "./fixtures";
 import { clearApiFaults, failApi } from "../support/api-faults";
 import { clearGitHubFaults, githubId, setGitHubItems, setGitHubUser, type FakeItem } from "../support/github";
 
@@ -11,6 +11,7 @@ const contexts: BrowserContext[] = [];
 test.use({ signedIn: false });
 test.beforeEach(async ({ context }) => {
   author = await createTestSession("Ada Lovelace");
+  await createTestTeam(author.userId);
   reviewer = await createTestSession("Grace Hopper");
   await context.addCookies([author.cookie]);
 });
@@ -31,7 +32,7 @@ async function createRequirement(page: Page) {
   await page.getByLabel("Title").fill("Guest checkout");
   await page.getByRole("button", { name: "Create requirement" }).click();
   await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
-  await runTestSql(`INSERT INTO public.project_members (project_id,user_id) VALUES ('${projectId}','${reviewer.userId}')`);
+  await addTestTeamMember(projectId, reviewer.userId);
   return { projectId, requirementId: page.url().split("/").at(-1)!, url: page.url() };
 }
 

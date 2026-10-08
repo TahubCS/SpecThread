@@ -25,6 +25,7 @@ test.beforeAll(async () => {
     ('owner','Owner','owner@example.invalid',true,now(),now()),
     ('member','Member','member@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now())`);
+  await database.pool.query(`INSERT INTO public.user_onboarding (user_id,completed_at) SELECT id,now() FROM public."user"`);
   const url = new URL(database.connectionString);
   fake = await startFakeGitHub({ port: 5113, appId: "888", publicKey: key.publicKey });
   api = await startApi(5114, {
@@ -62,8 +63,10 @@ const item = (number: number, title: string, extra: Partial<Item> = {}): Item =>
 /** A project with a member, one requirement, and a connected repository GitHub knows with these items. */
 async function setUp(request: APIRequestContext, items: Item[], { connected = true, appInstalled = true } = {}) {
   const owner = await as(request, "owner");
-  const project = await (await owner.post("/projects", { name: "Checkout" })).json();
-  expect((await owner.post(`/projects/${project.id}/members`, { email: "member@example.invalid" })).status()).toBe(201);
+  const team = await (await owner.post("/teams", { name: "Product team" })).json();
+  const project = await (await owner.post("/projects", { name: "Checkout", teamId: team.id })).json();
+  // Fixture-only membership. In the product a person joins a team by accepting an invitation.
+  await database.pool.query("INSERT INTO public.team_members (team_id,user_id) SELECT $1, unnest($2::text[])", [team.id, ["member"]]);
   const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Guest checkout" })).json();
   const [installationId, repositoryId] = [nextId++, nextId++];
   await request.put(`${gitHub}/__github/users/seed-${installationId}`, { data: { installations: [{ id: installationId, appInstalled, repositories: [{ id: repositoryId, owner: "acme", name: "web" }] }] } });
@@ -507,7 +510,7 @@ test("the release migration constrains what a release row can be, and its rollba
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'release'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(others);
   expect(await count(columns)).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(7);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(11);
 });
 
 test("the check migration defaults every link to manual, constrains the source, and rolls back without losing links", async () => {
@@ -531,7 +534,7 @@ test("the check migration defaults every link to manual, constrains the source, 
   await database.pool.query(await readFile("docs/schema/evidence-checks-rollback.sql", "utf8"));
   expect(await count(columns)).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence")).toBe(before);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(6);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(10);
 });
 
 test("the commit migration constrains what a row can be, and its rollback removes commit links only", async () => {
@@ -557,7 +560,7 @@ test("the commit migration constrains what a row can be, and its rollback remove
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE kind = 'commit'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_evidence WHERE repository_id = 515151")).toBe(2);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_evidence' AND column_name IN ('sha','commits','additions')")).toBe(0);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(5);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(9);
 });
 
 test("the migration protects the new table and its rollback removes only that table", async () => {
@@ -579,5 +582,5 @@ test("the migration protects the new table and its rollback removes only that ta
   await database.pool.query(await readFile("docs/schema/requirement-evidence-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_evidence'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('project_repositories','requirements')")).toBe(2);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(4);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(8);
 });

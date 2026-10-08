@@ -12,7 +12,7 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
   const [requirements, members, repository] = await Promise.all([
     listRequirements(projectId), listMembers(projectId), getProjectRepository(projectId),
   ]);
-  const owner = members.find(member => member.isOwner);
+  const creator = members.find(member => member.userId === project.ownerUserId);
   const recent = [...requirements].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);
 
   return (
@@ -41,8 +41,8 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
           <dl>
             <dt>Status</dt>
             <dd><span className={`status-dot${project.archivedAt ? "" : " is-active"}`} aria-hidden="true" />{project.archivedAt ? "Archived" : "Active"}</dd>
-            <dt>Owner</dt>
-            <dd>{owner?.name ?? "Unknown"}</dd>
+            <dt>Team</dt>
+            <dd><Link href={`/teams/${project.teamId}`}>{project.teamName}</Link></dd>
             <dt>Repository</dt>
             <dd><Link href={`/projects/${project.id}/settings/repository`}>{repository ? repository.fullName : "Not connected"}</Link></dd>
             <dt>Requirements</dt>
@@ -54,7 +54,7 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
         <section className="side-card" aria-labelledby="activity-heading">
           <h2 id="activity-heading">Activity</h2>
           <p className="side-activity">
-            {owner ? `${owner.name} created the project` : "Project created"} · <time dateTime={project.createdAt}>{formatDate(project.createdAt)}</time>
+            {creator ? `${creator.name} created the project` : "Project created"} · <time dateTime={project.createdAt}>{formatDate(project.createdAt)}</time>
           </p>
         </section>
       </aside>

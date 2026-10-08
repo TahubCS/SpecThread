@@ -52,12 +52,18 @@ try {
     },
     stdio: "inherit",
   });
-  api.on("exit", code => void stop(code ?? 1));
+  api.on("exit", code => { if (!stopping) void stop(code || 1); });
   api.on("error", () => void stop(1));
   await startApiProxy({ port: 5107, upstream: apiOrigin });
   await startFakeGitHub({ port: 5108, appId: gitHubAppId, publicKey: gitHubKey.publicKey });
   const env = { ...process.env, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: proxyOrigin };
   execFileSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], { cwd: "app/web", env, stdio: "inherit" });
+  for (let attempt = 0; ; attempt++) {
+    if (api.exitCode !== null) throw new Error("The browser-test API exited before it was ready.");
+    try { if ((await fetch(`${apiOrigin}/health`)).ok) break; } catch { /* Wait for the local process. */ }
+    if (attempt === 119) throw new Error("The browser-test API did not become ready.");
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
   server = spawn(process.execPath, ["../../node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3100"], { cwd: "app/web", env, stdio: "inherit" });
   server.on("exit", code => void stop(code ?? 1));
   server.on("error", () => void stop(1));

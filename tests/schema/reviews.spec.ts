@@ -20,6 +20,7 @@ test.beforeAll(async () => {
     ('reviewer','Reviewer','reviewer@example.invalid',true,now(),now()),
     ('second','Second','second@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now())`);
+  await database.pool.query(`INSERT INTO public.user_onboarding (user_id,completed_at) SELECT id,now() FROM public."user"`);
   const url = new URL(database.connectionString);
   api = await startApi(5115, {
     ConnectionStrings__Database: `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}`,
@@ -46,10 +47,10 @@ async function as(request: APIRequestContext, sub: string) {
 /** A project owned by the author, with two other members and one requirement the author wrote. */
 async function setUp(request: APIRequestContext) {
   const author = await as(request, "author");
-  const project = await (await author.post("/projects", { name: "Checkout" })).json();
-  for (const email of ["reviewer@example.invalid", "second@example.invalid"]) {
-    expect((await author.post(`/projects/${project.id}/members`, { email })).status()).toBe(201);
-  }
+  const team = await (await author.post("/teams", { name: "Product team" })).json();
+  const project = await (await author.post("/projects", { name: "Checkout", teamId: team.id })).json();
+  // Fixture-only membership. In the product a person joins a team by accepting an invitation.
+  await database.pool.query("INSERT INTO public.team_members (team_id,user_id) SELECT $1, unnest($2::text[])", [team.id, ["reviewer", "second"]]);
   const requirement = await (await author.post(`/projects/${project.id}/requirements`, { title: "Guest checkout" })).json();
   return { projectId: project.id as string, requirementId: requirement.id as string, path: `/requirements/${requirement.id}/reviews` };
 }
@@ -269,5 +270,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(8);
+  expect(history).toBe(12);
 });

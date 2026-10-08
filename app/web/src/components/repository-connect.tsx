@@ -5,7 +5,7 @@ import { Lock } from "lucide-react";
 import { connectRepository, disconnectRepository } from "@/app/projects/repository-actions";
 import type { AvailableRepository } from "@/lib/repositories";
 
-/** Renders the repositories the owner may connect as a single-choice list with a Connect button. */
+/** Renders the repositories a manager may connect as a single-choice list with a Connect button. */
 export function RepositoryPicker({ projectId, repositories }: { projectId: string; repositories: AvailableRepository[] }) {
   const [state, action, pending] = useActionState(connectRepository.bind(null, projectId), { error: null });
   const [selected, setSelected] = useState("");

@@ -24,6 +24,7 @@ test.beforeAll(async () => {
     ('owner','Owner','owner@example.invalid',true,now(),now()),
     ('member','Member','member@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now())`);
+  await database.pool.query(`INSERT INTO public.user_onboarding (user_id,completed_at) SELECT id,now() FROM public."user"`);
   const url = new URL(database.connectionString);
   const connection = `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}`;
   fake = await startFakeGitHub({ port: 5109, appId: "777", publicKey: key.publicKey });
@@ -59,8 +60,10 @@ async function gitHubShows(request: APIRequestContext, token: string, installati
 
 async function createProject(request: APIRequestContext) {
   const owner = await as(request, "owner");
-  const project = await (await owner.post("/projects", { name: "Checkout" })).json();
-  expect((await owner.post(`/projects/${project.id}/members`, { email: "member@example.invalid" })).status()).toBe(201);
+  const team = await (await owner.post("/teams", { name: "Product team" })).json();
+  const project = await (await owner.post("/projects", { name: "Checkout", teamId: team.id })).json();
+  // Fixture-only membership. In the product a person joins a team by accepting an invitation.
+  await database.pool.query("INSERT INTO public.team_members (team_id,user_id) SELECT $1, unnest($2::text[])", [team.id, ["member"]]);
   return project.id as string;
 }
 
@@ -252,6 +255,6 @@ test("the migration protects the new table and its rollback removes only that ta
   await database.pool.query(await readFile("docs/schema/project-repositories-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='project_repositories'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('projects','requirements','rateLimit')")).toBe(3);
-  // InitialSchema, AuthRateLimits, the four later evidence migrations, and RequirementReviews remain.
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(7);
+  // Everything else remains: the two initial migrations, four for teams, four later ones for evidence, and RequirementReviews.
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(11);
 });

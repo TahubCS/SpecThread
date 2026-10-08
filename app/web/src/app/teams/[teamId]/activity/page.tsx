@@ -1,6 +1,6 @@
-import { ScaffoldPage } from "@/components/scaffold-page";
+import { TeamPlannedSection } from "@/components/teams/team-planned-section";
 
-/** Renders the "Team activity" placeholder with scaffold navigation and no connected product data or actions. */
-export default function Page() {
-  return <ScaffoldPage title="Team activity" description="Follow changes across this team's projects." />;
+/** Membership-checked placeholder for the upcoming activity slice. */
+export default function Page({ params }: { params: Promise<{ teamId: string }> }) {
+  return <TeamPlannedSection params={params} title="Activity" />;
 }

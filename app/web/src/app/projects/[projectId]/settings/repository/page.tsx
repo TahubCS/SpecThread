@@ -3,21 +3,21 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink, Lock } from "lucide-react";
 import { RepositoryDisconnect, RepositoryPicker } from "@/components/repository-connect";
 import { getProjectRepository, gitHubAccess, listAvailableRepositories } from "@/lib/github-data";
-import { listMembers, requireProject, viewerId } from "@/lib/project-data";
-import { formatDate, type Project } from "@/lib/projects";
+import { listMembers, requireProject } from "@/lib/project-data";
+import { canManageProject, formatDate, type Project } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Repository" };
 
 const external = { target: "_blank", rel: "noreferrer" } as const;
 
 /**
- * Shows the GitHub repository a project reads evidence from. The owner connects one that
+ * Shows the GitHub repository a project reads evidence from. The team's Owner or an Admin connects one that
  * GitHub says they can reach through the SpecThread app, or disconnects it.
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/settings/repository">) {
   const project = await requireProject((await params).projectId);
-  const [repository, members, viewer] = await Promise.all([getProjectRepository(project.id), listMembers(project.id), viewerId()]);
-  const canChange = project.ownerUserId === viewer && !project.archivedAt;
+  const [repository, members] = await Promise.all([getProjectRepository(project.id), listMembers(project.id)]);
+  const canChange = canManageProject(project) && !project.archivedAt;
 
   return (
     <section className="project-page is-form" aria-labelledby="page-title">
@@ -43,14 +43,14 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
         <p className="notice">
           {project.archivedAt
             ? "No repository is connected, and this project is archived."
-            : "No repository is connected. Only the project owner can connect one."}
+            : "No repository is connected. Only the team Owner or an Admin can connect one."}
         </p>
       )}
     </section>
   );
 }
 
-/** Renders the owner's path to connecting: link GitHub, install the app, then choose a repository. */
+/** Renders a manager's path to connecting: link GitHub, install the app, then choose a repository. */
 async function Connect({ project }: { project: Project }) {
   const account = <Link href="/settings/account">your account page</Link>;
   const access = await gitHubAccess();

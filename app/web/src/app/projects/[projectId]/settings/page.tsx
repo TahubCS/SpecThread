@@ -3,15 +3,15 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { ProjectSettings } from "@/components/project-settings";
 import { getProjectRepository } from "@/lib/github-data";
-import { requireProject, viewerId } from "@/lib/project-data";
+import { requireProject } from "@/lib/project-data";
+import { canManageProject } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Settings" };
 
-/** Lets the owner rename or archive the project. Other members and archived projects see why they cannot. */
+/** Lets the team's Owner or an Admin rename or archive the project. Other members and archived projects see why they cannot. */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/settings">) {
   const project = await requireProject((await params).projectId);
-  const [viewer, repository] = await Promise.all([viewerId(), getProjectRepository(project.id)]);
-  const isOwner = project.ownerUserId === viewer;
+  const repository = await getProjectRepository(project.id);
 
   return (
     <section className="project-page is-narrow" aria-labelledby="page-title">
@@ -27,9 +27,9 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       </Link>
       {project.archivedAt
         ? <p className="notice">This project is archived and can no longer be changed.</p>
-        : isOwner
+        : canManageProject(project)
           ? <ProjectSettings projectId={project.id} name={project.name} />
-          : <p className="notice">Only the project owner can rename or archive this project.</p>}
+          : <p className="notice">Only the team Owner or an Admin can rename or archive this project.</p>}
     </section>
   );
 }

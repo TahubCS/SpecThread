@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef, useState } from "react";
 import {
-  ChevronDown, FileText, FolderKanban, House, Inbox, Plus, Search, Users, X,
+  FileText, FolderKanban, House, Inbox, Plus, Search, Users, X,
   type LucideIcon,
 } from "lucide-react";
 import { AppNavLink } from "./app-nav-link";
 import { ProfileMenu } from "./profile-menu";
+import { TeamSidebarLinks } from "./teams/team-sidebar-links";
 
 const destinations = [
   { label: "Overview", href: "/dashboard", icon: House },
@@ -30,7 +31,7 @@ export function workspaceTitleFor(pathname: string) {
 /**
  * Renders the sidebar for project and team work, with page search and create shortcuts.
  * Search filters the fixed destination labels, ignoring case and surrounding spaces.
- * The profile menu links to settings and the account; team links use an example ID.
+ * The profile menu links to settings and the account; teams use API-authorized memberships.
  */
 export function WorkspaceSidebar() {
   const pathname = usePathname();
@@ -80,9 +81,7 @@ export function WorkspaceSidebar() {
             <p className="app-nav-heading">Your teams</p>
             <Link href="/teams/new" aria-label="Create team"><Plus size={15} aria-hidden="true" /></Link>
           </div>
-          <Link className="app-team-name" href="/teams/example-team">Example team <ChevronDown size={13} aria-hidden="true" /></Link>
-          {link("/teams/example-team", "Home", House, true, true)}
-          {link("/teams/example-team/projects", "Projects", FolderKanban, false, true)}
+          <TeamSidebarLinks />
         </div>
       </nav>
       <dialog className="app-search-dialog" ref={searchDialog} aria-label="Search navigation">

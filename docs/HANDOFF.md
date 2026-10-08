@@ -1,6 +1,55 @@
 # Shared handoff
 
-## Current task: Evidence count on requirement lists (2026-10-08)
+## Current task: Merge main (teams) into feature/project-ui (2026-10-08)
+
+- Branch: `feature/project-ui`, merging `origin/main` at `0e6077b` (PR #14, teams).
+  The merge is resolved in the working tree and **not committed**; `git commit`
+  completes it. PR into `main` afterwards.
+- Completed (ADR-041):
+  - The 14 conflicted files are resolved. The EF model snapshot was stitched from
+    both sides and EF reports no pending model changes.
+  - Things Git did not flag but the merge broke: repository connect and disconnect
+    called a permission helper main removed (now the team's Owner or an Admin, as
+    for renaming a project); creating a project needs a team (the form has a Team
+    field, offers only teams the user owns or administers, and
+    `/projects/new?team=<id>` preselects one; the team's project list links to it);
+    project pages decide what to show from `teamRole`; both branches had added a
+    browser-test API on port 5106 (one kept, with main's readiness wait); the teams
+    API tests used ports 5107 to 5109, which this branch's test proxy and GitHub
+    stand-ins already use (moved to 5116 to 5118).
+  - main's decisions ADR-026 and ADR-027 are renumbered ADR-039 and ADR-040,
+    because this branch had used those numbers. References in main's code, tests,
+    and docs follow.
+  - This branch's tests create a team before a project and add people to the team
+    instead of to the project (`createTestTeam`, `addTestTeamMember` in
+    tests/e2e/fixtures.ts).
+- Changed beyond the conflicted files: `app/api/GitHub/RepositoryEndpoints.cs`,
+  `app/web/src/lib/projects.ts`, `app/web/src/app/projects/{actions,repository-actions}.ts`,
+  `app/web/src/app/projects/{page,new/page}.tsx`,
+  `app/web/src/app/projects/[projectId]/{page,settings/page,settings/repository/page}.tsx`,
+  `app/web/src/components/project-form.tsx`, `app/web/src/app/app-shell.css`,
+  `app/web/src/app/teams/[teamId]/projects/page.tsx` (New project link),
+  the six project, requirement, repository, evidence, and review browser specs,
+  `tests/schema/{evidence,reviews,github-repository}.spec.ts`,
+  `tests/api/project-data.spec.ts`, and the ADR references noted above.
+- Checks, all after the last code change: every schema-project spec passed (76),
+  including both branches' API and migration tests run together; every browser test
+  plus the parser tests passed (207). `dotnet build app/api --configuration Release`,
+  `dotnet format app/api --verify-no-changes --no-restore`, `npm run lint`, and
+  `npm run typecheck` passed. `dotnet ef migrations has-pending-model-changes`
+  reported none. Run with a temporary config because the dev API held port 5100, so
+  the api-project tests that need that port (health, JWT, OpenAPI) were not run.
+- Known issues and risks:
+  - **Setup**: `dotnet ef database update --project app/api` with the API stopped
+    applies whichever migrations the database lacks (docs/DATABASE.md, "Combined
+    migration order"). TeamProjects turns each existing project into its own team.
+  - Team pages use their own styles (teams.module.css) and are not yet in the
+    black-and-white system. Not changed here.
+  - Not verified against the live database or the real GitHub.
+- Next step: commit the merge, push, and let the PR's checks run. Then the AI slice
+  under ADR-036.
+
+## Previous task: Evidence count on requirement lists (2026-10-08)
 
 - Branch: `feature/project-ui`. Uncommitted, together with the reorder entry below
   unless that has been committed since.
@@ -475,6 +524,123 @@
     the next entry still apply.
 - Next step: the user reviews this slice. Then build the project overview at
   `/projects/{id}` with rename and archive, and send the create form there.
+
+## Previous task: Revised Teams implementation (branch feature/teams, merged as PR #14) (2026-10-08)
+
+- Branch: `feature/teams` in `/workspace/SpecThread`, based on `11285c2`.
+  Cloud workspace. The user explicitly authorized committing each slice and
+  opening a GitHub PR. Feature commits cover onboarding/navigation, members/
+  settings, team projects/archive restoration, and invitations, followed by
+  documentation and review screenshots. No deployment, live mail, or shared
+  database migration has been authorized or run.
+- User requires questions/options before substantive UI/feature decisions. They
+  supplied navigation screenshots, paused earlier work, selected the revised
+  behavior, and explicitly approved "Go ahead with the revised Teams plan."
+  Do not end an active turn while asynchronous design answers are pending.
+- Claude owns `feature/visual-polish`, global `/projects` pages, and project
+  creation/deletion forms. This branch leaves those web files untouched and owns
+  Teams UI, team-specific project/archive tables, and C# team access contracts.
+- Confirmed and implemented (ADR-040 supersedes earlier navigation/personal projects):
+  - Your teams: independently expandable groups with account-saved state,
+    Home/Projects links, personal favorites first, and a real native team menu.
+    Menu: Favorite/Unfavorite, Settings, Copy URL, Open archive, Leave team.
+  - `/teams`: searchable compact rows of real memberships. Normal creation is
+    `/teams/new`, name/optional description, Create/Cancel, creator becomes Owner.
+  - Team Home: Overview/Members tabs; name/description in main area and members
+    plus quick links on the right. Documents is separately agreed future work.
+  - After first verified sign-in, required full-page onboarding asks for initial
+    team name/optional description. It resumes across routes and sessions. Initial
+    team, Owner membership, and persistent completion commit atomically. Duplicate
+    initial submissions yield one 201/one 409 with no extra team. Completion survives
+    leaving/removal and is never inferred from cookies or current membership.
+  - All projects belong to one team; every Member accesses all team projects and
+    works on requirements. Owner/Admin alone create and manage names/settings/
+    archive/restore. Legacy migration preserves access with one team per project,
+    carrying over owner and collaborators; old project-membership writes return 410.
+  - Team Projects uses compact name/active-requirement-count/creation-date rows.
+    Archive contains only the team's archived projects. The user confirmed restore
+    in archive rows, Owner/Admin only, with confirmation naming project and team.
+    Restoration refreshes archive/active lists and rechecks live permissions.
+  - Members: name/email/role/joined table. Owner-only role dropdown + Save; Admins
+    remove regular Members, Owner alone removes Admins, nobody removes Owner.
+    Named confirmations guard removal/leave. Owner transfers to any existing
+    member before leaving; previous Owner becomes Admin. Settings is one page:
+    name/description Save, ownership transfer, Leave. Members see settings read-only.
+  - Invitations: Invite people email/role dialog from Members; separate View
+    invitations table of email/role/inviter/expiry/status, Resend/Revoke. Owner
+    manages Admin/Member invites; Admin manages Member invites only. Email plus
+    immediate Copy link; seven-day expiry; resend rotates secret and issuer.
+    Current inviter permission is checked at acceptance. Joining always requires
+    acceptance by a verified account matching the email. Accepted membership,
+    invitation consumption, and onboarding completion commit together. New signup
+    acceptance joins the invited team without naming another first team.
+  - Acceptance is the confirmed focused full-page screen matching onboarding.
+    It shows team, inviter, invited email, role, expiry, and Accept. Sign-in/signup/
+    verification preserve destination. Wrong accounts can sign out and switch.
+    Expired/revoked/replaced/permission-invalid links cannot join. Viewing a link
+    never unlocks onboarding. Consumed links cannot rejoin removed members.
+- Implementation boundaries:
+  - C# owns product rules and persistence; Next.js server-only JWT API calls and
+    authenticated server actions own UI orchestration. Browser receives no API JWT.
+    Only exact 64-hex invitation preview paths and legacy expiry redirects are
+    public; other unknown invitation URLs retain the deny-by-default gate.
+  - Team management, invitations, and project-management writes serialize on the
+    team row, re-read permissions/state, and form the response before commit.
+    Invitation storage contains only SHA-256 hashes of 32-byte random secrets.
+    Concurrent accepts in different teams use an idempotent completion UPSERT.
+  - Existing email sender is reused. Delivery failure preserves the usable invite
+    and Copy link/retry. API hosting request-start/finish logs are filtered below
+    Warning to avoid raw invitation URL secrets; public preview disables caching
+    and page metadata disables referrers/indexing. No live emails sent.
+  - EF-only Teams, TeamNavigationOnboarding, TeamProjects, and TeamInvitations
+    migrations and documented generators emit reviewed forward/rollback SQL,
+    RLS, and revoked browser grants. Only disposable test databases receive them.
+    Invitation rollback drops records/links but preserves accepted membership and
+    completion. See DATABASE.md for legacy-project rollback reconciliation limits.
+  - Named native dialogs supply focus containment/Escape/cancel; mobile tables
+    scroll locally. Screenshots were reviewed for modal centering, Save contrast,
+    invitation table wrapping, and focused mobile acceptance.
+- Final verification (all sessions closed):
+  - Complete Playwright suite: **165 passed (3.4m)** on the final source, log
+    `/tmp/specthread-teams-ready.log`. It builds the Release API and production web.
+    Covers browser flows, real signup/verification, permissions/concurrency, JWT,
+    onboarding, inherited project access, migrations, RLS/grants, and rollback.
+  - `npm run lint` and `npm run typecheck`: passed after the final form correction.
+  - `dotnet format app/api --verify-no-changes --no-restore`: passed. Offline EF
+    pending-model check and full-suite snapshot consistency check passed.
+  - `git diff --check`: passed. Global `/projects` web diff is empty.
+  - Commit checkpoints: onboarding and project EF snapshots were regenerated
+    with `dotnet ef migrations remove --force` in an isolated copy using an
+    unreachable placeholder connection, without changing the tested working
+    files. Intermediate C# builds, web lint/type checks, and offline EF model
+    checks passed. SQL generators normalize the final newline; regenerated SQL
+    and the complete staged patch pass `git diff --check`.
+  - Focused invitation/member form checks: 6 passed (2.2m), log
+    `/tmp/specthread-team-form-retry.log`. Retry testing found React's native reset
+    reverted an Admin selection after a rejected invitation; the dialog and member
+    role forms deliberately prevent that reset. The final browser flow checks both
+    email/role retention and successful retry/acceptance. Earlier failing runs were
+    corrected; the final complete run includes the regression.
+- Browser: official Chrome 155 extracted under `/workspace/.cache/teams-browser`,
+  temporary config `/workspace/.setup-tools/playwright-teams-chrome.config.ts`.
+  Pinned Playwright Chromium remains blocked at storage.googleapis.com despite the
+  user's saved allowlist update. Repository defaults unchanged. No tests use live
+  Supabase/OAuth/mail. Screenshots are copied before subsequent runs to
+  `/workspace/.cache/teams-preview/`, including navigation, onboarding, members,
+  transfer, invite dialog/list, mobile acceptance, and mobile restoration.
+  Selected screenshots using only disposable test accounts are also committed
+  under `docs/reviews/teams/` for GitHub review.
+- Changed areas: API Data/Teams/Projects/Program/migrations; web teams/onboarding/
+  invitation pages, server actions, AppFrame/sidebar/proxy/API helper, local team
+  components/styles; migration generators/SQL, disposable harness/fixtures, API/
+  schema/browser tests, and API/database/project/architecture/deployment/testing/
+  decision/handoff docs. Global project web page diff remains empty.
+- Still outside the agreed initial Home scope: Documents, Activity/audit history,
+  and Claude's global project UI. Do not invent these or add tabs without asking.
+- Exact next step: review the `feature/teams` PR against `main` and its screenshots.
+  Coordinate Claude's project UI with the documented `teamId`/`teamRole` API contract
+  before integrating branches. Merge only through the reviewed GitHub PR.
+  No pending design questions, shared migration, deployment, or live-mail check.
 
 ## Previous task: Fix timestamp precision in API write responses (2026-10-02)
 

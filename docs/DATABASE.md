@@ -13,8 +13,9 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and four product tables in
-`public`, with the InitialSchema and AuthRateLimits migrations. Startup never calls `EnsureCreated`, `Migrate`, or a database
+`SpecThreadDbContext` maps six Better Auth tables and eight product tables in
+`public`, with the InitialSchema, AuthRateLimits, Teams, TeamNavigationOnboarding,
+TeamProjects, and TeamInvitations migrations. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -60,14 +61,12 @@ authorization model must be designed explicitly.
 
 The previous handoff records InitialSchema as applied to Supabase. Its nine
 tables have RLS enabled and browser-role privileges revoked, with no allow
-policies. This does not implement project authorization for privileged server
-connections. C# JWT validation and membership checks remain outstanding.
+policies. Privileged server connections need C# authorization, which is now
+implemented for project reads/writes and team creation/member-only reads.
 Forward SQL is in schema/initial.sql; rollback.sql drops all nine tables and
 their data. These scripts are not idempotent. Do not rerun the one-time
 `npm run schema:generate` against the existing migration. Future changes need
 new EF migrations. See DEPLOYMENT.md for web TLS/CA configuration.
-
-## Supabase MCP for Codex
 
 ## Auth rate-limit migration
 
@@ -235,6 +234,77 @@ requirement lists and requirement pages fail. Rollback:
 `dotnet ef database update EvidenceReleases --project app/api`, or the rollback
 script. It drops the table, and with it every recorded decision.
 
+## Teams migration (first slice)
+
+Teams adds `public.teams` and `public.team_members`. A team has one owner user ID;
+the API derives the Owner role from that field, and other membership roles are
+Admin or Member. Foreign keys preserve existing accounts, and the composite
+membership key prevents duplicates. Both tables enable RLS with no allow policies;
+grants to PUBLIC, anon, and authenticated are revoked. C# checks membership for
+every product read rather than relying on a Supabase user JWT in EF connections.
+
+Generate and reproduce the artifacts without connecting to a database:
+
+```sh
+dotnet ef migrations add Teams --project app/api
+node scripts/generate-teams.mjs
+```
+
+The generator appends explicit RLS/grant SQL to the generated migration and writes
+`schema/teams.sql` and `schema/teams-rollback.sql`. Rerun only the generator after
+the migration exists; do not scaffold the same migration twice. Tests apply the
+forward SQL in disposable PostgreSQL and exercise rollback/reapply.
+
+Before deploying this slice, initialize EF, review the migration/SQL, inspect the
+target history, and apply `dotnet ef database update Teams --project app/api` to
+the intended database. This task does not apply it to shared Supabase. Deploy the
+API before the web and configure `SPECTHREAD_API_URL` and matching issuer origins.
+Back up team data before rollback. First revert the web/API team functionality,
+then `dotnet ef database update AuthRateLimits --project app/api`; rollback drops
+only teams and team memberships, preserving existing auth and project data.
+
+## Team navigation and onboarding migration
+
+TeamNavigationOnboarding adds `is_favorite` and `is_expanded` to memberships,
+and a private `user_onboarding` completion record keyed by account. Existing team
+members are backfilled as completed, using their earliest membership timestamp.
+New first-team creation saves completion with the team/member transaction.
+Completion does not depend on having a membership forever. No Better Auth column
+is added or modified.
+
+```sh
+dotnet ef migrations add TeamNavigationOnboarding --project app/api
+node scripts/generate-team-navigation.mjs
+```
+
+The generator adds the backfill/RLS/revoked-grant SQL and writes
+`schema/team-navigation.sql` and `schema/team-navigation-rollback.sql` offline.
+Review history and SQL before applying `dotnet ef database update
+TeamNavigationOnboarding --project app/api`. This work applies migrations only to
+disposable tests, not shared Supabase.
+
+Rollback to Teams preserves teams, members, auth, and projects, but removes
+completion and navigation preferences. Revert the web/API onboarding gate before
+rollback. Reapplying marks existing members completed; accounts that completed
+onboarding then left every team need their backed-up completion state restored.
+Back up these preferences and completion records before rollback.
+
+## Combined migration order
+
+The teams migrations and the evidence and review migrations were written on separate
+branches, so their timestamps interleave. EF applies them in timestamp order:
+Teams, TeamNavigationOnboarding, ProjectRepositories, TeamProjects,
+RequirementEvidence, TeamInvitations, EvidenceCommits, EvidenceChecks,
+EvidenceReleases, RequirementReviews. A database that already has one branch's
+migrations gets the other's with `dotnet ef database update --project app/api`
+(API stopped); EF runs only the missing ones, and each applies cleanly because the
+evidence and review tables refer only to projects, requirements, and users.
+`dotnet ef migrations has-pending-model-changes` reports none for the merged model.
+Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
+`dotnet ef database update <Name>` would also undo the other branch's migrations
+that come later in time. scripts/test-database.mjs applies the teams scripts first
+and then the evidence and review scripts.
+
 ## Supabase tooling
 
 ```sh
@@ -258,3 +328,59 @@ was already installed, so the optional duplicate skill installation was skipped.
 References: [Supabase connections](https://supabase.com/docs/guides/database/connecting-to-postgres),
 [Npgsql EF provider](https://www.npgsql.org/efcore/), and
 [Codex MCP](https://developers.openai.com/codex/mcp).
+
+
+## Team-owned projects migration
+
+TeamProjects adds the required `projects.team_id` FK to teams, with restricted
+team deletion. Before the FK is created, each existing project gets a separate
+team bearing its name; its owner and existing project members become that team's
+Owner and Members. Owner membership is supplied if an old project lacks it.
+Membership join timestamps, projects, requirements, criteria, and legacy membership
+rows are preserved. Legacy collaborators are backfilled as onboarded. No unrelated
+projects are combined. New authorization reads only team membership; legacy
+project_members remains historical data for rollback and grants no access.
+
+```sh
+dotnet ef migrations add TeamProjects --project app/api
+node scripts/generate-team-projects.mjs
+```
+
+The generator inserts the agreed backfill before the generated FK/index, removes
+the temporary column default, and emits `schema/team-projects.sql` and
+`schema/team-projects-rollback.sql` offline. Rerun the generator only once the
+migration exists. Tests use isolated Docker databases; no shared migration is run.
+
+Before deployment, back up the target, inspect history, initialize EF, and apply
+`dotnet ef database update TeamProjects --project app/api`. Deploy the matching API
+before the web. Rollback to TeamNavigationOnboarding drops only the project/team
+association and preserves generated teams and all project/auth/requirement data.
+It does not recreate individual memberships for projects created after migration,
+or reproduce team role changes in the old model. Reverting authorization requires
+an explicit access reconciliation from a backup. Reapplication creates new teams
+per project and does not reuse the preserved teams; prefer rolling forward once
+new team-owned data exists. Do not apply the full initial rollback.
+
+## Team invitations migration
+
+TeamInvitations adds `public.team_invitations`: team/email/role/issuer, hashed
+secret, creation/issue/expiry timestamps, and acceptance/revocation state. Team and
+auth-user foreign keys restrict deletion. Check constraints limit role and expiry
+and prevent simultaneous acceptance/revocation. A unique digest index supports
+token lookup; a partial unique team/email index permits only one unresolved invite
+per recipient. Expired unresolved invitations must be resent or revoked. RLS and
+revoked PUBLIC/anon/authenticated grants keep all access on the authorized API.
+
+```sh
+dotnet ef migrations add TeamInvitations --project app/api
+node scripts/generate-team-invitations.mjs
+```
+
+The generator adds the RLS/grant guard and emits `schema/team-invitations.sql` and
+`schema/team-invitations-rollback.sql` offline. After initialization, backup, and
+history review, the rollout target is `dotnet ef database update TeamInvitations
+--project app/api`. Only disposable databases are migrated during development.
+Rollback to TeamProjects drops invitation records, invalidating pending links;
+it preserves teams, accepted memberships, onboarding completion, projects, and auth.
+Reapplication creates empty invitation storage. Back up invitation history before
+rollback; hashes cannot recover plaintext links. Prefer rolling forward.

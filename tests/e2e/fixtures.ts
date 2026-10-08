@@ -17,10 +17,10 @@ export async function runTestSql(sql: string) {
 
 /**
  * Seeds a verified user and a one-day session in the test database and returns a
- * signed Better Auth session cookie. `remove` deletes the user and, by cascade, the session.
+ * signed Better Auth session cookie. `remove` deletes test-owned product rows before the user/session.
  * Tests that log out must use their own session, not the shared worker session.
  */
-export async function createTestSession(displayName: string) {
+export async function createTestSession(displayName: string, onboarded = true) {
   const secret = process.env.SPECTHREAD_TEST_AUTH_SECRET;
   if (!secret) throw new Error("Test auth secret is missing");
   const userId = randomUUID();
@@ -29,12 +29,34 @@ export async function createTestSession(displayName: string) {
     VALUES ('${userId}','${displayName}','${userId}@example.invalid',true,now(),now());
     INSERT INTO public.session (id,"userId",token,"expiresAt","createdAt","updatedAt")
     VALUES ('${randomUUID()}','${userId}','${token}',now() + interval '1 day',now(),now());`);
+  if (onboarded) await runTestSql(`INSERT INTO public.user_onboarding (user_id,completed_at) VALUES ('${userId}',now());`);
   const cookie: TestCookie = {
     name: "better-auth.session_token",
     value: `${token}.${await makeSignature(token, secret)}`,
     url: "http://127.0.0.1:3100",
   };
-  return { userId, cookie, remove: () => runTestSql(`DELETE FROM public."user" WHERE id = '${userId}'`) };
+  return { userId, cookie, remove: () => runTestSql(`
+    DELETE FROM public.team_invitations WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR invited_by = '${userId}' OR accepted_by = '${userId}';
+    DELETE FROM public.team_members WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR user_id = '${userId}';
+    DELETE FROM public.teams WHERE owner_user_id = '${userId}';
+    DELETE FROM public."user" WHERE id = '${userId}';`) };
+}
+
+/**
+ * Creates a team owned by the user directly in the test database and returns its ID.
+ * Projects belong to a team, so tests that create a project need one first.
+ */
+export async function createTestTeam(ownerId: string, name = "Test team") {
+  const teamId = randomUUID();
+  await runTestSql(`INSERT INTO public.teams (id,name,description,owner_user_id) VALUES ('${teamId}','${name}','','${ownerId}');
+    INSERT INTO public.team_members (team_id,user_id) VALUES ('${teamId}','${ownerId}');`);
+  return teamId;
+}
+
+/** Adds a user to the team of a project, which is how a user gets access to the project. */
+export async function addTestTeamMember(projectId: string, userId: string, role: "member" | "admin" = "member") {
+  await runTestSql(`INSERT INTO public.team_members (team_id,user_id,role)
+    SELECT team_id,'${userId}','${role}' FROM public.projects WHERE id = '${projectId}' ON CONFLICT DO NOTHING`);
 }
 
 /** Playwright test that starts signed in unless a file or describe block sets `signedIn: false`. */

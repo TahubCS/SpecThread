@@ -9,12 +9,12 @@ import { parseProjectRepository, parseRepositoryChoice } from "@/lib/repositorie
 
 export type RepositoryActionState = { error: string | null };
 
-const OWNER_ONLY = "Only the project owner can do this.";
+const MANAGERS_ONLY = "Only the team Owner or an Admin can do this.";
 const ARCHIVED = "This project is archived, so its repository can't be changed.";
 const SIGN_IN_AGAIN = "GitHub did not accept your GitHub sign-in. Sign in with GitHub again from your account page, then retry.";
 
 /**
- * Connects the chosen GitHub repository to a project for its owner. The API asks GitHub
+ * Connects the chosen GitHub repository to a project for its team's Owner or an Admin. The API asks GitHub
  * whether this user can reach the repository before saving, so the choice is never trusted.
  */
 export async function connectRepository(projectId: string, _previous: RepositoryActionState, formData: FormData): Promise<RepositoryActionState> {
@@ -34,7 +34,7 @@ export async function connectRepository(projectId: string, _previous: Repository
       const problem: unknown = await response.json();
       return { error: fieldError(problem, "repositoryId") ?? fieldError(problem, "installationId") ?? fieldError(problem, "githubToken") ?? failed };
     }
-    if (response.status === 403) return { error: OWNER_ONLY };
+    if (response.status === 403) return { error: MANAGERS_ONLY };
     if (response.status === 409) return { error: ARCHIVED };
     if (response.status === 502) return { error: "GitHub could not be reached. Try again in a moment." };
     if (response.status === 503) return { error: "GitHub is not set up for this SpecThread deployment yet." };
@@ -48,13 +48,13 @@ export async function connectRepository(projectId: string, _previous: Repository
   redirect(`/projects/${projectId}/settings/repository`);
 }
 
-/** Disconnects a project's repository for its owner. Evidence already recorded is not removed. */
+/** Disconnects a project's repository for its team's Owner or an Admin. Evidence already recorded is not removed. */
 export async function disconnectRepository(projectId: string): Promise<RepositoryActionState> {
   const failed = "The repository could not be disconnected. Please try again.";
   if (!isUuid(projectId)) return { error: failed };
   try {
     const response = await apiFetch(`/projects/${projectId}/repository`, { method: "DELETE" });
-    if (response.status === 403) return { error: OWNER_ONLY };
+    if (response.status === 403) return { error: MANAGERS_ONLY };
     if (response.status === 409) return { error: ARCHIVED };
     if (!response.ok) throw new Error(`Disconnect repository returned ${response.status}.`);
   } catch (error) {
