@@ -148,6 +148,20 @@
 .scaffold-link span { flex: 1; }
 .scaffold-parent-link { grid-column: 1 / -1; }
 
+.app-main .field input { border: 1px solid #55545c; background: #202023; color: #f3f3f5; }
+.app-main .field input:focus-visible { outline: 2px solid #b5a9f5; outline-offset: 2px; }
+.project-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 30px 0 18px; }
+.project-toolbar p { margin: 0; }
+.project-list { margin: 0; padding: 0; border: 1px solid #343438; border-radius: 9px; background: #1d1d20; list-style: none; }
+.project-list li + li { border-top: 1px solid #343438; }
+.project-list a { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 15px 18px; color: #ededf0; font-weight: 500; text-decoration: none; }
+.project-list a:hover { background: #26252b; }
+.project-list span { min-width: 0; overflow-wrap: anywhere; }
+.project-list time { color: #96969f; font-size: 13px; font-weight: 400; }
+.project-form { max-width: 520px; margin-top: 30px; }
+.project-form > * + * { margin-top: 20px; }
+.project-form-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
 @media (max-width: 1140px) {
   .dashboard-row { grid-template-columns: 24px 64px minmax(150px, 1fr) 150px 190px; }
   .dashboard-date { display: none; }
