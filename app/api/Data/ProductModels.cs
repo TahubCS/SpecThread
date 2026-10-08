@@ -4,6 +4,8 @@ public sealed class Project
 {
     public Guid Id { get; set; }
     public required string Name { get; set; }
+    public Guid TeamId { get; set; }
+    // Historical creator, retained in the existing column. Team roles grant management.
     public required string OwnerUserId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ArchivedAt { get; set; }

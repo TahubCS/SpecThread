@@ -5,19 +5,21 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { ArrowLeft, Bell, House, Menu, Settings, type LucideIcon } from "lucide-react";
-import { frameFor } from "@/lib/app-navigation";
+import { frameFor, isInvitationPath } from "@/lib/app-navigation";
 import { SettingsSidebar } from "./settings-sidebar";
 import { WorkspaceSidebar, workspaceTitleFor } from "./workspace-sidebar";
+import teamStyles from "./teams/teams.module.css";
 
 /**
  * Wraps page content in a sidebar with a mobile drawer and a top bar showing the section title.
  * Following any link inside the sidebar, including search results and menus, closes the drawer.
  */
-function AppShell({ sidebar, title, icon: Icon, children }: {
+function AppShell({ sidebar, title, icon: Icon, children, hideTopbar = false }: {
   sidebar: ReactNode;
   title: string;
   icon: LucideIcon;
   children: ReactNode;
+  hideTopbar?: boolean;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -38,10 +40,10 @@ function AppShell({ sidebar, title, icon: Icon, children }: {
         {sidebar}
       </aside>
       <div className="app-content">
-        <header className="app-topbar">
+        {!hideTopbar && <header className="app-topbar">
           <span className="app-breadcrumb"><Icon size={16} aria-hidden="true" /> {title}</span>
           <Link className="icon-button" href="/notifications" aria-label="Inbox"><Bell size={18} aria-hidden="true" /></Link>
-        </header>
+        </header>}
         <main id="main-content" tabIndex={-1} className="app-main">{children}</main>
       </div>
     </div>
@@ -56,12 +58,14 @@ function AppShell({ sidebar, title, icon: Icon, children }: {
  */
 export function AppFrame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  if (pathname === "/onboarding" || isInvitationPath(pathname)) return <main id="main-content" tabIndex={-1} className={teamStyles.onboardingMain}>{children}</main>;
   const frame = frameFor(pathname);
   if (frame === "settings") {
     return <AppShell sidebar={<SettingsSidebar />} title="Settings" icon={Settings}>{children}</AppShell>;
   }
   if (frame === "workspace") {
-    return <AppShell sidebar={<WorkspaceSidebar />} title={workspaceTitleFor(pathname)} icon={House}>{children}</AppShell>;
+    return <AppShell sidebar={<WorkspaceSidebar />} title={workspaceTitleFor(pathname)} icon={House}
+      hideTopbar={/^\/teams\/[\da-f-]{36}(?:\/|$)/i.test(pathname)}>{children}</AppShell>;
   }
   if (["/", "/login", "/signup"].includes(pathname)) return <>{children}</>;
   return (

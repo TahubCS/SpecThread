@@ -27,7 +27,7 @@ postgres:17. The first webServer entry calls scripts/build-api.mjs before starti
 the second entry (the API). Do not move that build into globalSetup: Playwright
 runs globalSetup after webServer startup, which locks the API DLL on Windows.
 scripts/start-test-web.mjs verifies EF initialization, creates an isolated
-password-protected database on a random loopback port, applies both versioned SQL
+password-protected database on a random loopback port, applies the versioned SQL
 migrations, and builds/starts Next.js with that database. No persistent volume is
 used. Global teardown also stops the web-test container on Windows, where
 process-tree termination may skip signal handlers.
@@ -49,7 +49,9 @@ npm run build:api          # Standalone Release API build
 `npm test` builds the web app and the Release API before tests. It starts the
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
-issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105. Keep these
+issuer. Auth tests also start extra API instances on 5102-5104, product API tests
+on 5105, the web-test product API on 5106, Teams API tests on 5107, management on
+5108, and invitations on 5109. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
 or development processes in this checkout: they share app/web/.next. Google Fonts
 currently require network access during the web build.
@@ -75,8 +77,10 @@ currently require network access during the web build.
 - Route scaffold: navigation to the Teams area, representative static and dynamic
   placeholder pages, a useful 404 for an unknown URL, the personal/team project
   descriptions, and a route walk
-  from Dashboard through a team, project, requirement, evidence, and review.
+  from Dashboard through a project, requirement, evidence, and review.
   These checks do not imply that product data or authorization are implemented.
+  Teams creation/list/overview is covered separately with real data rather than
+  the former example-team navigation. Other product routes remain scaffold checks.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,
@@ -85,16 +89,38 @@ currently require network access during the web build.
   Auth:Issuer fails explicitly. The test issuer generates keys per run.
   The schema suite validates a real Better Auth ES256 token against the API after
   expiring a legacy EdDSA key.
-- Product API (schema suite, real API on port 5105 against Docker Postgres, tokens from
-  the test issuer): project create/list/rename/archive, owner membership, member versus
-  owner rights, 404 for non-members, ordered criteria replacement, stale-version 409,
-  archived-item 409s, validation errors, anonymous 401, and accounts without a user row.
-  Member management covers these cases: adds by email that ignore case, duplicate and
-  unverified or unknown emails, owner-only adds and removals, members leaving and
-  losing access, and refusing to remove the owner.
-  The api project checks the OpenAPI paths and anonymous 401s without a database, and
-  `apiBaseUrl` validation for SPECTHREAD_API_URL. A concurrent-save race (as opposed to a
-  stale version sent by the client) is not exercised.
+- Product API: team-owned creation/list/rename/archive/restore, Owner/Admin management,
+  Member requirement editing, inherited member reads, revoked access after team
+  removal, inactive legacy memberships, retired membership writes, isolated team
+  project/archive lists, and active requirement counts. Ordered criteria/stale-version
+  and archived-item checks remain. OpenAPI and anonymous checks run without a DB.
+- Teams: real API-backed creation, search, empty/error/retry and member-only access;
+  reference Home, independent saved sidebar groups, personal favorites sorting first,
+  keyboard team menu, and desktop/mobile screenshots. Required onboarding resumes
+  across protected routes and closed browser sessions. API checks cover atomic first
+  creation, concurrent submissions (one 201/one 409), completion surviving membership
+  loss, and unbypassable project creation guard. Sidebar routes never expose JWTs.
+  Web-test API 5106 shares the disposable DB and trusts the real Better Auth origin;
+  schema API 5107 verifies roles, private preferences, RLS/grants, and rollback.
+- Team projects: compact real-data browser table, active/archive isolation, links to
+  the existing project page, member-only page access, and mobile overflow checks.
+  Archive restoration covers named confirmation/cancel, active-list refresh,
+  Member read-only controls, and an Admin demoted while confirmation is open.
+  Legacy migration tests preserve separate collaborator sets, owner fallback,
+  timestamps, requirements/criteria, and existing teams. They verify required FK,
+  onboarding backfill, and nondestructive association rollback/reapply.
+  Member/settings checks cover role Save, read-only permissions, name/description
+  validation, named removal/leave/transfer dialogs, cancellation/Escape/focus,
+  post-transfer roles, lost access after leave, and concurrent mutation invariants.
+  Invitation checks cover the Members dialog, Copy link, manager roles, the real
+  invitation table, resend/revoke and unavailable states, focused mobile acceptance,
+  wrong-account sign-out, and onboarding remaining required before acceptance.
+  Schema tests cover hashed secrets, seven-day expiry, email normalization, current
+  inviter permissions, verification/matching email, single-use/idempotent acceptance,
+  concurrent accepts/revoke, cross-team isolation, RLS/grants, and rollback/reapply.
+  Real Better Auth signup/verification with captured mail preserves the invitation
+  destination and joins only the invited team without initial-team creation.
+  Invitation tests use the loopback log sender or captured messages, never live mail.
 - EF: PostgreSQL provider initialization using dummy credentials at an unreachable
   local address, and explicit rejection when connection configuration is missing.
   These invoke the local dotnet-ef tool and never connect to Supabase.
@@ -127,9 +153,10 @@ currently require network access during the web build.
   in PostgreSQL, usable token retrieval, prefixed legacy plaintext compatibility,
   and rejection of corrupt ciphertext. No real provider credentials are used.
 
-Live OAuth, deployed TLS connectivity, and browser product flows are not tested. The health
-endpoint is liveness, not database readiness. EF initialization is not proof
-that live database credentials work.
+Live OAuth and deployed TLS connectivity are not tested. Teams, onboarding, and
+team Projects/archive have browser coverage against the disposable database;
+global project flows remain API or scaffold checks owned by Claude. The health endpoint is liveness, not database
+readiness. EF initialization is not proof that live database credentials work.
 
 ## Conventions
 

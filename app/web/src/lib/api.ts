@@ -9,11 +9,11 @@ import { auth } from "./auth";
  * token. Returns the raw Response so callers handle 400/403/404/409 themselves;
  * see docs/API.md. Throws when SPECTHREAD_API_URL is not configured or there is no session.
  */
-export async function apiFetch(path: `/${string}`, init: RequestInit = {}): Promise<Response> {
+export async function apiFetch(path: `/${string}`, init: RequestInit = {}, incomingHeaders?: Headers): Promise<Response> {
   const base = apiBaseUrl(process.env.SPECTHREAD_API_URL);
   const url = new URL(path, base);
   if (url.origin !== base.origin) throw new Error("apiFetch path must stay on the API origin.");
-  const { token } = await auth.api.getToken({ headers: await headers() });
+  const { token } = await auth.api.getToken({ headers: incomingHeaders ?? await headers() });
   const requestHeaders = new Headers(init.headers);
   requestHeaders.set("authorization", `Bearer ${token}`);
   if (init.body !== undefined && !requestHeaders.has("content-type")) {

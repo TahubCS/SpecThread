@@ -1,11 +1,13 @@
 import { createTestSession, expect, test } from "./fixtures";
 import { isPublicPath, safeNextPath } from "../../app/web/src/lib/app-navigation";
 
-test("only the eight public pages are public", () => {
+test("only the public pages and exact invitation token previews are public", () => {
   for (const path of ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms"]) {
     expect(isPublicPath(path), path).toBe(true);
   }
-  for (const path of ["/dashboard", "/settings", "/help", "/invites/x", "/login/extra", "/privacyx", "/not-a-route"]) {
+  expect(isPublicPath(`/invites/${"a".repeat(64)}`)).toBe(true);
+  expect(isPublicPath(`/invites/${"a".repeat(64)}/expired`)).toBe(true);
+  for (const path of ["/dashboard", "/settings", "/help", "/invites/x", `/invites/${"a".repeat(64)}/extra`, `/invites/${"z".repeat(64)}`, "/login/extra", "/privacyx", "/not-a-route"]) {
     expect(isPublicPath(path), path).toBe(false);
   }
 });

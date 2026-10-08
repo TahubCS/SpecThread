@@ -40,3 +40,9 @@ export const verificationEmail = (to: string, url: string) =>
 
 export const passwordResetEmail = (to: string, url: string) =>
   linkMessage(to, "Reset your SpecThread password", "Someone asked to reset the password for your SpecThread account.", "Reset password", url);
+
+export const teamInvitationEmail = ({ to, url, teamName, inviterName, role, expiresAt }: {
+  to: string; url: string; teamName: string; inviterName: string; role: "admin" | "member"; expiresAt: string;
+}) => linkMessage(to, "You’re invited to a SpecThread team",
+  `${inviterName} invited you to join ${teamName} as ${role === "admin" ? "an Admin" : "a Member"}. Sign in with ${to} to accept. This link expires ${new Date(expiresAt).toUTCString()}.`,
+  "Review invitation", url);

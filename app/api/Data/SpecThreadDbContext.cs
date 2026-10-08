@@ -9,6 +9,10 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Requirement> Requirements => Set<Requirement>();
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<UserOnboarding> UserOnboardings => Set<UserOnboarding>();
+    public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -43,15 +47,73 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         model.Entity<AuthRateLimit>().HasIndex(x => x.Key).IsUnique();
         model.Entity<AuthRateLimit>().HasIndex(x => x.LastRequest);
 
+        var team = model.Entity<Team>();
+        team.ToTable("teams", table => table.HasCheckConstraint("ck_teams_name", "length(btrim(name)) > 0"));
+        team.HasKey(x => x.Id);
+        team.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        team.Property(x => x.Name).HasColumnName("name").HasMaxLength(200);
+        team.Property(x => x.Description).HasColumnName("description").HasMaxLength(10_000);
+        team.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
+        team.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+        team.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+
+        var teamMember = model.Entity<TeamMember>();
+        teamMember.ToTable("team_members", table => table.HasCheckConstraint("ck_team_members_role", "role IN ('admin', 'member')"));
+        teamMember.HasKey(x => new { x.TeamId, x.UserId });
+        teamMember.Property(x => x.TeamId).HasColumnName("team_id");
+        teamMember.Property(x => x.UserId).HasColumnName("user_id");
+        teamMember.Property(x => x.Role).HasColumnName("role").HasDefaultValue("member");
+        teamMember.Property(x => x.JoinedAt).HasColumnName("joined_at").HasDefaultValueSql("now()");
+        teamMember.Property(x => x.IsFavorite).HasColumnName("is_favorite").HasDefaultValue(false);
+        teamMember.Property(x => x.IsExpanded).HasColumnName("is_expanded").HasDefaultValue(true);
+        teamMember.HasIndex(x => x.UserId);
+        teamMember.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.Restrict);
+        teamMember.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+
+        var onboarding = model.Entity<UserOnboarding>();
+        onboarding.ToTable("user_onboarding");
+        onboarding.HasKey(x => x.UserId);
+        onboarding.Property(x => x.UserId).HasColumnName("user_id");
+        onboarding.Property(x => x.CompletedAt).HasColumnName("completed_at");
+        onboarding.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        var invitation = model.Entity<TeamInvitation>();
+        invitation.ToTable("team_invitations", table =>
+        {
+            table.HasCheckConstraint("ck_team_invitations_role", "role IN ('admin', 'member')");
+            table.HasCheckConstraint("ck_team_invitations_expiry", "expires_at > issued_at");
+            table.HasCheckConstraint("ck_team_invitations_resolution", "accepted_at IS NULL OR revoked_at IS NULL");
+        });
+        invitation.HasKey(x => x.Id);
+        invitation.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        invitation.Property(x => x.TeamId).HasColumnName("team_id");
+        invitation.Property(x => x.Email).HasColumnName("email").HasMaxLength(254);
+        invitation.Property(x => x.Role).HasColumnName("role");
+        invitation.Property(x => x.InvitedBy).HasColumnName("invited_by");
+        invitation.Property(x => x.TokenHash).HasColumnName("token_hash").HasMaxLength(64);
+        invitation.Property(x => x.CreatedAt).HasColumnName("created_at");
+        invitation.Property(x => x.IssuedAt).HasColumnName("issued_at");
+        invitation.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+        invitation.Property(x => x.AcceptedAt).HasColumnName("accepted_at");
+        invitation.Property(x => x.AcceptedBy).HasColumnName("accepted_by");
+        invitation.Property(x => x.RevokedAt).HasColumnName("revoked_at");
+        invitation.HasIndex(x => x.TokenHash).IsUnique();
+        invitation.HasIndex(x => new { x.TeamId, x.Email }).IsUnique().HasFilter("accepted_at IS NULL AND revoked_at IS NULL");
+        invitation.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.Restrict);
+        invitation.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.InvitedBy).OnDelete(DeleteBehavior.Restrict);
+        invitation.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.AcceptedBy).OnDelete(DeleteBehavior.Restrict);
+
         var project = model.Entity<Project>();
         project.ToTable("projects", table => table.HasCheckConstraint("ck_projects_name", "length(btrim(name)) > 0"));
         project.HasKey(x => x.Id);
         project.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         project.Property(x => x.Name).HasColumnName("name");
+        project.Property(x => x.TeamId).HasColumnName("team_id");
         project.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         project.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         project.Property(x => x.ArchivedAt).HasColumnName("archived_at");
         project.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+        project.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.Restrict);
 
         var member = model.Entity<ProjectMember>();
         member.ToTable("project_members");

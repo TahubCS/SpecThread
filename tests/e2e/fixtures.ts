@@ -8,10 +8,10 @@ export type TestCookie = { name: string; value: string; url: string };
 
 /**
  * Seeds a verified user and a one-day session in the test database and returns a
- * signed Better Auth session cookie. `remove` deletes the user and, by cascade, the session.
+ * signed Better Auth session cookie. `remove` deletes test-owned product rows before the user/session.
  * Tests that log out must use their own session, not the shared worker session.
  */
-export async function createTestSession(displayName: string) {
+export async function createTestSession(displayName: string, onboarded = true) {
   const { name } = JSON.parse(await readFile("playwright/.cache/test-web-database.json", "utf8"));
   const secret = process.env.SPECTHREAD_TEST_AUTH_SECRET;
   if (!secret) throw new Error("Test auth secret is missing");
@@ -25,12 +25,17 @@ export async function createTestSession(displayName: string) {
     VALUES ('${userId}','${displayName}','${userId}@example.invalid',true,now(),now());
     INSERT INTO public.session (id,"userId",token,"expiresAt","createdAt","updatedAt")
     VALUES ('${randomUUID()}','${userId}','${token}',now() + interval '1 day',now(),now());`);
+  if (onboarded) runSql(`INSERT INTO public.user_onboarding (user_id,completed_at) VALUES ('${userId}',now());`);
   const cookie: TestCookie = {
     name: "better-auth.session_token",
     value: `${token}.${await makeSignature(token, secret)}`,
     url: "http://127.0.0.1:3100",
   };
-  return { userId, cookie, remove: () => runSql(`DELETE FROM public."user" WHERE id = '${userId}'`) };
+  return { userId, cookie, remove: () => runSql(`
+    DELETE FROM public.team_invitations WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR invited_by = '${userId}' OR accepted_by = '${userId}';
+    DELETE FROM public.team_members WHERE team_id IN (SELECT id FROM public.teams WHERE owner_user_id = '${userId}') OR user_id = '${userId}';
+    DELETE FROM public.teams WHERE owner_user_id = '${userId}';
+    DELETE FROM public."user" WHERE id = '${userId}';`) };
 }
 
 /** Playwright test that starts signed in unless a file or describe block sets `signedIn: false`. */

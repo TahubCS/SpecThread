@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isPublicPath } from "@/lib/app-navigation";
+import { apiFetch } from "@/lib/api";
+import { parseOnboarding } from "@/lib/team-types";
 
 /**
  * Deny-by-default page gate (ADR-023). Public pages pass through; every other page needs a
@@ -18,6 +20,12 @@ export async function proxy(request: NextRequest) {
     const login = new URL("/login", request.url);
     login.searchParams.set("next", `${pathname}${search}`);
     result = NextResponse.redirect(login);
+  } else if (pathname !== "/onboarding") {
+    const state = await apiFetch("/onboarding", {}, request.headers);
+    if (!state.ok) throw new Error("Account setup could not be checked.");
+    if (!parseOnboarding(await state.json()).completed) {
+      result = NextResponse.redirect(new URL("/onboarding", request.url));
+    }
   }
   for (const cookie of headers.getSetCookie()) result.headers.append("set-cookie", cookie);
   return result;

@@ -9,9 +9,10 @@ const fakeSession = {
 };
 
 test("frame selection keeps the top header for landing and sign-in only", () => {
-  for (const path of ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms"]) {
+  for (const path of ["/", "/login", "/signup", "/forgot-password", "/reset-password", "/auth/error", "/privacy", "/terms", "/onboarding"]) {
     expect(frameFor(path), path).toBe("public");
   }
+  expect(frameFor(`/invites/${"a".repeat(64)}`)).toBe("public");
   for (const path of ["/settings", "/settings/account", "/account", "/help", "/help/example-article",
     "/welcome", "/onboarding/project", "/invites/example-token/expired"]) {
     expect(frameFor(path), path).toBe("settings");

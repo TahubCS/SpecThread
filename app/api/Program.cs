@@ -5,8 +5,12 @@ using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
 using SpecThread.Api.Projects;
 using SpecThread.Api.Requirements;
+using SpecThread.Api.Teams;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Hosting request-start/finish logs include raw invitation secrets in the URL.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
 builder.Services.AddOpenApi();
 builder.AddSpecThreadAuthentication();
@@ -46,6 +50,9 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
 app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
+app.MapTeamEndpoints();
+app.MapTeamManagementEndpoints();
+app.MapInvitationEndpoints();
 
 app.Run();
 

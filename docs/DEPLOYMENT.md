@@ -212,6 +212,35 @@ ES256 key, its newest live key, which is harmless while no other client uses tok
 
 ---
 
+## Teams rollout
+
+The authenticated web app now checks required onboarding through C# on protected
+page requests. Deploy the API and schema before the matching web release:
+
+1. Initialize EF, review Teams, TeamNavigationOnboarding, TeamProjects, and TeamInvitations plus
+   their generated SQL in `docs/schema`. Back up the target and inspect history,
+   then apply `dotnet ef database update TeamInvitations --project app/api`. These
+   changes have only been tested in disposable databases; no task or API startup
+   applies shared migrations automatically. See DATABASE.md for rollback limits.
+2. Deploy the API with `/teams`, `/onboarding`, invitation endpoints, and inherited project authorization.
+3. Set server-only `SPECTHREAD_API_URL` to the API origin. Render's `Auth__Issuer`
+   must match the web's `BETTER_AUTH_URL` exactly.
+4. Verify unfinished signup resumes team naming across routes and sessions, creation
+   opens Home, expansion/favorites persist, and another account cannot discover the
+   team. Verify team project/archive lists and Owner/Admin versus Member permissions.
+5. Use the existing production email sender configuration for invitation delivery.
+   Verify a matching recipient can complete verified signup and accept without
+   creating another team, while wrong/expired/revoked/replaced links grant no access.
+   Verify resend rotates the link and Copy link remains available if delivery fails.
+
+An API configured for one issuer rejects tokens from previews with a different
+Better Auth origin. Give previews their own matching API/database. A failed
+onboarding check fails closed; the API's availability now affects protected pages.
+Render's free plan can cold-start slowly; pages provide loading/retry states.
+The project creation form must send `teamId`, and management controls use `teamRole`;
+Claude owns those global project pages/forms. Team archive restoration uses the
+existing project restore API and rechecks current Owner/Admin permission.
+
 ## 3. Post-Deployment Verification
 
 ### Web Verification
