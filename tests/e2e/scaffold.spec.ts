@@ -6,7 +6,6 @@ import { navigationFor, scaffoldRoutes } from "../../app/web/src/lib/scaffold-ro
 const routes = [
   ["/teams", "Teams"],
   ["/teams/team-1/projects", "Team projects"],
-  ["/projects", "Projects"],
   ["/projects/project-1/settings/repository", "Repository settings"],
   ["/projects/project-1/requirements/requirement-1/evidence", "Evidence thread"],
   ["/projects/project-1/requirements/requirement-1/review", "Review requirement"],
@@ -25,9 +24,9 @@ test("scaffold navigation reaches the main product areas", async ({ page }, test
 
 test("planned pages keep their navigation and fit a narrow workspace", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/projects");
+  await page.goto("/teams");
   await expect(page.getByRole("status").getByText("Product data and actions are not connected yet.")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Create project" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Page navigation" }).getByRole("link", { name: "Create team" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -45,13 +44,6 @@ test("unknown routes show a useful not-found page", async ({ page }) => {
   expect(response?.status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Go to dashboard" })).toBeVisible();
-});
-
-test("projects includes personal and team-owned projects in its routing scope", async ({ page }) => {
-  await page.goto("/projects");
-  await expect(page.getByText("Browse your personal projects and projects shared through teams.")).toBeVisible();
-  await page.goto("/projects/new");
-  await expect(page.getByText("Create a personal project or choose a team to own it.")).toBeVisible();
 });
 
 test("standalone search is not part of the route map", async ({ page }) => {
@@ -75,6 +67,8 @@ test("route navigation connects teams, projects, requirements, evidence, and rev
 
 test("every reserved page participates in navigation", async () => {
   const root = path.join(process.cwd(), "app/web/src/app");
+  // Pages that no longer use the placeholder stay in the route catalog.
+  const connected = ["dashboard", "settings/account", "projects", "projects/new"].map(route => path.join(root, route, "page.tsx"));
   async function pagesIn(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });
     const nested = await Promise.all(entries.map(async entry => {
@@ -82,8 +76,7 @@ test("every reserved page participates in navigation", async () => {
       if (entry.isDirectory()) return pagesIn(fullPath);
       if (entry.name !== "page.tsx") return [];
       const contents = await readFile(fullPath, "utf8");
-      if (!contents.includes("ScaffoldPage") && !fullPath.endsWith(`${path.sep}dashboard${path.sep}page.tsx`) &&
-          !fullPath.endsWith(`${path.sep}settings${path.sep}account${path.sep}page.tsx`)) return [];
+      if (!contents.includes("ScaffoldPage") && !connected.includes(fullPath)) return [];
       return [`/${path.relative(root, directory).split(path.sep).join("/")}`];
     }));
     return nested.flat();
