@@ -119,8 +119,13 @@ currently require network access during the web build.
   shown next to the title and the right criterion; and a failing requirement page
   showing the error inside the project frame and recovering. The api project checks
   requirement parsing, input trimming and limits, and mapping problem details to
-  fields. Not exercised: 50 criteria through the browser, and two saves landing in
-  the same instant.
+  fields. Reordering criteria: moving rows up and down on a new and on an existing
+  requirement and reading the saved order; the first and last rows refusing to move
+  further; text typed between moves staying with its row; reordering with the
+  keyboard at 390px with focus kept on the pressed button; a criterion's message
+  staying with its row after moves and removals; a failed save keeping the order;
+  and `moveItem` in the api project. Not exercised: 50 criteria through the browser,
+  two saves landing in the same instant, and what a screen reader announces.
 - GitHub repository connection (ADR-032). Browser: connecting, seeing the repository
   across the project, and disconnecting after confirmation; no linked GitHub account;
   a rejected GitHub sign-in; no installation; the choice kept after a refused attempt;

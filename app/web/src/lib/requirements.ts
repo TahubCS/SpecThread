@@ -12,6 +12,15 @@ export const REQUIREMENT_DESCRIPTION_MAX = 10_000;
 export const CRITERIA_MAX = 50;
 export const CRITERION_MAX = 2_000;
 
+/** Returns the list with the item at `from` moved to `to`, or the same list when either position does not exist. */
+export function moveItem<T>(list: T[], from: number, to: number): T[] {
+  const valid = (index: number) => Number.isInteger(index) && index >= 0 && index < list.length;
+  if (!valid(from) || !valid(to) || from === to) return list;
+  const result = [...list];
+  result.splice(to, 0, ...result.splice(from, 1));
+  return result;
+}
+
 /** What a user enters for a requirement. `criteria` is in display order. */
 export type RequirementInput = { title: string; description: string; criteria: string[] };
 

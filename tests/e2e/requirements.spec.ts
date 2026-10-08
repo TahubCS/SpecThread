@@ -351,3 +351,119 @@ test("a requirement page that cannot load shows the error inside the project fra
   await page.getByRole("button", { name: "Try again" }).click();
   await expect(page.getByLabel("Title")).toHaveValue("Guest checkout");
 });
+
+const move = (page: Page, position: number, direction: "up" | "down") =>
+  page.getByRole("button", { name: `Move criterion ${position} ${direction}`, exact: true });
+const criterion = (page: Page, position: number) => page.getByLabel(`Criterion ${position}`, { exact: true });
+
+test("criteria are moved up and down before saving, on a new and on an existing requirement", async ({ page }, testInfo) => {
+  const projectId = await createProject(page, "Checkout");
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill("Guest checkout");
+  for (const [index, text] of ["First", "Second", "Third"].entries()) {
+    await page.getByRole("button", { name: "Add criterion" }).click();
+    await criterion(page, index + 1).fill(text);
+  }
+  // The ends cannot move further, and pressing them changes nothing.
+  await expect(move(page, 1, "up")).toBeDisabled();
+  await expect(move(page, 3, "down")).toBeDisabled();
+  await expect(move(page, 2, "up")).toBeEnabled();
+  await move(page, 1, "up").click({ force: true });
+  await move(page, 3, "down").click({ force: true });
+  await expect(criterion(page, 1)).toHaveValue("First");
+  await expect(criterion(page, 3)).toHaveValue("Third");
+
+  await move(page, 3, "up").click();
+  await expect(page.getByRole("status").filter({ hasText: "Criterion moved to position 2 of 3." })).toHaveCount(1);
+  await move(page, 1, "down").click();
+  await expect(criterion(page, 1)).toHaveValue("Third");
+  await expect(criterion(page, 2)).toHaveValue("First");
+  await expect(criterion(page, 3)).toHaveValue("Second");
+  // Text typed after a move stays with its row through the next move.
+  await criterion(page, 2).fill("First, reworded");
+  await move(page, 2, "down").click();
+  await expect(criterion(page, 3)).toHaveValue("First, reworded");
+  await page.screenshot({ path: testInfo.outputPath("criteria-reorder.png"), fullPage: true });
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  const saved = page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem");
+  await expect(saved).toHaveText(["Third", "Second", "First, reworded"]);
+
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(criterion(page, 1)).toHaveValue("Third");
+  await move(page, 1, "down").click();
+  await move(page, 2, "down").click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(saved).toHaveText(["Second", "First, reworded", "Third"]);
+  await expect(page.getByText("Version 2")).toBeVisible();
+  await page.reload();
+  await expect(saved).toHaveText(["Second", "First, reworded", "Third"]);
+});
+
+test("criteria are reordered with the keyboard on a narrow screen, and focus stays on the pressed button", async ({ page }, testInfo) => {
+  const projectId = await createProject(page, "Checkout");
+  await createRequirement(page, projectId, "Guest checkout", ["First", "Second", "Third"]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(criterion(page, 3)).toHaveValue("Third");
+
+  await criterion(page, 3).focus();
+  await page.keyboard.press("Tab");
+  await expect(move(page, 3, "up")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(move(page, 2, "up")).toBeFocused();
+  await page.keyboard.press("Space");
+  // At the top the button can do no more, and focus has not been lost.
+  await expect(move(page, 1, "up")).toBeFocused();
+  await expect(move(page, 1, "up")).toBeDisabled();
+  await page.keyboard.press("Enter");
+  await expect(criterion(page, 1)).toHaveValue("Third");
+  await page.keyboard.press("Tab");
+  await expect(move(page, 1, "down")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(criterion(page, 2)).toHaveValue("Third");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("criteria-reorder-mobile.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "Save changes" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["First", "Third", "Second"]);
+});
+
+test("a message about one criterion stays with it when criteria are moved or removed, and a failed save keeps the order", async ({ page }) => {
+  const projectId = await createProject(page, "Checkout");
+  const requirementId = await createRequirement(page, projectId, "Guest checkout", ["First", "Second", "Third"]);
+  await page.getByRole("link", { name: "Edit" }).click();
+  await move(page, 3, "up").click();
+  await failApi(owner.userId, { method: "PUT", path: `^/requirements/${requirementId}$`, status: 400, body: { errors: {
+    "acceptanceCriteria[1]": ["That criterion is not allowed."],
+  } } });
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const invalid = page.locator('.criteria-inputs input[aria-invalid="true"]');
+  await expect(invalid).toHaveValue("Third");
+  await expect(criterion(page, 2)).toHaveAttribute("aria-invalid", "true");
+
+  // The message is about "Third", wherever that row goes.
+  await move(page, 2, "down").click();
+  await expect(invalid).toHaveCount(1);
+  await expect(criterion(page, 3)).toHaveAttribute("aria-invalid", "true");
+  await expect(criterion(page, 3)).toHaveValue("Third");
+  await page.getByRole("button", { name: "Remove criterion 1" }).click();
+  await expect(invalid).toHaveValue("Third");
+  await page.getByRole("button", { name: "Remove criterion 2" }).click();
+  await expect(invalid).toHaveCount(0);
+  await expect(page.getByText("That criterion is not allowed.")).toHaveCount(0);
+  await clearApiFaults(owner.userId);
+
+  // A save that fails keeps the order on screen and changes nothing stored.
+  await page.getByRole("button", { name: "Add criterion" }).click();
+  await criterion(page, 2).fill("Added");
+  await move(page, 2, "up").click();
+  await failApi(owner.userId, { method: "PUT", path: `^/requirements/${requirementId}$`, status: 500, body: { status: 500 } });
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "The requirement could not be saved. Please try again." })).toBeVisible();
+  await expect(criterion(page, 1)).toHaveValue("Added");
+  await expect(criterion(page, 2)).toHaveValue("Second");
+  await clearApiFaults(owner.userId);
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Added", "Second"]);
+});

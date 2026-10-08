@@ -1,9 +1,46 @@
 # Shared handoff
 
-## Current task: Review decisions on a requirement (2026-10-08)
+## Current task: Reorder acceptance criteria (2026-10-08)
 
-- Branch: `feature/project-ui`. Evidence slice 5 is committed (`d102562`). This entry
-  is uncommitted. The approved plan is in
+- Branch: `feature/project-ui`. Review decisions are committed (`643f36a`). This
+  entry is uncommitted. The approved plan is in
+  `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
+- Completed: on the create and edit requirement forms each criterion has "Move
+  criterion N up" and "Move criterion N down" buttons. The order on screen is the
+  order saved. Web only: the API already stores criteria in the order sent, so there
+  is no API, database, or migration change and nothing to set up.
+- Changed files: `app/web/src/components/requirement-form.tsx`,
+  `app/web/src/lib/requirements.ts` (`moveItem`), `app/web/src/app/app-shell.css`,
+  `tests/e2e/requirements.spec.ts`, `tests/api/project-data.spec.ts`,
+  `docs/TESTING.md`, and this file. No ADR: no product rule or boundary changed.
+- Decisions and differences from the plan:
+  - A button that cannot move its row is `aria-disabled`, not `disabled`, and does
+    nothing when pressed. That keeps keyboard focus on it when a row reaches the top
+    or bottom, so no focus is moved by code (the plan had focus jump to the other
+    button).
+  - A message about one criterion is now shown on the row that was sent at that
+    position, so it follows the row when rows are moved or removed. Before, it
+    stayed at the position and could sit beside the wrong row after a removal.
+  - A hidden `role="status"` line says where a moved criterion now is.
+- Checks: `tests/e2e/requirements.spec.ts` and `tests/api/project-data.spec.ts`
+  passed (42). All browser tests, run twice after the last code change: 170 of 171
+  passed each time. The one failure both times was "a session that ended sends the
+  user to sign in instead of creating a project" (`project-failures.spec.ts`), which
+  does not touch the requirement form; it passed 3 of 3 when run alone, and is the
+  test already known to be slow under a full parallel run. `npm run lint` and
+  `npm run typecheck` passed. Run with a temporary config because the dev API held
+  port 5100; the api-project tests on that port and the schema specs were not rerun
+  (no API or schema change).
+- Known issues and risks: no drag and drop; a long move takes one press per step.
+  Saving a new order raises the requirement's version, so a recorded decision shows
+  as outdated (ADR-038), as for any edit. Screen-reader output was not checked with
+  a screen reader.
+- Next step: the evidence count on requirement lists. The AI slice follows ADR-036.
+
+## Previous task: Review decisions on a requirement (2026-10-08)
+
+- Branch: `feature/project-ui`. Evidence slice 5 is committed (`d102562`). Committed
+  as `643f36a`. The approved plan was in
   `~/.claude/plans/yes-i-want-to-delightful-sunset.md`.
 - Completed (ADR-038): a requirement page has a Review section. A project member
   who did not create the requirement records Accept, Reject, or Request more

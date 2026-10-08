@@ -296,6 +296,10 @@ a.row:focus-visible { outline-offset: -2px; }
 .criteria-inputs .criteria-number { line-height: 36px; text-align: right; }
 .criteria-inputs .field { flex: 1; min-width: 0; }
 .criteria-inputs .icon-button { width: 36px; height: 36px; }
+.criteria-inputs .icon-button + .icon-button { margin-left: -8px; }
+.criteria-inputs .icon-button[aria-disabled="true"] { background: transparent; color: var(--app-line-strong); cursor: default; }
+/* Read by screen readers only: says where a moved criterion now is. */
+.criteria-moved { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .project-page .settings-block.is-danger { max-width: none; }
 /* Evidence */
 .evidence-rows { margin-bottom: 12px; }

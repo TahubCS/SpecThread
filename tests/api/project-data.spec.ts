@@ -3,7 +3,7 @@ import {
   fieldError, formatDate, isUuid, parseMembers, parseProject, parseProjects, parseRequirementSummaries, projectNameError,
 } from "../../app/web/src/lib/projects";
 import {
-  parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
+  moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
 import {
   checkSummary, evidenceChanges, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
@@ -270,4 +270,17 @@ test("a decision is outdated when the version or the set of evidence links diffe
   expect(reviewedText({ requirementVersion: 1, evidence: [] })).toBe("Reviewed version 1 with no evidence links");
   expect(reviewedText({ requirementVersion: 2, evidence: [link("a")] })).toBe("Reviewed version 2 with 1 evidence link");
   expect(reviewedText(review)).toBe("Reviewed version 2 with 2 evidence links");
+});
+
+test("an item is moved within a list, and an impossible move changes nothing", () => {
+  const list = ["a", "b", "c", "d"];
+  expect(moveItem(list, 0, 1)).toEqual(["b", "a", "c", "d"]);
+  expect(moveItem(list, 3, 2)).toEqual(["a", "b", "d", "c"]);
+  expect(moveItem(list, 0, 3)).toEqual(["b", "c", "d", "a"]);
+  expect(moveItem(list, 3, 0)).toEqual(["d", "a", "b", "c"]);
+  expect(list).toEqual(["a", "b", "c", "d"]);
+  for (const [from, to] of [[0, -1], [3, 4], [-1, 0], [4, 0], [1, 1], [0.5, 1], [0, Number.NaN]]) {
+    expect(moveItem(list, from, to), `${from} to ${to}`).toBe(list);
+  }
+  expect(moveItem([], 0, 0)).toEqual([]);
 });
