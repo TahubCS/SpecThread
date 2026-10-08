@@ -51,8 +51,11 @@ web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
-the web test database and trusts the test web app as its token issuer, and the web app
-reaches it through SPECTHREAD_API_URL. Keep these
+the web test database and trusts the test web app as its token issuer. The web app
+reaches it through a test-only proxy on 5107 (scripts/test-api-proxy.mjs), set as
+SPECTHREAD_API_URL. A test calls `failApi` from tests/support/api-faults.ts to make the
+API fail, drop the connection, answer with a wrong body, or respond slowly for that
+test's own user only, so parallel tests are unaffected. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
 or development processes in this checkout: they share app/web/.next. Google Fonts
 currently require network access during the web build.
@@ -88,8 +91,16 @@ currently require network access during the web build.
   seeing no rename or archive controls, and not-found for non-members, unknown IDs, and
   malformed IDs. The api project checks response parsing for projects, requirements, and
   members, name limits, UUID-shaped IDs, date formatting, and reading field messages
-  from problem details. An unreachable API, non-400 failures from the create, rename,
-  and archive calls, and the loading states are not exercised.
+  from problem details.
+- Project failures (browser, through the test proxy): the list and every project
+  section showing the error page for a 500, a dropped connection, a rejected token, and
+  a malformed body, with "Try again" recovering; create, rename, and archive keeping
+  the input and showing the right message for 400, 403, 404, 409, 500, a dropped
+  connection, and a malformed success body; the loading message for slow calls, with
+  the project frame kept while a tab loads; a form submitted after the session ended
+  going to sign-in without creating anything; and a removed member seeing not-found.
+  Not exercised: the API being slow enough to hit a platform timeout, and two owners
+  renaming at the same moment.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

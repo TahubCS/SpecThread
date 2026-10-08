@@ -42,6 +42,8 @@
 .app-sidebar-top { display: flex; align-items: center; gap: 2px; min-height: 34px; padding: 0 2px; }
 .app-brand { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--app-text); font-size: 14px; font-weight: 600; white-space: nowrap; }
 .app-brand img { flex: none; width: 39px; height: 22px; object-fit: contain; }
+/* The brand mark is a lavender image; show it in white wherever it appears. */
+img[src$="thread-mark.png"] { filter: grayscale(1) brightness(1.7); }
 .app-brand svg:last-child { flex: none; color: var(--app-text-3); }
 .app-sidebar-actions { display: flex; gap: 4px; margin-left: auto; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--app-text-2); }
@@ -195,21 +197,21 @@ a.row:focus-visible { outline-offset: -2px; }
 
 /* Planned pages. These unscoped rules also style the public policy pages. */
 .scaffold-page { width: 100%; max-width: 1120px; margin: 0 auto; padding: clamp(28px, 4vw, 52px); }
-.scaffold-heading { padding-bottom: 28px; border-bottom: 1px solid #343438; }
-.scaffold-kicker { margin: 0 0 16px; color: #aaa0e5; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
-.scaffold-heading h1 { max-width: 800px; margin: 0; color: #f2f2f4; font-size: clamp(28px, 3vw, 38px); font-weight: 600; letter-spacing: -.035em; }
-.scaffold-heading > p:last-child { max-width: 720px; margin: 13px 0 0; color: #b5b5bd; font-size: 16px; line-height: 1.55; }
-.scaffold-status { display: flex; align-items: flex-start; gap: 15px; margin-top: 30px; padding: 20px 22px; border: 1px solid #343438; border-radius: 9px; background: #1d1d20; }
-.scaffold-status-mark { flex: none; width: 11px; height: 11px; margin-top: 5px; border: 2px solid #b5a9f5; border-radius: 50%; }
-.scaffold-status strong { color: #ebe9f3; font-size: 14px; font-weight: 600; }
-.scaffold-status p { margin: 6px 0 0; color: #aaaab2; line-height: 1.5; }
+.scaffold-heading { padding-bottom: 28px; border-bottom: 1px solid #212121; }
+.scaffold-kicker { margin: 0 0 16px; color: #a6a6a6; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+.scaffold-heading h1 { max-width: 800px; margin: 0; color: #f2f2f2; font-size: clamp(28px, 3vw, 38px); font-weight: 600; letter-spacing: -.035em; }
+.scaffold-heading > p:last-child { max-width: 720px; margin: 13px 0 0; color: #b6b6b6; font-size: 16px; line-height: 1.55; }
+.scaffold-status { display: flex; align-items: flex-start; gap: 15px; margin-top: 30px; padding: 20px 22px; border: 1px solid #212121; border-radius: 9px; background: #141414; }
+.scaffold-status-mark { flex: none; width: 11px; height: 11px; margin-top: 5px; border: 2px solid #f5f5f5; border-radius: 50%; }
+.scaffold-status strong { color: #eaeaea; font-size: 14px; font-weight: 600; }
+.scaffold-status p { margin: 6px 0 0; color: #ababab; line-height: 1.5; }
 .scaffold-navigation { display: block; margin-top: 44px; }
-.scaffold-navigation-heading h2 { margin: 0; color: #efeff1; font-size: 16px; font-weight: 600; }
-.scaffold-navigation-heading p { margin: 6px 0 0; color: #96969f; }
+.scaffold-navigation-heading h2 { margin: 0; color: #efefef; font-size: 16px; font-weight: 600; }
+.scaffold-navigation-heading p { margin: 6px 0 0; color: #979797; }
 .scaffold-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 10px; margin-top: 18px; }
-.scaffold-links a { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 13px 15px; border: 1px solid #343438; border-radius: 7px; background: #1d1d20; color: #dedee3; font-weight: 500; text-decoration: none; }
-.scaffold-links a:hover { border-color: #71689d; background: #26252b; color: #f5f3ff; }
-.scaffold-links a svg { flex: none; color: #b5a9f5; }
+.scaffold-links a { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 13px 15px; border: 1px solid #212121; border-radius: 7px; background: #141414; color: #dedede; font-weight: 500; text-decoration: none; }
+.scaffold-links a:hover { border-color: #5a5a5a; background: #1f1f1f; color: #f4f4f4; }
+.scaffold-links a svg { flex: none; color: #f5f5f5; }
 .scaffold-link span { flex: 1; }
 .scaffold-parent-link { grid-column: 1 / -1; }
 

@@ -495,10 +495,15 @@ dashboard shows each sample requirement's evidence as a progress ring with a cou
 and as a checklist when the row is opened; the row of connected circles is removed.
 The uppercase label above page headings is removed from signed-in pages.
 
-Consequences: The landing, sign-in, and policy pages keep their lavender styles, so
-they no longer match the app until they are recolored; the unscoped `.scaffold-*`
-rules remain for the policy pages. New signed-in UI should use the variables. This
-replaces the visual reference in ADR-020 for signed-in pages.
+The landing, sign-in, password, sign-in error, and policy pages use the same black,
+white, and neutral grays: the lavender values in landing.css, public-pages.css, and
+the unscoped `.scaffold-*` rules were replaced, and the lavender brand image is shown
+in white through a CSS filter.
+
+Consequences: New signed-in UI should use the variables. The public pages still use
+literal colors and the landing page's own variables, not the `.app-shell` variables.
+The browser icon keeps the original lavender mark. This replaces the visual reference
+in ADR-020 and the palette in ADR-022.
 
 ADR-028: A project is a framed workspace with tabs
 
@@ -528,6 +533,32 @@ state has already started the response. Creating and editing requirements, manag
 members, and the evidence views are still to be built. The owner's name comes from
 the members list. The Activity panel shows only the creation event, the one event
 the API can supply.
+
+ADR-029: Failed API calls keep the user's place, and tests can make the API fail
+
+Status: Accepted
+
+Context: The project pages had no tests for a failing API, and testing them showed two
+gaps: "Try again" on the error page re-rendered the failed result without asking the
+API again, and a form submitted after the session ended showed the error page
+instead of asking the user to sign in.
+
+Decision: A failed page load shows the shared error page, and "Try again" uses Next's
+`retry()` so the data is fetched again. A failing project section shows that error
+inside the project frame; a failing project load shows it without the frame. A failed
+create, rename, or archive keeps what the user typed and shows one message next to
+the form: the API's field message for 400, an owner-only message for 403, an archived
+message for 409 on rename, and a general message otherwise. When the error page
+appears and the browser has no session, the user is sent to `/login` with `next` set
+to the page they were on (this changes ADR-026). Browser tests reach the API through
+scripts/test-api-proxy.mjs on port 5107, which forwards requests unless a test has
+registered a fault for its own user: a status and body, a dropped connection, or a
+delay. The proxy runs only in the test harness.
+
+Consequences: The sign-in redirect needs one extra session request whenever an error
+page is shown. Text typed into a form is lost when the session has ended. The proxy
+reads the user ID from the token without verifying it, which is acceptable because
+it only selects test faults and the API still verifies every token.
 
 ADR-NNN: Title
 

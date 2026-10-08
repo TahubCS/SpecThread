@@ -2,12 +2,15 @@ import { spawn, execFileSync } from "node:child_process";
 import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { startTestDatabase } from "./test-database.mjs";
 import buildApi from "./build-api.mjs";
+import { startApiProxy } from "./test-api-proxy.mjs";
 
 // Playwright starts webServer entries in order, before globalSetup.
 // Build here before the second entry starts the API and locks its DLL on Windows.
 buildApi();
 // The product API for browser tests. It shares the web test database and trusts the test web app's tokens.
 const apiOrigin = "http://127.0.0.1:5106";
+// The web app reaches the API through this proxy, so tests can make API calls fail for one user.
+const proxyOrigin = "http://127.0.0.1:5107";
 let database;
 let api;
 let server;
@@ -41,7 +44,8 @@ try {
   });
   api.on("exit", code => void stop(code ?? 1));
   api.on("error", () => void stop(1));
-  const env = { ...process.env, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: apiOrigin };
+  await startApiProxy({ port: 5107, upstream: apiOrigin });
+  const env = { ...process.env, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: proxyOrigin };
   execFileSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], { cwd: "app/web", env, stdio: "inherit" });
   server = spawn(process.execPath, ["../../node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "3100"], { cwd: "app/web", env, stdio: "inherit" });
   server.on("exit", code => void stop(code ?? 1));

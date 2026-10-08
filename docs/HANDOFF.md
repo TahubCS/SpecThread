@@ -1,6 +1,35 @@
 # Shared handoff
 
-## Current task: Black-and-white redesign and the project workspace (2026-10-08)
+## Current task: Black-and-white public pages and failure tests (2026-10-08)
+
+- Branch: `feature/visual-polish`. The redesign and project workspace below are committed
+  (`b66c14c`). The changes in this entry are uncommitted.
+- Completed:
+  - The landing, sign-in, password, sign-in error, and policy pages now use the black
+    and white palette (ADR-027). The brand mark is shown in white.
+  - Planned pages are unchanged and still labeled as previews.
+  - Failure handling (ADR-029): "Try again" fetches again, a failing project section
+    keeps the project frame, and a form submitted after the session ended goes to
+    sign-in.
+  - A test-only API proxy lets browser tests make the API fail for one user, with 22
+    new failure tests.
+- Changed files: `app/web/src/app/{landing,public-pages,app-shell}.css`,
+  `app/web/src/app/error.tsx`, `app/web/src/app/projects/[projectId]/error.tsx` (new),
+  `scripts/{test-api-proxy,start-test-web}.mjs`, `tests/support/api-faults.ts` (new),
+  `tests/e2e/project-failures.spec.ts` (new), and docs/{DECISIONS,TESTING,HANDOFF}.md.
+- Checks: all 95 browser tests passed, run with a temporary config that started only
+  the test web server because the user's dev API held port 5100. `npm run lint` and
+  `npm run typecheck` passed. Inspected screenshots of the landing, login, and sign-in
+  error pages.
+- Known issues and risks:
+  - The full `npm test` (api and schema projects) was not run in this session.
+  - The browser icon is still the lavender mark.
+  - The public pages were recolored by replacing color values; their hover and focus
+    states were not inspected one by one.
+- Next step: the user reviews. Then build creating and editing requirements inside the
+  Requirements tab.
+
+## Previous task: Black-and-white redesign and the project workspace (2026-10-08)
 
 - Branch: `feature/visual-polish`, created from `feature/project-ui` at `b47ce88`.
   Changes are uncommitted. It should merge after `feature/project-ui`. The user asked
@@ -38,7 +67,6 @@
 - Known issues and risks:
   - The full `npm test` was not run; the rest of the api project and the schema project
     were not re-run. No file they cover changed.
-  - The landing, sign-in, and policy pages still use the lavender palette.
   - The sidebar's "Example team" links and the dashboard rows are still sample content.
   - Requirement rows link to the requirement page, which is still a planned placeholder.
   - A project's not-found page is sent with HTTP 200 (ADR-028).
