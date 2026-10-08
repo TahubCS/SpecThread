@@ -4,13 +4,14 @@ import { expect, test } from "@playwright/test";
 test("OpenAPI describes the product endpoints", async ({ request }) => {
   const { paths } = await (await request.get("/openapi/v1.json")).json();
   expect(Object.keys(paths)).toEqual(expect.arrayContaining([
-    "/projects", "/projects/{projectId}", "/projects/{projectId}/archive",
+    "/projects", "/projects/{projectId}", "/projects/{projectId}/archive", "/projects/{projectId}/restore", "/teams/{teamId}/projects",
     "/projects/{projectId}/requirements", "/requirements/{requirementId}", "/requirements/{requirementId}/archive",
     "/projects/{projectId}/members", "/projects/{projectId}/members/{userId}",
   ]));
   expect(paths["/requirements/{requirementId}"].put.responses).toEqual(
     expect.objectContaining({ "200": expect.anything(), "400": expect.anything(), "401": expect.anything(), "404": expect.anything(), "409": expect.anything() }));
   expect(paths["/projects/{projectId}"].patch.responses["403"]).toBeDefined();
+  expect(paths["/projects/{projectId}/members"].post.responses["410"]).toBeDefined();
 });
 
 test("product endpoints reject anonymous requests before touching the database", async ({ request }) => {

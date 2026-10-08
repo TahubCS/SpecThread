@@ -65,14 +65,20 @@ test("only the Owner appoints/demotes Admins and the Owner role cannot be change
   expect((await (await as(request, "outsider")).patch(path + "/members/member", { role: "admin" })).status()).toBe(404);
 });
 
-test("Admins remove regular Members, Owner removes Admins, and voluntary leaving revokes team access", async ({ request }) => {
+test("Admins remove regular Members, Owner removes Admins, and voluntary leaving revokes project access", async ({ request }) => {
   const path = await team(request);
   const owner = await as(request, "owner"), admin = await as(request, "admin"), member = await as(request, "member");
   expect((await admin.delete(path + "/members/another-admin")).status()).toBe(403);
   expect((await member.delete(path + "/members/admin")).status()).toBe(403);
   expect((await owner.delete(path + "/members/owner")).status()).toBe(409);
   expect((await admin.delete(path + "/members/owner")).status()).toBe(409);
+  const created = await owner.post("/projects", { name: "Shared", teamId: path.slice(7) });
+  expect(created.status()).toBe(201);
+  const project = await created.json();
+  const requirement = await (await member.post(`/projects/${project.id}/requirements`, { title: "Before removal" })).json();
   expect((await admin.delete(path + "/members/member")).status()).toBe(204);
+  expect((await member.get(`/requirements/${requirement.id}`)).status()).toBe(404);
+  expect((await member.get(`/projects/${project.id}`)).status()).toBe(404);
   expect((await owner.delete(path + "/members/another-admin")).status()).toBe(204);
   expect((await admin.delete(path + "/members/admin")).status()).toBe(204);
   expect((await admin.get(path)).status()).toBe(404);
@@ -111,4 +117,26 @@ test("concurrent transfer/removal and promotion/removal preserve ownership and p
     owner.patch(second + "/members/member", { role: "admin" }), admin.delete(second + "/members/member"),
   ]);
   expect([[200,403],[404,204]]).toContainEqual([promotion.status(), removed.status()]);
+});
+
+test("concurrent project restore/create and role revocation return consistent permissions without committing a failed response", async ({ request }) => {
+  const owner = await as(request, "owner"), admin = await as(request, "admin");
+  const path = await team(request);
+  const project = await (await owner.post("/projects", { name: "Concurrent restore", teamId: path.slice(7) })).json();
+  expect((await owner.post(`/projects/${project.id}/archive`)).status()).toBe(200);
+  const [demoted, restore] = await Promise.all([
+    owner.patch(path + "/members/admin", { role: "member" }), admin.post(`/projects/${project.id}/restore`),
+  ]);
+  expect(demoted.status()).toBe(200);
+  expect([200,403]).toContain(restore.status());
+  const state = await (await owner.get(`/projects/${project.id}`)).json();
+  expect(state.archivedAt === null).toBe(restore.status() === 200);
+  const another = await team(request);
+  const [created, removed] = await Promise.all([
+    admin.post("/projects", { name: "Concurrent creation", teamId: another.slice(7) }), owner.delete(another + "/members/admin"),
+  ]);
+  expect(removed.status()).toBe(204);
+  expect([201,404]).toContain(created.status());
+  const projects = await (await owner.get(another + "/projects")).json();
+  expect(projects.length).toBe(created.status() === 201 ? 1 : 0);
 });

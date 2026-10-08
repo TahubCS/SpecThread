@@ -81,10 +81,12 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         project.HasKey(x => x.Id);
         project.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
         project.Property(x => x.Name).HasColumnName("name");
+        project.Property(x => x.TeamId).HasColumnName("team_id");
         project.Property(x => x.OwnerUserId).HasColumnName("owner_user_id");
         project.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         project.Property(x => x.ArchivedAt).HasColumnName("archived_at");
         project.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
+        project.HasOne<Team>().WithMany().HasForeignKey(x => x.TeamId).OnDelete(DeleteBehavior.Restrict);
 
         var member = model.Entity<ProjectMember>();
         member.ToTable("project_members");

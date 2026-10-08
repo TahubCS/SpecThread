@@ -2,7 +2,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startApi } from "../support/api-process";
 
-// The product API (ADR-024) against a disposable PostgreSQL database. Tokens come from
+// The product API (ADR-027) against a disposable PostgreSQL database. Tokens come from
 // the test JWKS issuer that Playwright starts for every run (scripts/start-test-jwks.mjs).
 const issuer = "http://127.0.0.1:5101";
 let database: Awaited<ReturnType<typeof startTestDatabase>>;
@@ -43,27 +43,37 @@ async function as(request: APIRequestContext, sub: string) {
   };
 }
 
-async function createProject(request: APIRequestContext, name = "Checkout") {
+async function createTeam(request: APIRequestContext, name = "Product team") {
   const owner = await as(request, "owner");
-  const response = await owner.post("/projects", { name });
+  const created = await owner.post("/teams", { name });
+  expect(created.status()).toBe(201);
+  const team = await created.json();
+  // Fixture-only memberships. Product joins require invitation acceptance.
+  await database.pool.query("INSERT INTO team_members(team_id,user_id,role) VALUES ($1,'member','member'),($1,'second','admin')", [team.id]);
+  return team as { id: string };
+}
+
+async function createProject(request: APIRequestContext, name = "Checkout") {
+  const team = await createTeam(request);
+  const owner = await as(request, "owner");
+  const response = await owner.post("/projects", { name, teamId: team.id });
   expect(response.status()).toBe(201);
-  const project = await response.json();
-  expect((await owner.post(`/projects/${project.id}/members`, { email: "member@example.invalid" })).status()).toBe(201);
-  return project as { id: string };
+  return await response.json() as { id: string; teamId: string };
 }
 
 test("owners create, list, rename, and archive projects", async ({ request }) => {
   const owner = await as(request, "owner");
-  const created = await owner.post("/projects", { name: "  Billing  " });
+  const team = await createTeam(request, "Billing team");
+  const created = await owner.post("/projects", { name: "  Billing  ", teamId: team.id, ownerUserId: "outsider", teamRole: "admin" });
   expect(created.status()).toBe(201);
   const project = await created.json();
-  expect(project).toMatchObject({ name: "Billing", ownerUserId: "owner", archivedAt: null });
+  expect(project).toMatchObject({ name: "Billing", ownerUserId: "owner", archivedAt: null, teamId: team.id, teamName: "Billing team", teamRole: "owner", requirementCount: 0 });
   expect(created.headers().location).toBe(`/projects/${project.id}`);
   // Write responses carry the stored timestamp, not a higher-precision in-memory one.
   expect((await (await owner.get(`/projects/${project.id}`)).json()).createdAt).toBe(project.createdAt);
 
   const { rows } = await database.pool.query("SELECT user_id FROM public.project_members WHERE project_id = $1", [project.id]);
-  expect(rows).toEqual([{ user_id: "owner" }]);
+  expect(rows).toEqual([]); // Access comes from team membership, not project rows.
 
   expect((await (await owner.get("/projects")).json()).map((p: { id: string }) => p.id)).toContain(project.id);
   const renamed = await owner.patch(`/projects/${project.id}`, { name: "Billing v2" });
@@ -174,48 +184,76 @@ test("anonymous requests and tokens without an account record are refused", asyn
   expect(await (await ghost.get("/projects")).json()).toEqual([]);
 });
 
-test("owners add existing verified accounts by email and members see each other", async ({ request }) => {
-  const owner = await as(request, "owner");
-  const project = await (await owner.post("/projects", { name: "Members" })).json();
-  const added = await owner.post(`/projects/${project.id}/members`, { email: "  Second@Example.INVALID " });
-  expect(added.status()).toBe(201);
-  expect(added.headers().location).toBe(`/projects/${project.id}/members/second`);
-  expect(await added.json()).toMatchObject({ userId: "second", name: "Second", email: "second@example.invalid", isOwner: false });
-
-  const second = await as(request, "second");
-  expect((await second.post(`/projects/${project.id}/requirements`, { title: "Shared work" })).status()).toBe(201);
-  const members = await (await second.get(`/projects/${project.id}/members`)).json();
-  expect(members.map((m: { userId: string; isOwner: boolean }) => [m.userId, m.isOwner])).toEqual([["owner", true], ["second", false]]);
-
-  expect((await owner.post(`/projects/${project.id}/members`, { email: "second@example.invalid" })).status()).toBe(409);
-  for (const email of ["nobody@example.invalid", "unverified@example.invalid", " "]) {
-    const rejected = await owner.post(`/projects/${project.id}/members`, { email });
-    expect(rejected.status()).toBe(400);
-    expect((await rejected.json()).errors).toHaveProperty("email");
-  }
-  expect((await second.post(`/projects/${project.id}/members`, { email: "member@example.invalid" })).status()).toBe(403);
-  const outsider = await as(request, "outsider");
-  expect((await outsider.get(`/projects/${project.id}/members`)).status()).toBe(404);
-  expect((await outsider.post(`/projects/${project.id}/members`, { email: "outsider@example.invalid" })).status()).toBe(404);
-});
-
-test("members can leave, only the owner removes others, and the owner stays", async ({ request }) => {
-  const project = await createProject(request, "Removals");
+test("project lists inherit team membership, count active requirements, and isolate archives", async ({ request }) => {
+  const project = await createProject(request, "Inherited project");
   const owner = await as(request, "owner");
   const member = await as(request, "member");
-  await owner.post(`/projects/${project.id}/members`, { email: "second@example.invalid" });
-
-  expect((await member.delete(`/projects/${project.id}/members/second`)).status()).toBe(403);
-  expect((await member.delete(`/projects/${project.id}/members/owner`)).status()).toBe(403);
-  expect((await owner.delete(`/projects/${project.id}/members/owner`)).status()).toBe(409);
-  expect((await owner.delete(`/projects/${project.id}/members/outsider`)).status()).toBe(404);
-
-  expect((await member.delete(`/projects/${project.id}/members/member`)).status()).toBe(204);
-  expect((await member.get(`/projects/${project.id}`)).status()).toBe(404);
-  expect((await owner.delete(`/projects/${project.id}/members/second`)).status()).toBe(204);
-  expect((await (await as(request, "second")).get(`/projects/${project.id}/requirements`)).status()).toBe(404);
-  expect(await (await owner.get(`/projects/${project.id}/members`)).json()).toEqual([expect.objectContaining({ userId: "owner" })]);
-
+  const otherTeam = await createTeam(request, "Separate team");
+  const other = await (await owner.post("/projects", { name: "Other project", teamId: otherTeam.id })).json();
+  const first = await (await member.post(`/projects/${project.id}/requirements`, { title: "Active requirement" })).json();
+  const second = await (await member.post(`/projects/${project.id}/requirements`, { title: "Archived requirement" })).json();
+  await member.post(`/requirements/${second.id}/archive`);
+  expect(await (await member.get(`/teams/${project.teamId}/projects`)).json()).toEqual([
+    expect.objectContaining({ id: project.id, requirementCount: 1, teamRole: "member" }),
+  ]);
+  const members = await (await member.get(`/projects/${project.id}/members`)).json();
+  expect(members.map((m: { userId: string; role: string }) => [m.userId, m.role])).toEqual([
+    ["owner", "owner"], ["member", "member"], ["second", "admin"],
+  ]);
   await owner.post(`/projects/${project.id}/archive`);
-  expect((await owner.post(`/projects/${project.id}/members`, { email: "member@example.invalid" })).status()).toBe(409);
+  expect(await (await member.get(`/teams/${project.teamId}/projects`)).json()).toEqual([]);
+  expect(await (await member.get(`/teams/${project.teamId}/projects?archived=true`)).json()).toEqual([
+    expect.objectContaining({ id: project.id, requirementCount: 1 }),
+  ]);
+  expect((await member.post(`/projects/${project.id}/restore`)).status()).toBe(403);
+  expect((await owner.post(`/projects/${project.id}/restore`)).status()).toBe(200);
+  expect(await (await member.get(`/requirements/${first.id}`)).json()).toMatchObject({ title: "Active requirement" });
+  const outsider = await as(request, "outsider");
+  expect((await outsider.get(`/teams/${project.teamId}/projects?archived=true`)).status()).toBe(404);
+  expect((await member.get(`/teams/00000000-0000-0000-0000-000000000000/projects`)).status()).toBe(404);
+  expect(await (await owner.get(`/teams/${otherTeam.id}/projects`)).json()).toEqual([expect.objectContaining({ id: other.id })]);
+});
+
+test("Owner and Admin manage all team projects; historical creators do not retain management after demotion", async ({ request }) => {
+  const team = await createTeam(request, "Managed team");
+  const admin = await as(request, "second");
+  const member = await as(request, "member");
+  const owner = await as(request, "owner");
+  expect((await member.post("/projects", { name: "Forbidden", teamId: team.id })).status()).toBe(403);
+  expect((await owner.post("/projects", { name: "No team" })).status()).toBe(400);
+  expect((await owner.post("/projects", { name: "Unknown", teamId: "00000000-0000-0000-0000-000000000001" })).status()).toBe(404);
+  const created = await admin.post("/projects", { name: "Admin project", teamId: team.id });
+  expect(created.status()).toBe(201);
+  const project = await created.json();
+  expect(project).toMatchObject({ teamRole: "admin", ownerUserId: "second" });
+  expect((await owner.patch(`/projects/${project.id}`, { name: "Owner rename", teamId: "00000000-0000-0000-0000-000000000001" })).status()).toBe(200);
+  expect((await admin.post(`/projects/${project.id}/archive`)).status()).toBe(200);
+  expect((await admin.post(`/projects/${project.id}/restore`)).status()).toBe(200);
+  await database.pool.query("UPDATE team_members SET role='member' WHERE team_id=$1 AND user_id='second'", [team.id]);
+  expect((await admin.patch(`/projects/${project.id}`, { name: "Creator bypass" })).status()).toBe(403);
+  expect((await admin.post(`/projects/${project.id}/archive`)).status()).toBe(403);
+  expect((await admin.post(`/projects/${project.id}/requirements`, { title: "Still a member" })).status()).toBe(201);
+});
+
+test("legacy project membership writes cannot bypass invitation acceptance, and team removal revokes all access", async ({ request }) => {
+  const project = await createProject(request, "Revocation");
+  const owner = await as(request, "owner");
+  const member = await as(request, "member");
+  const outsider = await as(request, "outsider");
+  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Private" })).json();
+  for (const caller of [owner, member]) {
+    expect((await caller.post(`/projects/${project.id}/members`, { email: "outsider@example.invalid" })).status()).toBe(410);
+    expect((await caller.delete(`/projects/${project.id}/members/member`)).status()).toBe(410);
+  }
+  expect((await outsider.post(`/projects/${project.id}/members`, { email: "outsider@example.invalid" })).status()).toBe(404);
+  // Even a stale legacy membership does not grant access after leaving the team.
+  await database.pool.query("INSERT INTO project_members(project_id,user_id) VALUES ($1,'member'),($1,'outsider')", [project.id]);
+  expect((await outsider.get(`/projects/${project.id}`)).status()).toBe(404);
+  await database.pool.query("DELETE FROM team_members WHERE team_id=$1 AND user_id='member'", [project.teamId]);
+  for (const response of [
+    await member.get(`/projects/${project.id}`), await member.get(`/projects/${project.id}/members`),
+    await member.get(`/requirements/${requirement.id}`),
+    await member.put(`/requirements/${requirement.id}`, { title: "Revoked", version: 1 }),
+  ]) expect(response.status()).toBe(404);
+  expect(await (await member.get("/projects")).json()).not.toContainEqual(expect.objectContaining({ id: project.id }));
 });
