@@ -166,7 +166,8 @@ and personal favorite/expansion preferences. Your teams has expandable groups wi
 Home and Projects links. Team Home uses Overview/Members tabs with a team menu.
 After first verified sign-in, the proxy requires persistent first-team onboarding;
 C# saves completion atomically with the initial team and refuses project creation
-while incomplete. Completion is stored separately from Better Auth tables and
+while incomplete. Once the API reports completion, the proxy remembers it in a signed,
+user-bound HttpOnly cookie and stops asking on later navigations (ADR-042). Completion is stored separately from Better Auth tables and
 survives loss of membership. Server API calls use Better Auth JWTs; browser sidebar
 reads/preferences stay on same-origin session-checked routes. Startup still performs
 no database work. Team-owned project authorization and the compact team Projects/archive tables are
