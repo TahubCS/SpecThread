@@ -1,4 +1,7 @@
+import { ONBOARDED_COOKIE, onboardedCookieValue } from "../../app/web/src/lib/onboarding-cookie";
 import { createTestSession, expect, test } from "./fixtures";
+
+const secret = () => process.env.SPECTHREAD_TEST_AUTH_SECRET!;
 
 test("unfinished first-team setup resumes across pages and browser sessions", async ({ browser }, testInfo) => {
   const session = await createTestSession("New user", false);
@@ -75,4 +78,33 @@ test("team groups expand independently and persist favorites and expansion", asy
     await expect(first.getByRole("link", { name: "Home", exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("teams-navigation-desktop.png"), fullPage: true });
   } finally { session.remove(); }
+});
+
+test("finished setup is remembered in a cookie bound to the user", async ({ browser }) => {
+  const done = await createTestSession("Onboarded user");
+  const pending = await createTestSession("Pending user", false);
+  const context = await browser.newContext({ baseURL: "http://127.0.0.1:3100" });
+  try {
+    await context.addCookies([done.cookie]);
+    const page = await context.newPage();
+    await page.goto("/teams");
+    await expect(page).toHaveURL(/\/teams$/);
+    const remembered = (await context.cookies()).find(cookie => cookie.name === ONBOARDED_COOKIE);
+    expect(remembered).toMatchObject({ value: onboardedCookieValue(done.userId, secret()), httpOnly: true, sameSite: "Lax" });
+
+    // A user who has not finished setup is still sent to /onboarding with a tampered cookie,
+    // or with a valid cookie issued to someone else.
+    await context.clearCookies();
+    await context.addCookies([pending.cookie]);
+    for (const value of [`${pending.userId}.forged`, onboardedCookieValue(done.userId, secret())]) {
+      await context.addCookies([{ name: ONBOARDED_COOKIE, value, url: "http://127.0.0.1:3100" }]);
+      await page.goto("/teams");
+      await expect(page).toHaveURL(/\/onboarding$/);
+    }
+    // The cookie is only a cache of the API's answer: once this deployment issues it for the user,
+    // the page gate trusts it instead of asking the API again.
+    await context.addCookies([{ name: ONBOARDED_COOKIE, value: onboardedCookieValue(pending.userId, secret()), url: "http://127.0.0.1:3100" }]);
+    await page.goto("/settings");
+    await expect(page).toHaveURL(/\/settings$/);
+  } finally { await context.close(); await done.remove(); await pending.remove(); }
 });

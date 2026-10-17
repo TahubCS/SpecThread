@@ -7,8 +7,8 @@ import styles from "@/components/teams/teams.module.css";
 
 /** Shows the authorized team's description and membership facts. */
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
-  const team = await getTeam((await params).teamId);
-  const members = await getTeamMembers(team.id);
+  const { teamId } = await params;
+  const [team, members] = await Promise.all([getTeam(teamId), getTeamMembers(teamId)]);
   const home = "/teams/" + team.id;
   return <div className={styles.overview}>
     <div className={styles.summary}>

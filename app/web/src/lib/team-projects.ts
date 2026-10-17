@@ -1,8 +1,7 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
-import { apiFetch } from "./api";
 import type { TeamRole } from "./team-types";
-import { getTeam } from "./teams";
+import { readWithTeam } from "./teams";
 
 export type TeamProject = {
   id: string;
@@ -17,8 +16,7 @@ export type TeamProject = {
 
 /** Team pages validate both the API shape and its requested team/archive scope. */
 export async function getTeamProjects(teamId: string, archived = false): Promise<TeamProject[]> {
-  await getTeam(teamId);
-  const response = await apiFetch(`/teams/${teamId}/projects?archived=${archived}`);
+  const { response } = await readWithTeam(teamId, `/teams/${teamId}/projects?archived=${archived}`);
   if (response.status === 401) redirect("/login");
   if (response.status === 404) notFound();
   if (!response.ok) throw new Error("Team projects could not be loaded.");

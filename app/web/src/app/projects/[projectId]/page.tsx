@@ -8,9 +8,8 @@ import { formatDate } from "@/lib/projects";
 /** Shows a project's most recently changed requirements beside its details. */
 export default async function Page({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
-  const project = await requireProject(projectId);
-  const [requirements, members, repository] = await Promise.all([
-    listRequirements(projectId), listMembers(projectId), getProjectRepository(projectId),
+  const [project, requirements, members, repository] = await Promise.all([
+    requireProject(projectId), listRequirements(projectId), listMembers(projectId), getProjectRepository(projectId),
   ]);
   const creator = members.find(member => member.userId === project.ownerUserId);
   const recent = [...requirements].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);

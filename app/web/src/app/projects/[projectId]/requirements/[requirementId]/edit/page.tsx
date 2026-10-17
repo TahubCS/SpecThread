@@ -11,8 +11,7 @@ export const metadata: Metadata = { title: "Edit requirement" };
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements/[requirementId]/edit">) {
   const { projectId, requirementId } = await params;
-  const project = await requireProject(projectId);
-  const requirement = await requireRequirement(projectId, requirementId);
+  const [project, requirement] = await Promise.all([requireProject(projectId), requireRequirement(projectId, requirementId)]);
   const detail = `/projects/${project.id}/requirements/${requirement.id}`;
 
   return (

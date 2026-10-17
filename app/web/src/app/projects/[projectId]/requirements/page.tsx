@@ -9,8 +9,7 @@ export const metadata: Metadata = { title: "Requirements" };
 /** Lists a project's active requirements, oldest first, as the API returns them. */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements">) {
   const { projectId } = await params;
-  const project = await requireProject(projectId);
-  const requirements = await listRequirements(projectId);
+  const [project, requirements] = await Promise.all([requireProject(projectId), listRequirements(projectId)]);
 
   return (
     <section className="project-page" aria-labelledby="page-title">

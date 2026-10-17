@@ -10,8 +10,8 @@ export const metadata: Metadata = { title: "Settings" };
 
 /** Lets the team's Owner or an Admin rename or archive the project. Other members and archived projects see why they cannot. */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/settings">) {
-  const project = await requireProject((await params).projectId);
-  const repository = await getProjectRepository(project.id);
+  const { projectId } = await params;
+  const [project, repository] = await Promise.all([requireProject(projectId), getProjectRepository(projectId)]);
 
   return (
     <section className="project-page is-narrow" aria-labelledby="page-title">

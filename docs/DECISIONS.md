@@ -956,6 +956,32 @@ team, so projects created before the merge appear as one team per project. The
 team pages keep the styles they were built with and have not been brought into the
 black-and-white system of ADR-027.
 
+ADR-042: Remember finished setup in a signed cookie, and read page data once per render
+
+Status: Accepted
+
+Context: The page gate (ADR-023) asked the API whether first-team setup was finished
+on every navigation, including link prefetches. Each check exchanged the session for
+a token and made a call to the API host, so every signed-in page waited on the API
+even when the answer could not have changed. Server pages also exchanged the session
+for a token once per API read, and loaded the data a page shows one read after another.
+
+Decision: After the API answers that setup is finished, the gate sets the HttpOnly,
+SameSite=Lax cookie `specthread.onboarded`, holding the user ID and an HMAC-SHA256 of
+it keyed by BETTER_AUTH_SECRET (`app/web/src/lib/onboarding-cookie.ts`). A cookie that
+verifies for the signed-in user skips the API call; any other value falls back to
+asking the API. Finishing setup is permanent (the API only adds that record), and the
+API still refuses to create projects before it, so a forged or stale cookie can at
+most skip the redirect to /onboarding. Within one server render, `apiFetch` exchanges
+the session for a token once, team pages look up the session once, and pages start
+the API reads they need together rather than in sequence.
+
+Consequences: Only the first signed-in navigation in a browser asks the API about
+setup. Rotating BETTER_AUTH_SECRET invalidates the cookie, which costs one API call
+per user. The API answers and authorizes every read as before, so the parallel reads
+change no access rules; a requirement in another project still shows the not-found
+page before anything renders.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected
