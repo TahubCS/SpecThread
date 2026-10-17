@@ -1,6 +1,6 @@
 import { test as base, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { makeSignature } from "better-auth/crypto";
 
@@ -63,6 +63,12 @@ export async function addTestTeamMember(projectId: string, userId: string, role:
 export const test = base.extend<{ signedIn: boolean }, { sessionCookie: TestCookie }>({
   signedIn: [true, { option: true }],
   // Playwright's fixture callback is named `provide`, not `use`, so React's hook lint rule ignores it.
+  // Each test is its own client: the production-mode test server rate limits auth requests per
+  // client IP, which Better Auth reads from x-forwarded-for (ADR-013). Without this every test
+  // shares 127.0.0.1's budget and a full run ends in 429s. Explicit headers still win.
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
+    await provide({ "x-forwarded-for": `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`, ...extraHTTPHeaders });
+  },
   sessionCookie: [
     async ({}, provide) => {
       const session = await createTestSession("Test user");
