@@ -59,7 +59,9 @@ internal static class RequirementEndpoints
         if (input is null) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var userId = user.CallerId();
-        var project = await db.ProjectsFor(userId).AsNoTracking().SingleOrDefaultAsync(p => p.Id == projectId, cancel);
+        // Serialize with archiving, membership changes, and other writes in this project's team.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var project = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
         if (project is null) return TypedResults.NotFound();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
@@ -77,7 +79,8 @@ internal static class RequirementEndpoints
         };
         db.Requirements.Add(requirement);
         var criteria = AddCriteria(db, requirement.Id, input.Criteria);
-        await db.SaveChangesAsync(cancel); // One transaction: requirement and criteria.
+        await db.SaveChangesAsync(cancel);
+        await transaction.CommitAsync(cancel);
 
         return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria));
     }
@@ -103,13 +106,13 @@ internal static class RequirementEndpoints
         if (request.Version is null) errors.Add("version", "Send the version you loaded.");
         if (input is null || errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
-        var found = await FindForMember(db.Requirements, db, user.CallerId(), requirementId, cancel);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var found = await LockForMember(db, user.CallerId(), requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
         var requirement = found.Requirement;
         if (found.ProjectArchived || requirement.ArchivedAt is not null) return ProjectEndpoints.Archived();
         if (requirement.Version != request.Version) return Stale();
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         // Delete first so new positions never collide with the unique (requirement_id, position) index.
         await db.AcceptanceCriteria.Where(c => c.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
         requirement.Title = input.Title;
@@ -133,7 +136,8 @@ internal static class RequirementEndpoints
     private static async Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
         Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
-        var found = await FindForMember(db.Requirements, db, user.CallerId(), requirementId, cancel);
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var found = await LockForMember(db, user.CallerId(), requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
         if (found.ProjectArchived) return ProjectEndpoints.Archived();
 
@@ -147,12 +151,26 @@ internal static class RequirementEndpoints
         {
             return Stale();
         }
+        await transaction.CommitAsync(cancel);
 
         var criteria = await db.AcceptanceCriteria.AsNoTracking()
             .Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
         return TypedResults.Ok(ToResponse(found.Requirement, criteria));
+    }
+
+    // Like FindForMember, but locks the project's team first and then reads the requirement, so
+    // the archived states and membership it sees cannot change before this transaction ends.
+    private static async Task<MemberRequirement?> LockForMember(
+        SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel)
+    {
+        var projectId = await db.Requirements.Where(r => r.Id == requirementId).Select(r => (Guid?)r.ProjectId).SingleOrDefaultAsync(cancel);
+        if (projectId is null) return null;
+        var project = await ProjectEndpoints.LockProjectForCaller(db, projectId.Value, userId, cancel);
+        if (project is null) return null;
+        var requirement = await db.Requirements.SingleAsync(r => r.Id == requirementId, cancel);
+        return new MemberRequirement(requirement, project.ArchivedAt != null);
     }
 
     // Null when the requirement does not exist or the caller is not a member of its project.

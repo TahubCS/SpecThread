@@ -155,6 +155,31 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   expect((await owner.put(`/requirements/${requirement.id}`, { title: "Revive", version: 2 })).status()).toBe(409);
 });
 
+test("requirement writes and project archiving serialize, so nothing changes after a project is archived", async ({ request }) => {
+  const owner = await as(request, "owner");
+  const member = await as(request, "member");
+  for (let round = 0; round < 5; round++) {
+    const project = await createProject(request, `Race ${round}`);
+    const existing = await (await member.post(`/projects/${project.id}/requirements`, { title: "Existing" })).json();
+    const [archive, created, updated] = await Promise.all([
+      owner.post(`/projects/${project.id}/archive`),
+      member.post(`/projects/${project.id}/requirements`, { title: "Racing create" }),
+      member.put(`/requirements/${existing.id}`, { title: "Racing update", acceptanceCriteria: ["Changed"], version: 1 }),
+    ]);
+    expect(archive.status()).toBe(200);
+    const archivedAt = Date.parse((await archive.json()).archivedAt);
+    // Each write either finished before the archive or was refused because of it.
+    expect([201, 409]).toContain(created.status());
+    expect([200, 409]).toContain(updated.status());
+    if (created.status() === 201) expect(Date.parse((await created.json()).createdAt)).toBeLessThanOrEqual(archivedAt);
+    if (updated.status() === 200) expect(Date.parse((await updated.json()).updatedAt)).toBeLessThanOrEqual(archivedAt);
+    const { rows } = await database.pool.query(
+      `SELECT count(*)::int AS late FROM requirements r JOIN projects p ON p.id = r.project_id
+        WHERE p.id = $1 AND greatest(r.created_at, r.updated_at) > p.archived_at`, [project.id]);
+    expect(rows[0].late).toBe(0);
+  }
+});
+
 test("invalid input is rejected with field errors", async ({ request }) => {
   const project = await createProject(request);
   const owner = await as(request, "owner");

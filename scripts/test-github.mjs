@@ -22,7 +22,7 @@ import { createVerify } from "node:crypto";
 // A commit nobody set checks for has none. A release's history includes its own commit and the
 // commits in `contains`; comparing with a commit in `unknown` answers 404, as for a commit the
 // repository no longer has. A pull request item may set `merge_sha`, its commit after merging.
-//   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, close?, times? }
+//   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, headers?, close?, times? }
 //   DELETE /__github/faults?bearer=<token | app | installation>&path=<the same path>
 //
 // The app reads issues and pull requests with the installation token it is given here, so
@@ -65,8 +65,8 @@ export function startFakeGitHub({ port, appId, publicKey }) {
   });
   const installationToken = "ghs_test_installation_token";
   const faults = [];
-  const send = (response, status, body) => {
-    response.writeHead(status, { "content-type": "application/json" });
+  const send = (response, status, body, headers = {}) => {
+    response.writeHead(status, { ...headers, "content-type": "application/json" });
     response.end(body === undefined ? "" : JSON.stringify(body));
   };
   const page = (items, url) => {
@@ -113,7 +113,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
       const fault = index === -1 ? null : faults[index];
       if (fault?.times !== undefined && --fault.times <= 0) faults.splice(index, 1);
       if (fault?.close) return void request.socket.destroy();
-      if (fault?.status) return send(response, fault.status, fault.body);
+      if (fault?.status) return send(response, fault.status, fault.body, fault.headers);
 
       const access = /^\/app\/installations\/(\d+)\/access_tokens$/.exec(url.pathname);
       if (access && request.method === "POST") {

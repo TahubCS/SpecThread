@@ -115,7 +115,8 @@ internal static class ProjectEndpoints
         return TypedResults.Ok(response);
     }
 
-    private static async Task<Project?> LockProjectForCaller(SpecThreadDbContext db, Guid projectId, string userId, CancellationToken cancel)
+    // Locks the project's team for this transaction, then re-reads the project if the caller is still a member.
+    internal static async Task<Project?> LockProjectForCaller(SpecThreadDbContext db, Guid projectId, string userId, CancellationToken cancel)
     {
         var teamId = await db.ProjectsFor(userId).Where(p => p.Id == projectId).Select(p => (Guid?)p.TeamId).SingleOrDefaultAsync(cancel);
         if (teamId is null || await TeamManagementEndpoints.LockTeam(db, teamId.Value, cancel) is null) return null;

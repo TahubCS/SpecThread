@@ -209,6 +209,8 @@ test("GitHub failures map to 502, 503, and 409 and never save a partial refresh"
   for (const [bearer, data, status] of [
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 500 }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, close: true }, 502],
+    // GitHub's secondary rate limit answers 403 with retry-after; it is not a missing item.
+    ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 403, body: { message: "You have exceeded a secondary rate limit." }, headers: { "retry-after": "60" } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 2, title: 5 } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 9, title: "Wrong item", state: "open", html_url: "https://github.com/a/b/issues/9", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 2, title: "Bad link", state: "open", html_url: "https://evil.example/2", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" } }, 502],
