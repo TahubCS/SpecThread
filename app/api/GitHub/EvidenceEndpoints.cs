@@ -156,24 +156,34 @@ internal static partial class EvidenceEndpoints
             .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId).ToListAsync(cancel);
         var fullName = $"{repository.Owner}/{repository.Name}";
         var now = Clock.UtcNow();
-        foreach (var item in items)
+        // What each release pointed at and each change was before this refresh, so answers about
+        // release contents that cannot have changed are kept instead of asked again.
+        var before = items.ToDictionary(e => e.Id, e => (Sha: e.Sha, Change: ChangeSha(e), Contains: ReadContains(e)));
+
+        // Read everything first, a few GitHub calls at a time; entities change only afterwards.
+        if (items.Count > 0)
         {
-            if (item.Kind != "commit")
-            {
-                var found = item.Number is { } number
-                    ? await github.GetItemAsync(repository.InstallationId, repository.RepositoryId, number, cancel)
-                    : await github.GetReleaseAsync(repository.InstallationId, repository.RepositoryId, item.Tag!, cancel);
-                // An item deleted or moved on GitHub keeps its last snapshot, so the record stays inspectable.
-                if (found.Failure == GitHubFailure.NotFound) continue;
-                if (found.Failure != GitHubFailure.None) return Failed(found.Failure, fullName);
-                Apply(item, found.Value!, now);
-            }
-            var checks = await ReadChecksAsync(github, repository, item.Kind, item.Sha, cancel);
+            var token = await github.CheckInstallationAsync(repository.InstallationId, cancel);
+            if (token != GitHubFailure.None) return Failed(token, fullName);
+        }
+        var reads = await ReadConcurrentlyAsync(items, item => ReadItemAsync(github, repository, item, cancel), cancel);
+        for (var index = 0; index < items.Count; index++)
+        {
+            var (item, (found, checks)) = (items[index], reads[index]);
+            // An item deleted or moved on GitHub keeps its last snapshot, so the record stays inspectable.
+            if (found?.Failure == GitHubFailure.NotFound) continue;
+            if (found is { Failure: not GitHubFailure.None }) return Failed(found.Failure, fullName);
+            if (found is not null) Apply(item, found.Value!, now);
             if (checks.Failure is not (GitHubFailure.None or GitHubFailure.NotFound)) return Failed(checks.Failure, fullName);
             ApplyChecks(item, checks, now);
         }
         foreach (var release in items.FindAll(e => e.Kind == "release")) release.Contains = null;
-        var contents = await ReadContentsAsync(github, repository, items.FindAll(e => e.Kind == "release"), items, cancel);
+        // A commit cannot leave the history of the same release commit, so an earlier "included"
+        // answer stands while both SHAs are unchanged. "Not included" is asked again, because it
+        // may have come from a commit GitHub could not find at the time.
+        var contents = await ReadContentsAsync(github, repository, items.FindAll(e => e.Kind == "release"), items, cancel,
+            (release, change) => before[release.Id].Sha == release.Sha && before[change.Id].Change == ChangeSha(change) &&
+                before[release.Id].Contains.GetValueOrDefault(change.Id));
         if (contents != GitHubFailure.None) return Failed(contents, fullName);
         await db.SaveChangesAsync(cancel);
         return TypedResults.Ok(await ReadAsync(db, requirementId, cancel));
@@ -243,24 +253,87 @@ internal static partial class EvidenceEndpoints
     };
 
     // Asks GitHub, for each release, whether its history includes each change, and records the
-    // answers on the release. Answers already recorded for other changes are kept.
+    // answers on the release. Answers already recorded for other changes are kept, and so are
+    // answers `known` says still hold.
     private static async Task<GitHubFailure> ReadContentsAsync(
-        IGitHubClient github, ProjectRepository repository, List<RequirementEvidence> releases, List<RequirementEvidence> changes, CancellationToken cancel)
+        IGitHubClient github, ProjectRepository repository, List<RequirementEvidence> releases, List<RequirementEvidence> changes,
+        CancellationToken cancel, Func<RequirementEvidence, RequirementEvidence, bool>? known = null)
     {
+        var pairs = new List<(RequirementEvidence Release, RequirementEvidence Change, string Sha)>();
         foreach (var release in releases)
         {
             if (release.RepositoryId != repository.RepositoryId || release.Sha is null) continue;
-            var contains = release.Contains is null ? [] : JsonSerializer.Deserialize<Dictionary<Guid, bool>>(release.Contains, CommitJson) ?? [];
             foreach (var change in changes)
             {
                 if (change.RepositoryId != repository.RepositoryId || ChangeSha(change) is not { } sha) continue;
-                var included = await github.IsAncestorAsync(repository.InstallationId, repository.RepositoryId, sha, release.Sha, cancel);
-                if (included.Failure != GitHubFailure.None) return included.Failure;
-                contains[change.Id] = included.Value;
+                pairs.Add((release, change, sha));
+            }
+        }
+        var asked = pairs.FindAll(pair => known?.Invoke(pair.Release, pair.Change) != true);
+        var answers = await ReadConcurrentlyAsync(asked,
+            pair => github.IsAncestorAsync(repository.InstallationId, repository.RepositoryId, pair.Sha, pair.Release.Sha!, cancel), cancel);
+        var failure = answers.Find(answer => answer.Failure != GitHubFailure.None);
+        if (failure is not null) return failure.Failure;
+
+        var answered = new Dictionary<(Guid Release, Guid Change), bool>();
+        for (var index = 0; index < asked.Count; index++) answered[(asked[index].Release.Id, asked[index].Change.Id)] = answers[index].Value;
+        foreach (var release in releases)
+        {
+            if (release.RepositoryId != repository.RepositoryId || release.Sha is null) continue;
+            var contains = ReadContains(release);
+            foreach (var (_, change, _) in pairs.Where(pair => pair.Release == release))
+            {
+                // A pair that was not asked is one `known` confirmed is still included.
+                contains[change.Id] = answered.GetValueOrDefault((release.Id, change.Id), true);
             }
             release.Contains = JsonSerializer.Serialize(contains, CommitJson);
         }
         return GitHubFailure.None;
+    }
+
+    // Which linked changes a release's history includes, by evidence ID; empty when not yet read.
+    private static Dictionary<Guid, bool> ReadContains(RequirementEvidence release) =>
+        release.Contains is null ? [] : JsonSerializer.Deserialize<Dictionary<Guid, bool>>(release.Contains, CommitJson) ?? [];
+
+    // An item's current state from GitHub, and its checks. Issues and releases are read again;
+    // a commit never changes, so only its checks are. Found is null for a commit.
+    private static async Task<(GitHubResult<GitHubItem>? Found, GitHubResult<GitHubChecks> Checks)> ReadItemAsync(
+        IGitHubClient github, ProjectRepository repository, RequirementEvidence item, CancellationToken cancel)
+    {
+        GitHubResult<GitHubItem>? found = null;
+        var (kind, sha) = (item.Kind, item.Sha);
+        if (item.Kind != "commit")
+        {
+            found = item.Number is { } number
+                ? await github.GetItemAsync(repository.InstallationId, repository.RepositoryId, number, cancel)
+                : await github.GetReleaseAsync(repository.InstallationId, repository.RepositoryId, item.Tag!, cancel);
+            if (found.Failure != GitHubFailure.None) return (found, GitHubResult<GitHubChecks>.Fail(GitHubFailure.NotFound));
+            (kind, sha) = (found.Value!.Kind, found.Value.Sha);
+        }
+        return (found, await ReadChecksAsync(github, repository, kind, sha, cancel));
+    }
+
+    private const int MaxConcurrentReads = 4;
+
+    // Runs `read` for every input with at most MaxConcurrentReads in flight, and returns the
+    // results in input order. Reads must not touch the DbContext, which is not thread-safe.
+    private static async Task<List<TResult>> ReadConcurrentlyAsync<TInput, TResult>(
+        IReadOnlyList<TInput> inputs, Func<TInput, Task<TResult>> read, CancellationToken cancel)
+    {
+        using var gate = new SemaphoreSlim(MaxConcurrentReads);
+        var reads = inputs.Select(async input =>
+        {
+            await gate.WaitAsync(cancel);
+            try
+            {
+                return await read(input);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }).ToList();
+        return [.. await Task.WhenAll(reads)];
     }
 
     // Stores what was read. Checks GitHub would not let the app read are stored as null, with the time of the attempt.

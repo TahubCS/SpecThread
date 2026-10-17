@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -111,7 +112,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
 
     // Installation tokens created by this instance. A client lives for one API request, so a
     // refresh of many items asks GitHub for a token once per installation, not once per item.
-    private readonly Dictionary<long, string> installationTokens = [];
+    private readonly ConcurrentDictionary<long, string> installationTokens = [];
 
     public static void Configure(HttpClient client)
     {

@@ -24,6 +24,7 @@ import { createVerify } from "node:crypto";
 // repository no longer has. A pull request item may set `merge_sha`, its commit after merging.
 //   POST   /__github/faults          { bearer: <token> | "app" | "installation", path, status?, body?, headers?, close?, times? }
 //   DELETE /__github/faults?bearer=<token | app | installation>&path=<the same path>
+//   GET    /__github/requests?path=<regex>   { count }: GitHub API requests made so far whose path matches
 //
 // The app reads issues and pull requests with the installation token it is given here, so
 // faults for those calls use the bearer "installation". Faults for "app" and "installation"
@@ -65,6 +66,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
   });
   const installationToken = "ghs_test_installation_token";
   const faults = [];
+  const requests = [];
   const send = (response, status, body, headers = {}) => {
     response.writeHead(status, { ...headers, "content-type": "application/json" });
     response.end(body === undefined ? "" : JSON.stringify(body));
@@ -95,6 +97,9 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         } else if (request.method === "POST" && url.pathname === "/__github/faults") {
           const fault = JSON.parse(body);
           faults.push({ ...fault, path: new RegExp(fault.path) });
+        } else if (request.method === "GET" && url.pathname === "/__github/requests") {
+          const path = new RegExp(url.searchParams.get("path") ?? "");
+          return send(response, 200, { count: requests.filter(value => path.test(value)).length });
         } else if (request.method === "DELETE" && url.pathname === "/__github/faults") {
           const [bearer, path] = [url.searchParams.get("bearer"), url.searchParams.get("path")];
           for (let index = faults.length - 1; index >= 0; index--) {
@@ -106,6 +111,7 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         return send(response, 204);
       }
 
+      requests.push(url.pathname);
       const bearer = (request.headers.authorization ?? "").replace(/^Bearer /, "");
       const asApp = url.pathname.startsWith("/app/");
       const faultKey = asApp ? "app" : bearer === installationToken ? "installation" : bearer;
