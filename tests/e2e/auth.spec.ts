@@ -151,6 +151,24 @@ test("email login handles wrong passwords, throttling and unverified email by ke
   expect(resent).toMatchObject({ email: "person@example.invalid", callbackURL: "/dashboard" });
 });
 
+test("only an unverified email asks the user to check their email, and only a used reset link counts as expired", async ({ page }) => {
+  await page.route("**/api/auth/sign-in/email", route => route.fulfill({ status: 403, json: { code: "INVALID_ORIGIN", message: "private-detail" } }));
+  await page.goto("/login");
+  await page.getByLabel("Email", { exact: true }).fill("person@example.invalid");
+  await page.getByLabel("Password", { exact: true }).fill("a long enough password");
+  await page.getByRole("button", { name: "Log in" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("Unable to log in. Please try again.");
+  await expect(page.getByRole("heading", { name: "Check your email" })).toHaveCount(0);
+
+  await page.route("**/api/auth/reset-password", route => route.fulfill({ status: 500, json: { code: "INTERNAL_SERVER_ERROR" } }));
+  await page.goto("/reset-password?token=test-token");
+  await page.getByLabel("New password", { exact: true }).fill("a long enough password");
+  await page.getByLabel("Confirm new password", { exact: true }).fill("a long enough password");
+  await page.getByRole("button", { name: "Update password" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText("Unable to update your password. Please try again.");
+  await expect(page.getByRole("heading", { name: "Reset link expired" })).toHaveCount(0);
+});
+
 test("sign-up validates the password and then asks the user to check their email", async ({ page }) => {
   let body: Record<string, unknown> = {};
   await page.route("**/api/auth/sign-up/email", async route => {

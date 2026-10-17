@@ -39,7 +39,6 @@ export function createAuth(env: Record<string, string | undefined>, overrides: {
     },
     account: {
       encryptOAuthTokens: true,
-       // Implicit linking by email still requires both emails to be verified
       // Implicit linking by email still requires both emails to be verified
       // (Better Auth default). Explicit linking from /account may use a
       // different provider email because the user is already signed in. ADR-016.

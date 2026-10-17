@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { canUnlink, isUsableSignInMethod } from "../../app/web/src/lib/sign-in-methods";
+import { canUnlink, enabledProviders, isUsableSignInMethod } from "../../app/web/src/lib/sign-in-methods";
 
 const providers = { github: { enabled: false }, google: { enabled: true } };
 
@@ -18,4 +18,11 @@ test("an account can be unlinked only if another usable method remains", () => {
   expect(canUnlink(github, [credential, github])).toBe(true);
   expect(canUnlink(credential, [credential, github, google])).toBe(true);
   expect(canUnlink(credential, [credential])).toBe(false);
+});
+
+test("sign-in pages offer only the providers enabled in this deployment, in display order", () => {
+  expect(enabledProviders(["github", "google"], providers)).toEqual(["google"]);
+  expect(enabledProviders(["github", "google"], { github: { enabled: true }, google: { enabled: true } })).toEqual(["github", "google"]);
+  expect(enabledProviders(["google", "github"], { github: { enabled: true }, google: { enabled: true } })).toEqual(["google", "github"]);
+  expect(enabledProviders(["github", "google"], { github: { enabled: false }, google: { enabled: false } })).toEqual([]);
 });

@@ -87,7 +87,9 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
       if (!result.error) setDone(true);
       else if (result.error.status === 429) setError(TOO_MANY);
       else if (result.error.code === "PASSWORD_TOO_SHORT") setError(`Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`);
-      else setExpired(true);
+      // Only an invalid or used token means the link expired; anything else can be retried.
+      else if (result.error.code === "INVALID_TOKEN") setExpired(true);
+      else setError("Unable to update your password. Please try again.");
     } catch {
       setError(UNREACHABLE);
     }

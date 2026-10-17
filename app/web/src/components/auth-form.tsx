@@ -6,16 +6,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DEFAULT_AFTER_SIGN_IN } from "@/lib/app-navigation";
 import { authClient } from "@/lib/auth-client";
+import type { SocialProvider } from "@/lib/sign-in-methods";
 import { SignInThread } from "./sign-in-thread";
 
-type Provider = "google" | "github";
+type Provider = SocialProvider;
 const providerLabels: Record<Provider, string> = { google: "Google", github: "GitHub" };
 const MIN_PASSWORD_LENGTH = 12;
 const TOO_MANY = "Too many attempts. Please wait a moment before trying again.";
 const UNREACHABLE = "Unable to reach the sign-in service. Please try again.";
 
-/** Renders the login or signup form; every sign-in path returns to `next`, a pre-validated same-site path. */
-export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { signup?: boolean; next?: string }) {
+/**
+ * Renders the login or signup form; every sign-in path returns to `next`, a pre-validated same-site path.
+ * Only the social providers enabled in this deployment are offered.
+ */
+export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN, providers }: {
+  signup?: boolean; next?: string; providers: readonly Provider[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<"email" | Provider | "resend" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +77,8 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
       } else {
         const result = await authClient.signIn.email({ email, password, callbackURL: next });
         if (result.error) {
-          if (result.error.status === 403) {
+          // 403 also answers other refusals, such as an untrusted origin; only this code means "verify first".
+          if (result.error.status === 403 && result.error.code === "EMAIL_NOT_VERIFIED") {
             setPendingEmail(email);
           } else {
             setError(result.error.status === 429 ? TOO_MANY
@@ -135,14 +142,18 @@ export function AuthForm({ signup = false, next = DEFAULT_AFTER_SIGN_IN }: { sig
       <h1 className="signin-title">{signup ? "Create your account" : "Log in to SpecThread"}</h1>
       {signup && <p className="signin-lead">Connect one GitHub repository. Free for small teams.</p>}
       {alert}
-      <div className="signin-stack">
-        {(["github", "google"] as const).map(provider => (
-          <button key={provider} className="signin-secondary" type="button" disabled={busy !== null} onClick={() => handleSocial(provider)}>
-            {busy === provider ? `Connecting to ${providerLabels[provider]}...` : `Continue with ${providerLabels[provider]}`}
-          </button>
-        ))}
-      </div>
-      <div className="signin-divider" aria-hidden="true"><span />OR<span /></div>
+      {providers.length > 0 && (
+        <>
+          <div className="signin-stack">
+            {providers.map(provider => (
+              <button key={provider} className="signin-secondary" type="button" disabled={busy !== null} onClick={() => handleSocial(provider)}>
+                {busy === provider ? `Connecting to ${providerLabels[provider]}...` : `Continue with ${providerLabels[provider]}`}
+              </button>
+            ))}
+          </div>
+          <div className="signin-divider" aria-hidden="true"><span />OR<span /></div>
+        </>
+      )}
       <form className="signin-stack" onSubmit={handleEmail} aria-label={signup ? "Sign up with email" : "Log in with email"}>
         {signup && (
           <div className="signin-field">

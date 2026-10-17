@@ -120,7 +120,8 @@ test("a session revoked while browsing is sent to login on the next page", async
     await context.addCookies([seeded.cookie]);
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-    seeded.remove();
+    // Wait for the deletion, or the next navigation can still find the session.
+    await seeded.remove();
     await page.goto("/teams");
     await expect(page).toHaveURL(/\/login\?next=%2Fteams$/);
   } finally {

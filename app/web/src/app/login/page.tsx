@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
 import { auth } from "@/lib/auth";
 import { safeNextPath } from "@/lib/app-navigation";
+import { enabledProviders } from "@/lib/sign-in-methods";
 
 export const metadata: Metadata = { title: "Log in" };
 
@@ -20,5 +21,5 @@ export default async function LoginPage({ searchParams }: {
   const next = safeNextPath((await searchParams).next);
   const session = await auth.api.getSession({ headers: await headers() });
   if (session) redirect(next);
-  return <AuthForm next={next} />;
+  return <AuthForm next={next} providers={enabledProviders(["github", "google"], auth.options.socialProviders)} />;
 }
