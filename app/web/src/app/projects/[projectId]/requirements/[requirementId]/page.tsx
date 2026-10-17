@@ -82,7 +82,8 @@ export default async function Page({ params }: Props) {
         <h2 id="review-heading">Review</h2>
         <ReviewPanel projectId={project.id} requirementId={requirement.id} version={requirement.version} reviews={reviews}
           evidenceIds={evidence.map(link => link.id)} people={people}
-          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"} />
+          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"}
+          soloTeam={members.length === 1 ? { name: project.teamName, invitations: `/teams/${project.teamId}/invitations` } : null} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
     </article>
