@@ -29,6 +29,9 @@ be served, the process not to run as root, and the Supabase root CA to be in the
 trust store. Reproduce it with `docker build --tag specthread-api:ci .` and
 `docker run --rm --publish 8080:8080 specthread-api:ci`.
 
+A third job, `deploy-api`, runs only on pushes to `main` after both pass. It is not a
+check: it applies migrations to Supabase and deploys the API (ADR-044, docs/DEPLOYMENT.md).
+
 The test web server and schema project require a running Docker engine and
 postgres:17. The first webServer entry calls scripts/build-api.mjs before starting
 the second entry (the API). Do not move that build into globalSetup: Playwright

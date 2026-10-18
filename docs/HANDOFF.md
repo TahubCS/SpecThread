@@ -1,6 +1,36 @@
 # Shared handoff
 
-## Current task: Stabilize the current features (2026-10-17)
+## Current task: Apply migrations and deploy the API from CI (2026-10-18)
+
+- Branch: `feature/ci-db-migrations`, from `main` at `3d8d68e`. One pull request into
+  `main`. Independent of the open `fix/page-load-time` pull request, which uses ADR-043.
+- Completed (ADR-044):
+  - `.github/workflows/ci.yml`: new job `deploy-api`, on pushes to `main` only, after
+    `verify` and `api-image`. It builds an EF migration bundle, trusts the Supabase CA,
+    applies pending migrations, then calls Render's deploy hook with `ref` set to the commit.
+    It runs in the GitHub environment `api-deploy`, one at a time, never cancelled midway.
+  - `render.yaml`: `autoDeployTrigger: off`.
+  - `docs/{DECISIONS,DATABASE,DEPLOYMENT,TESTING,HANDOFF}.md`.
+- Decisions and assumptions:
+  - The environment is `api-deploy`, not `production`: GitHub environment names ignore case,
+    and Vercel already uses Production. Render's `main - specthread-api` is left to Render.
+  - Muhammad reports `api-deploy` is configured with `DATABASE_MIGRATION_CONNECTION_STRING`
+    and `RENDER_DEPLOY_HOOK_URL`, and Render's auto-deploy is handled. Not checked here.
+  - Building the bundle needs a connection string; a dummy is used. Checked locally: the
+    bundle reads `ConnectionStrings__Database` when it runs (an unreachable host was tried,
+    not the dummy), and exits 1 when none is set.
+- Checks: listed in the pull request; the job itself runs only after the merge.
+- Known issues or risks:
+  - **Merging this pull request runs the job for the first time**, against Supabase. If a
+    migration was ever applied without its `__EFMigrationsHistory` row, that run fails on it.
+  - The bundle was never run against a real database here (Docker was not running). The
+    deploy hook call and the CA install were not run outside CI.
+  - Each migration must work with the API already running (ADR-044). Rollback is manual.
+- Next step: run `dotnet ef migrations list --project app/api` against Supabase (read
+  only) and confirm no migration shows as pending that is already in the database; then
+  merge, and approve the `deploy-api` run if `api-deploy` requires a reviewer.
+
+## Previous task: Stabilize the current features (2026-10-17)
 
 - Branch: `fix/stabilize-current-features`, from `main` at `c1928d9`. Fixes only; no new
   features. Opened as one pull request into `main`.
