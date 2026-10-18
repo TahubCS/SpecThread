@@ -6,9 +6,8 @@ import { InvitePeopleButton } from "@/components/teams/invitation-controls";
 
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
-  const team = await getTeam(teamId);
   const session = await requireTeamSession(`/teams/${teamId}/members`);
-  const members = await getTeamMembers(teamId);
+  const [team, members] = await Promise.all([getTeam(teamId), getTeamMembers(teamId)]);
   return <div className={styles.sectionContent}><div className={styles.header}><h1>Members</h1>
     {team.role !== "member" && <div className={styles.actions}><InvitePeopleButton teamId={teamId} owner={team.role === "owner"} />
       <Link className={styles.secondary} href={`/teams/${teamId}/invitations`}>View invitations</Link></div>}</div>

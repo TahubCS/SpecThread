@@ -5,8 +5,7 @@ import styles from "@/components/teams/teams.module.css";
 
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
-  const team = await getTeam(teamId);
-  const members = await getTeamMembers(teamId);
+  const [team, members] = await Promise.all([getTeam(teamId), getTeamMembers(teamId)]);
   const owner = members.find(member => member.role === "owner");
   return <div className={`${styles.sectionContent} ${styles.page}`}>
     <header className={styles.header}><h1>Team settings</h1></header>

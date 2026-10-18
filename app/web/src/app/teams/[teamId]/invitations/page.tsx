@@ -6,8 +6,7 @@ import styles from "@/components/teams/teams.module.css";
 
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
-  const team = await getTeam(teamId);
-  const invitations = await getTeamInvitations(teamId);
+  const [team, invitations] = await Promise.all([getTeam(teamId), getTeamInvitations(teamId)]);
   return <div className={styles.sectionContent}>
     <Link className={styles.back} href={`/teams/${teamId}/members`}>← Back to Members</Link>
     <div className={styles.header}><h1>Invitations</h1><InvitePeopleButton teamId={teamId} owner={team.role === "owner"} /></div>

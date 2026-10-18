@@ -28,7 +28,7 @@ const registered: { bearer: string; path: string }[] = [];
  * installation token ("installation"). Every test shares the app and the installation token,
  * so for those two the path must name this test's own installation or repository.
  */
-export async function failGitHub(bearer: string, fault: { path: string; status?: number; body?: unknown; close?: boolean; times?: number }) {
+export async function failGitHub(bearer: string, fault: { path: string; status?: number; body?: unknown; headers?: Record<string, string>; close?: boolean; times?: number }) {
   const response = await fetch(`${github}/faults`, { method: "POST", body: JSON.stringify({ bearer, ...fault }) });
   if (response.status !== 204) throw new Error(`The fake GitHub rejected the fault (${response.status}).`);
   registered.push({ bearer, path: fault.path });

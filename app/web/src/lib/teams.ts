@@ -6,11 +6,28 @@ import { auth } from "./auth";
 import { apiFetch } from "./api";
 import { parseOnboarding, parseTeam, parseTeamMembers, parseTeams } from "./team-types";
 
+/** One session lookup per server render, shared by every team read in it. */
+const requestSession = cache(async () => auth.api.getSession({ headers: await headers() }));
+
 /** Validates the session on pages and actions, including calls without the page proxy. */
 export async function requireTeamSession(next: string) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await requestSession();
   if (!session) redirect(`/login?next=${encodeURIComponent(next)}`);
   return session;
+}
+
+const teamIdPattern = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+/**
+ * Reads a team-scoped API resource together with the membership-checked team lookup that gates
+ * it, instead of one after the other. The session and team ID are checked first, so a missing
+ * session still redirects and a malformed ID never reaches the API.
+ */
+export async function readWithTeam(id: string, path: `/${string}`) {
+  await requireTeamSession(`/teams/${encodeURIComponent(id)}`);
+  if (!teamIdPattern.test(id)) notFound();
+  const [team, response] = await Promise.all([getTeam(id), apiFetch(path)]);
+  return { team, response };
 }
 
 /** Loads real memberships; failures reach the Teams error boundary. */
@@ -31,8 +48,7 @@ export async function getOnboarding() {
 }
 
 export async function getTeamMembers(id: string) {
-  await getTeam(id);
-  const response = await apiFetch(`/teams/${id}/members`);
+  const { response } = await readWithTeam(id, `/teams/${id}/members`);
   if (response.status === 401) redirect("/login");
   if (response.status === 404) notFound();
   if (!response.ok) throw new Error("Team members could not be loaded.");
@@ -42,7 +58,7 @@ export async function getTeamMembers(id: string) {
 /** The layout and overview share one membership-checked lookup per server render. */
 export const getTeam = cache(async (id: string) => {
   await requireTeamSession(`/teams/${encodeURIComponent(id)}`);
-  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) notFound();
+  if (!teamIdPattern.test(id)) notFound();
   const response = await apiFetch(`/teams/${id}`);
   if (response.status === 401) redirect(`/login?next=${encodeURIComponent(`/teams/${id}`)}`);
   if (response.status === 404) notFound();

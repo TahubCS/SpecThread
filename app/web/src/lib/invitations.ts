@@ -1,14 +1,12 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
-import { apiFetch } from "./api";
 import { apiBaseUrl } from "./api-config";
-import { getTeam } from "./teams";
+import { readWithTeam } from "./teams";
 import { invitationTokenPattern, parseInvitationPreview, parseInvitations } from "./invitation-types";
 
 export async function getTeamInvitations(teamId: string) {
-  const team = await getTeam(teamId);
+  const { team, response } = await readWithTeam(teamId, `/teams/${teamId}/invitations`);
   if (team.role === "member") notFound();
-  const response = await apiFetch(`/teams/${teamId}/invitations`);
   if (response.status === 401) redirect("/login");
   if (response.status === 403 || response.status === 404) notFound();
   if (!response.ok) throw new Error("Invitations could not be loaded.");

@@ -18,11 +18,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 /** Shows a requirement's description, ordered acceptance criteria, evidence, and review decisions, with edit and archive while it can change. */
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
-  const project = await requireProject(projectId);
-  const [requirement, members, repository] = await Promise.all([
-    requireRequirement(projectId, requirementId), listMembers(projectId), getProjectRepository(projectId),
+  // One round of parallel reads. Each is authorized by the API, and requireRequirement still
+  // shows the not-found page before anything renders when the requirement is in another project.
+  const [project, requirement, members, repository, evidence, reviews, viewer] = await Promise.all([
+    requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
+    getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
   ]);
-  const [evidence, reviews, viewer] = await Promise.all([listEvidence(requirement.id), listReviews(requirement.id), viewerId()]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const author = members.find(member => member.userId === requirement.createdBy)?.name ?? "a former member";
   const editable = !project.archivedAt && !requirement.archivedAt;
@@ -81,7 +82,8 @@ export default async function Page({ params }: Props) {
         <h2 id="review-heading">Review</h2>
         <ReviewPanel projectId={project.id} requirementId={requirement.id} version={requirement.version} reviews={reviews}
           evidenceIds={evidence.map(link => link.id)} people={people}
-          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"} />
+          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"}
+          soloTeam={members.length === 1 ? { name: project.teamName, invitations: `/teams/${project.teamId}/invitations` } : null} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
     </article>

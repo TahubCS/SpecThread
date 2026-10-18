@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
@@ -111,7 +112,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
 
     // Installation tokens created by this instance. A client lives for one API request, so a
     // refresh of many items asks GitHub for a token once per installation, not once per item.
-    private readonly Dictionary<long, string> installationTokens = [];
+    private readonly ConcurrentDictionary<long, string> installationTokens = [];
 
     public static void Configure(HttpClient client)
     {
@@ -595,9 +596,12 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             if (response.StatusCode == HttpStatusCode.Unauthorized) return (GitHubFailure.TokenRejected, null);
             if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden or HttpStatusCode.UnprocessableEntity)
             {
-                // A 403 with no remaining quota is rate limiting, not a missing resource.
+                // A 403 with no remaining quota (the primary limit) or with retry-after (a
+                // secondary limit) is rate limiting, not a missing resource.
                 var exhausted = response.Headers.TryGetValues("x-ratelimit-remaining", out var remaining) && remaining.FirstOrDefault() == "0";
-                return (exhausted ? GitHubFailure.Unavailable : GitHubFailure.NotFound, null);
+                var limited = exhausted || (response.StatusCode == HttpStatusCode.Forbidden && response.Headers.RetryAfter is not null);
+                if (limited) logger.LogWarning("GitHub rate limited {Method} {Path}.", method, path.Split('?')[0]);
+                return (limited ? GitHubFailure.Unavailable : GitHubFailure.NotFound, null);
             }
             if (!response.IsSuccessStatusCode)
             {

@@ -56,8 +56,9 @@ export default defineConfig({
         // Nothing is sent to GitHub: tests stub the sign-in redirect and use scripts/test-github.mjs.
         GITHUB_CLIENT_ID: "test-github-client-id",
         GITHUB_CLIENT_SECRET: "test-github-client-secret",
-        GOOGLE_CLIENT_ID: "",
-        GOOGLE_CLIENT_SECRET: "",
+        // Dummy values enable Google too, so the sign-in pages offer both providers. Nothing is sent to Google.
+        GOOGLE_CLIENT_ID: "test-google-client-id",
+        GOOGLE_CLIENT_SECRET: "test-google-client-secret",
         EMAIL_DELIVERY: "log",
       },
     },

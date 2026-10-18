@@ -22,6 +22,13 @@ On Linux CI install browsers with `npx playwright install --with-deps chromium`.
 The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
+A second CI job, `api-image`, builds the root Dockerfile that Render deploys and runs
+it as Render does: Production, port 8080, no database or issuer. It requires `/health`
+to answer `{"status":"ok"}`, anonymous `/me` to answer 401, the OpenAPI document not to
+be served, the process not to run as root, and the Supabase root CA to be in the image's
+trust store. Reproduce it with `docker build --tag specthread-api:ci .` and
+`docker run --rm --publish 8080:8080 specthread-api:ci`.
+
 The test web server and schema project require a running Docker engine and
 postgres:17. The first webServer entry calls scripts/build-api.mjs before starting
 the second entry (the API). Do not move that build into globalSetup: Playwright
@@ -45,6 +52,14 @@ npm run test:report        # Latest HTML report
 npm run build             # Standalone web production build
 npm run build:api          # Standalone Release API build
 ```
+
+The test web app runs in production mode, so Better Auth rate limits auth requests
+per client IP. The browser fixture in tests/e2e/fixtures.ts gives each test its own
+`x-forwarded-for` address, so a full run never exhausts one shared budget; headers a
+test sets explicitly take precedence. The test web app enables GitHub and Google with
+dummy client values, so both sign-in buttons render; nothing is sent to either provider.
+The GitHub stand-in counts the API requests it receives (`GET /__github/requests?path=`),
+which the release evidence test uses to check that stable answers are not asked again.
 
 `npm test` builds the web app and the Release API before tests. It starts the
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
@@ -261,8 +276,7 @@ currently require network access during the web build.
   screens with mocked auth responses. Real Google/GitHub linking callbacks and
   Resend delivery are verified manually.
 - Auth: explicit configuration failures, email delivery and provider enablement rules, verified TLS options, restricted origins,
-- Auth: explicit configuration failures, verified TLS options, restricted origins,
-  CA PEM parsing/bundles, complete GitHub credential pairs,
+  CA PEM parsing/bundles, complete GitHub credential pairs, sign-in pages offering only enabled providers,
   session endpoint, HTTP rejection of unrelated origins, proxy header precedence,
   retryable HTTP/network failures, provider redirection, and a safe public error page.
   An active session redirects login and signup to Dashboard; an invalid cookie

@@ -74,6 +74,30 @@ test("the author is told another member has to review, and lists show the requir
   await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).toContainText("Not reviewed");
 });
 
+test("an author alone in the team is pointed to inviting a teammate, and the hint goes once someone joins", async ({ page }) => {
+  await page.goto("/projects/new");
+  await page.getByLabel("Project name").fill("Solo");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+  const projectId = page.url().split("/").at(-1)!;
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill("Solo requirement");
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
+  await page.reload();
+  const invite = page.getByRole("link", { name: "Invite a teammate" });
+  await expect(page.getByText("You are the only member of Test team.")).toBeVisible();
+  await expect(invite).toHaveAttribute("href", /^\/teams\/[0-9a-f-]{36}\/invitations$/);
+  await invite.click();
+  await expect(page.getByRole("heading", { name: "Invitations", level: 1 })).toBeVisible();
+
+  await addTestTeamMember(projectId, reviewer.userId);
+  await page.goBack();
+  await page.reload();
+  await expect(page.getByText("You created this requirement, so another member has to review it.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Invite a teammate" })).toHaveCount(0);
+});
+
 test("another member records each decision, a reason is required to reject, and earlier decisions stay readable", async ({ page, browser }, testInfo) => {
   const { projectId, url } = await createRequirement(page);
   const review = await asReviewer(browser, url);

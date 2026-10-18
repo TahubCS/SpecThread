@@ -15,8 +15,10 @@ const external = { target: "_blank", rel: "noreferrer" } as const;
  * GitHub says they can reach through the SpecThread app, or disconnects it.
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/settings/repository">) {
-  const project = await requireProject((await params).projectId);
-  const [repository, members] = await Promise.all([getProjectRepository(project.id), listMembers(project.id)]);
+  const { projectId } = await params;
+  const [project, repository, members] = await Promise.all([
+    requireProject(projectId), getProjectRepository(projectId), listMembers(projectId),
+  ]);
   const canChange = canManageProject(project) && !project.archivedAt;
 
   return (

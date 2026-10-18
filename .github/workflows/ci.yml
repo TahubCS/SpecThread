@@ -13,12 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24.13.0'
           cache: npm
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
       - run: npm ci
@@ -29,3 +29,43 @@ jobs:
       - run: npm run typecheck
       - run: dotnet format app/api --verify-no-changes --no-restore
       - run: npm test
+
+  # Render deploys the API from this Dockerfile only after a merge (render.yaml). Build and boot
+  # the same image here, so a broken image or Production startup fails the PR instead.
+  api-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the image Render deploys
+        run: docker build --tag specthread-api:ci .
+      - name: Start it as Render runs it
+        # Production, port 8080, and no database or issuer: /health must not need them.
+        run: docker run --detach --name api --publish 8080:8080 specthread-api:ci
+      - name: Wait for /health
+        run: |
+          for attempt in $(seq 1 30); do
+            if [ "$(docker inspect --format '{{.State.Running}}' api)" != "true" ]; then
+              echo "::error::The API container exited during startup."; exit 1
+            fi
+            body=$(curl --silent --fail --max-time 2 http://127.0.0.1:8080/health) && break
+            sleep 2
+          done
+          test "$body" = '{"status":"ok"}' || { echo "::error::/health answered '$body', expected {\"status\":\"ok\"}."; exit 1; }
+      - name: Check Production behavior
+        run: |
+          me=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/me)
+          test "$me" = 401 || { echo "::error::Anonymous /me answered $me, expected 401."; exit 1; }
+          openapi=$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8080/openapi/v1.json)
+          test "$openapi" != 200 || { echo "::error::Production serves the OpenAPI document."; exit 1; }
+      - name: Check the image runs unprivileged and trusts the Supabase CA
+        run: |
+          test "$(docker exec api id -u)" != 0 || { echo "::error::The API runs as root."; exit 1; }
+          docker exec api test -e /etc/ssl/certs/supabase-root-2021.pem ||
+            { echo "::error::The Supabase root CA is not in the system trust store (ADR-011)."; exit 1; }
+      - name: Show API logs
+        if: failure()
+        run: docker logs api || true
+      - name: Remove the container
+        if: always()
+        run: docker rm --force api || true

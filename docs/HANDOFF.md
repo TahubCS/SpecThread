@@ -1,5 +1,66 @@
 # Shared handoff
 
+## Current task: Stabilize the current features (2026-10-17)
+
+- Branch: `fix/stabilize-current-features`, from `main` at `c1928d9`. Fixes only; no new
+  features. Opened as one pull request into `main`.
+- Completed:
+  - CI on `main` was red: the home page tests got 429 from Better Auth's rate limit,
+    because every browser test came from 127.0.0.1. Each test now has its own client IP
+    (`tests/e2e/fixtures.ts`). The root `package.json` now pins better-auth 1.7.5, as the
+    web app does, so the lockfile resolves one copy.
+  - Fewer repeated lookups on the web side (ADR-042). The page gate remembers finished
+    setup in a signed cookie instead of calling the API on every navigation; `apiFetch`
+    exchanges the session for a token once per render; team pages look up the session once;
+    project, requirement, and team pages start their API reads together.
+  - API fixes. Requirement create, update, and archive lock the project's team, so nothing
+    is written to a project that is being archived. A GitHub secondary rate limit (403 with
+    retry-after) is reported as GitHub unavailable (502); before, refresh quietly kept stale data.
+  - Evidence refresh reads GitHub with up to four calls at once and keeps earlier "included"
+    answers while the release and change commits are unchanged.
+  - Sign-in pages show only the providers this deployment has configured. Login treats only
+    EMAIL_NOT_VERIFIED as "verify your email", and reset treats only INVALID_TOKEN as an
+    expired link.
+  - When a requirement's author is the only member of the team, the review notice links to
+    the team's invitations. The review rule (ADR-038) is unchanged.
+  - Baseline security headers (no framing, nosniff, referrer policy); CI actions on v5.
+  - A new CI job, `api-image`, builds and boots the Docker image Render deploys and checks
+    `/health`, Production behavior, the non-root user, and the Supabase CA. Before this, no
+    check covered the API deployment.
+- Changed files: `app/web/src/{proxy.ts,lib/{api,teams,team-projects,invitations,sign-in-methods,onboarding-cookie,create-auth}.ts}`,
+  project/team/login/signup/account pages, `components/{auth-form,password-forms,review-panel}.tsx`,
+  `app/web/next.config.ts`, `app/api/{Requirements/RequirementEndpoints,Projects/ProjectEndpoints,GitHub/EvidenceEndpoints,GitHub/GitHubClient}.cs`,
+  `scripts/test-github.mjs`, `playwright.config.ts`, tests in `tests/{e2e,api,schema,support}`,
+  `.github/workflows/ci.yml`, `package.json`, `package-lock.json`, and
+  `docs/{ARCHITECTURE,DECISIONS,TESTING,HANDOFF}.md`.
+- Decisions and assumptions:
+  - ADR-042 (setup cookie and per-render reads).
+  - Kept as is, on purpose: a half-configured Google sign-in still disables Google rather
+    than failing startup (ADR-016 and its test); `enforce-pr.yml` is unchanged.
+  - The deleted-release case in the release evidence test now uses a commit history that
+    real git can produce, because reused "included" answers assume history for a fixed SHA
+    does not change.
+- Checks, all on the final code: `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, `npm run build:api`, `npm run build`,
+  `dotnet ef migrations has-pending-model-changes` (no changes; run with a dummy connection
+  string), `git diff --check`, and one full `CI=1 npm test`: 323 passed. Before the changes,
+  the same full run had 316 passed and 1 failed with the 429. The new secondary rate-limit
+  test failed against the old client code. The revoked-session test passed 15 repeated runs
+  after its missing `await` was fixed.
+- Known issues or risks: none of these were run against Vercel, Render, or Supabase.
+  Chromium 141 was used locally instead of the version Playwright 1.63 expects. The CI
+  action upgrade is verified only by the pull request's own CI run. `main` has no branch
+  protection; protecting it and requiring the `verify` check is a repository setting a
+  maintainer must change. Out of scope (new features): webhooks, an audit trail, the
+  Playwright verification feature, real dashboard data, the placeholder pages, and
+  privacy/terms content.
+- The `api-image` steps were run locally against the image's real runtime stage: all
+  passed, and the CA check failed for an image built without the CA. The local build had
+  to trust this sandbox's HTTPS proxy in a scratch copy of the build stage; the repository's
+  Dockerfile is unchanged.
+- Exact next step: review and merge the pull request after its CI is green, then protect
+  `main` in the repository settings and require both `verify` and `api-image`.
+
 ## Current task: Merge main (teams) into feature/project-ui (2026-10-08)
 
 - Branch: `feature/project-ui`, merging `origin/main` at `0e6077b` (PR #14, teams).

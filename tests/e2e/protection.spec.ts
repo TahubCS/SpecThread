@@ -120,7 +120,8 @@ test("a session revoked while browsing is sent to login on the next page", async
     await context.addCookies([seeded.cookie]);
     await page.goto("/dashboard");
     await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-    seeded.remove();
+    // Wait for the deletion, or the next navigation can still find the session.
+    await seeded.remove();
     await page.goto("/teams");
     await expect(page).toHaveURL(/\/login\?next=%2Fteams$/);
   } finally {
@@ -143,5 +144,14 @@ test("the gate forwards Better Auth's refreshed session cookie", async ({ playwr
   } finally {
     await request.dispose();
     seeded.remove();
+  }
+});
+
+test("pages and auth responses carry the baseline security headers", async ({ request }) => {
+  for (const path of ["/", "/login", "/api/auth/get-session"]) {
+    const headers = (await request.get(path)).headers();
+    expect(headers["x-frame-options"], path).toBe("DENY");
+    expect(headers["x-content-type-options"], path).toBe("nosniff");
+    expect(headers["referrer-policy"], path).toBe("strict-origin-when-cross-origin");
   }
 });

@@ -209,6 +209,8 @@ test("GitHub failures map to 502, 503, and 409 and never save a partial refresh"
   for (const [bearer, data, status] of [
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 500 }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, close: true }, 502],
+    // GitHub's secondary rate limit answers 403 with retry-after; it is not a missing item.
+    ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 403, body: { message: "You have exceeded a secondary rate limit." }, headers: { "retry-after": "60" } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 2, title: 5 } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 9, title: "Wrong item", state: "open", html_url: "https://github.com/a/b/issues/9", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" } }, 502],
     ["installation", { path: `^/repositories/${repositoryId}/issues/2$`, status: 200, body: { number: 2, title: "Bad link", state: "open", html_url: "https://evil.example/2", created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" } }, 502],
@@ -480,10 +482,19 @@ test("releases are linked by tag or address, and each records which linked chang
   expect((await member.post(`${path}/refresh`)).status()).toBe(200);
   expect((await byTag("v1.4.0")).contains).toEqual({ [ids["9"]]: true, [ids[late]]: true, [ids[gone]]: false, [ids[added]]: false });
 
-  // A release deleted on GitHub keeps its snapshot and is still compared through its stored commit.
-  await request.put(`${gitHub}/__github/repositories/${repositoryId}/releases`, { data: { releases: [{ tag: "kept-for-compare", published_at: "2026-09-25T10:00:00Z", sha: one, contains: [squash] }] } });
+  // An answer of "included" stands while the release and the change keep their commits, because a
+  // commit's history cannot change; only "not included" is asked again.
+  const compares = async () => (await (await request.get(`${gitHub}/__github/requests?path=${encodeURIComponent(`^/repositories/${repositoryId}/compare/`)}`)).json()).count;
+  const asked = await compares();
   expect((await member.post(`${path}/refresh`)).status()).toBe(200);
-  expect(await byTag("v1.4.0")).toMatchObject({ title: "Guest checkout", sha: one, contains: { [ids["9"]]: true, [ids[late]]: false } });
+  const notIncluded = [await byTag("v1.4.0"), await byTag("release/2.0-rc.1"), await byTag("1234567"), await byTag("v1.0+build")]
+    .flatMap(release => Object.values(release.contains as Record<string, boolean>)).filter(value => !value).length;
+  expect(await compares() - asked).toBe(notIncluded);
+
+  // A release deleted on GitHub keeps its snapshot and is still compared through its stored commit.
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/releases`, { data: { releases: [{ tag: "kept-for-compare", published_at: "2026-09-25T10:00:00Z", sha: one, contains: [squash, late, added] }] } });
+  expect((await member.post(`${path}/refresh`)).status()).toBe(200);
+  expect(await byTag("v1.4.0")).toMatchObject({ title: "Guest checkout", sha: one, contains: { [ids["9"]]: true, [ids[late]]: true, [ids[gone]]: false, [ids[added]]: true } });
 });
 
 test("the release migration constrains what a release row can be, and its rollback removes release links only", async () => {
