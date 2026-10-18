@@ -181,6 +181,11 @@ attached to the schema test report; they are not a production speedup guarantee.
 
 The ASP.NET Core Web API is packaged as an unprivileged, multi-stage Linux container using the official Microsoft .NET 10 runtime images.
 
+Render builds this image only after a merge to `main`, so the CI job `api-image` builds
+and boots the same image on every pull request first (docs/TESTING.md). It checks that the
+container starts in Production and answers `/health`; it does not reach Supabase or check
+Render's own settings.
+
 ### Method A: Using the Render Blueprint (`render.yaml`)
 1. In the Render Dashboard, click **New > Blueprint**.
 2. Connect the **SpecThread** repository.

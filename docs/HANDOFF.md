@@ -24,6 +24,9 @@
   - When a requirement's author is the only member of the team, the review notice links to
     the team's invitations. The review rule (ADR-038) is unchanged.
   - Baseline security headers (no framing, nosniff, referrer policy); CI actions on v5.
+  - A new CI job, `api-image`, builds and boots the Docker image Render deploys and checks
+    `/health`, Production behavior, the non-root user, and the Supabase CA. Before this, no
+    check covered the API deployment.
 - Changed files: `app/web/src/{proxy.ts,lib/{api,teams,team-projects,invitations,sign-in-methods,onboarding-cookie,create-auth}.ts}`,
   project/team/login/signup/account pages, `components/{auth-form,password-forms,review-panel}.tsx`,
   `app/web/next.config.ts`, `app/api/{Requirements/RequirementEndpoints,Projects/ProjectEndpoints,GitHub/EvidenceEndpoints,GitHub/GitHubClient}.cs`,
@@ -51,8 +54,12 @@
   maintainer must change. Out of scope (new features): webhooks, an audit trail, the
   Playwright verification feature, real dashboard data, the placeholder pages, and
   privacy/terms content.
+- The `api-image` steps were run locally against the image's real runtime stage: all
+  passed, and the CA check failed for an image built without the CA. The local build had
+  to trust this sandbox's HTTPS proxy in a scratch copy of the build stage; the repository's
+  Dockerfile is unchanged.
 - Exact next step: review and merge the pull request after its CI is green, then protect
-  `main` in the repository settings.
+  `main` in the repository settings and require both `verify` and `api-image`.
 
 ## Current task: Merge main (teams) into feature/project-ui (2026-10-08)
 

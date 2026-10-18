@@ -22,6 +22,13 @@ On Linux CI install browsers with `npx playwright install --with-deps chromium`.
 The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
+A second CI job, `api-image`, builds the root Dockerfile that Render deploys and runs
+it as Render does: Production, port 8080, no database or issuer. It requires `/health`
+to answer `{"status":"ok"}`, anonymous `/me` to answer 401, the OpenAPI document not to
+be served, the process not to run as root, and the Supabase root CA to be in the image's
+trust store. Reproduce it with `docker build --tag specthread-api:ci .` and
+`docker run --rm --publish 8080:8080 specthread-api:ci`.
+
 The test web server and schema project require a running Docker engine and
 postgres:17. The first webServer entry calls scripts/build-api.mjs before starting
 the second entry (the API). Do not move that build into globalSetup: Playwright
