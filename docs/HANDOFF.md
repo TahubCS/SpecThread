@@ -1,9 +1,39 @@
 # Shared handoff
 
-## Current task: Page load time (2026-10-18)
+## Current task: Apply migrations and deploy the API from CI (2026-10-18)
 
-- Branch: `fix/page-load-time`, rebuilt on `main` at `3d8d68e` (PR #16 merged). One pull
-  request into `main`.
+- Branch: `feature/ci-db-migrations`, from `main` at `3d8d68e`, with `main` merged in at
+  `3868cef` (PR #17, page load time). One pull request into `main`.
+- Completed (ADR-044):
+  - `.github/workflows/ci.yml`: new job `deploy-api`, on pushes to `main` only, after
+    `verify` and `api-image`. It builds an EF migration bundle, trusts the Supabase CA,
+    applies pending migrations, then calls Render's deploy hook with `ref` set to the commit.
+    It runs in the GitHub environment `api-deploy`, one at a time, never cancelled midway.
+  - `render.yaml`: `autoDeployTrigger: off`.
+  - `docs/{DECISIONS,DATABASE,DEPLOYMENT,TESTING,HANDOFF}.md`.
+- Decisions and assumptions:
+  - The environment is `api-deploy`, not `production`: GitHub environment names ignore case,
+    and Vercel already uses Production. Render's `main - specthread-api` is left to Render.
+  - Muhammad reports `api-deploy` is configured with `DATABASE_MIGRATION_CONNECTION_STRING`
+    and `RENDER_DEPLOY_HOOK_URL`, and Render's auto-deploy is handled. Not checked here.
+  - Building the bundle needs a connection string; a dummy is used. Checked locally: the
+    bundle reads `ConnectionStrings__Database` when it runs (an unreachable host was tried,
+    not the dummy), and exits 1 when none is set.
+- Checks: listed in the pull request; the job itself runs only after the merge.
+- Known issues or risks:
+  - **Merging this pull request runs the job for the first time**, against Supabase. If a
+    migration was ever applied without its `__EFMigrationsHistory` row, that run fails on it.
+  - The bundle was never run against a real database here (Docker was not running). The
+    deploy hook call and the CA install were not run outside CI.
+  - Each migration must work with the API already running (ADR-044). Rollback is manual.
+- Next step: run `dotnet ef migrations list --project app/api` against Supabase (read
+  only) and confirm no migration shows as pending that is already in the database; then
+  merge, and approve the `deploy-api` run if `api-deploy` requires a reviewer.
+
+## Previous task: Page load time (2026-10-18)
+
+- Branch: `fix/page-load-time`, rebuilt on `main` at `3d8d68e` (PR #16 merged). Merged
+  into `main` as PR #17.
 - Problem: every page took about two seconds against the hosted database, and the dev
   server's log showed Supabase refusing connections ("max clients reached in session
   mode ... pool_size: 15").
@@ -35,8 +65,8 @@
   - About one session read per prefetched link remains. Reducing it needs a decision:
     let the gate trust a recent session check (sign-out would take that long to apply),
     or prefetch fewer links.
-- Next step: review and merge the pull request after CI is green, then try the app
-  against the hosted database and decide on the remaining session reads.
+- Next step: try the app against the hosted database and decide on the remaining session
+  reads.
 
 ## Previous task: Stabilize the current features (2026-10-17)
 

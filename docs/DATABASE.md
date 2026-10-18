@@ -59,6 +59,15 @@ Review the generated migration and SQL before applying it. Document the target,
 backup needs, and rollback. Prefer a direct connection for migration execution;
 consult Supabase's connection guidance for IPv4-only environments.
 
+After a merge to `main`, the CI job `deploy-api` applies pending migrations to Supabase
+and then deploys the API (ADR-044). It connects with the `DATABASE_MIGRATION_CONNECTION_STRING`
+secret in the GitHub environment `api-deploy`: the session pooler string (port 5432,
+`SSL Mode=VerifyFull`), because GitHub's runners have no IPv6 for the direct connection.
+A migration must work with the API version already running, because that version serves
+requests until the new one starts. Rollback stays manual. `dotnet ef migrations list
+--project app/api` with the Supabase connection string shows which migrations are
+applied, without changing anything.
+
 Do not run `database update`, ad-hoc MCP SQL, or schema edits before EF Core is
 initialized and the intended schema change is reviewed. Do not introduce a
 second Supabase CLI or Drizzle migration history. Do not map or alter Supabase's

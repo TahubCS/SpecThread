@@ -186,6 +186,15 @@ and boots the same image on every pull request first (docs/TESTING.md). It check
 container starts in Production and answers `/health`; it does not reach Supabase or check
 Render's own settings.
 
+Render does not deploy by itself (`autoDeployTrigger: off` in render.yaml; for a service
+not managed by the Blueprint, set **Auto-Deploy** to **Off** in its settings). After a
+merge, the CI job `deploy-api` applies pending migrations and then calls the service's
+deploy hook for that commit (ADR-044). It needs the GitHub environment `api-deploy` with
+two secrets: `DATABASE_MIGRATION_CONNECTION_STRING` (the same value as Render's
+`ConnectionStrings__Database`) and `RENDER_DEPLOY_HOOK_URL` (Render: **Settings > Deploy
+Hook**). Adding yourself as a required reviewer on `api-deploy` makes each production
+migration and deploy wait for approval. To deploy by hand, apply the migrations first.
+
 ### Method A: Using the Render Blueprint (`render.yaml`)
 1. In the Render Dashboard, click **New > Blueprint**.
 2. Connect the **SpecThread** repository.

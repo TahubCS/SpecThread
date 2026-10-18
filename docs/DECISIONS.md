@@ -1014,6 +1014,34 @@ API tokens for 60 seconds and finished onboarding for an hour in server memory; 
 replaced both, so the statement counts measured with that version (dashboard 170 to
 27, requirement page 300 to 69) have not been measured again for this combination.
 
+ADR-044: CI applies migrations after a merge, then deploys the API
+
+Status: Accepted
+
+Context: Migrations were applied by hand (`dotnet ef database update` or the scripts in
+docs/schema), and Render deployed the API on every commit to `main` by itself. Each
+migration had to reach Supabase before the API that needs it, so a merge meant a manual
+step that was easy to forget or to do in the wrong order. ADR-007 forbids applying
+migrations on API startup and any second migration history.
+
+Decision: The CI job `deploy-api` (.github/workflows/ci.yml) runs on pushes to `main`
+only, after `verify` and `api-image` pass. It builds an EF Core migration bundle, applies
+the pending migrations to Supabase with the `DATABASE_MIGRATION_CONNECTION_STRING`
+secret, and then calls Render's deploy hook (`RENDER_DEPLOY_HOOK_URL`) with `ref` set to
+the same commit. Both secrets live in the GitHub environment `api-deploy`, not in the
+environments Render and Vercel create for their own deployments. Render's auto-deploy is
+off (`autoDeployTrigger: off` in render.yaml). One deploy runs at a time and is never
+cancelled partway through. EF remains the only migration history.
+
+Consequences: A merge reaches the API only after its checks pass and its migrations are
+applied; a failed migration stops the job and nothing is deployed. Between the migration
+and the new API starting, the previous API runs against the new schema, so every
+migration must work with the API version already running: drop or rename a column only
+after a deploy that no longer uses it. Rollback stays manual (`dotnet ef database update
+<previous migration>` or the matching rollback script). If the job is skipped or fails,
+deploy the API from the Render dashboard only after the migrations are applied. The web
+app still deploys from Vercel on merge, independently of this job.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

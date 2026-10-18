@@ -69,3 +69,50 @@ jobs:
       - name: Remove the container
         if: always()
         run: docker rm --force api || true
+
+  # After a merge, apply pending EF Core migrations to Supabase, then deploy that same commit
+  # to Render, so the new API never starts before its schema exists (ADR-044). Render's own
+  # auto-deploy is off (render.yaml). The `api-deploy` environment holds the two secrets.
+  deploy-api:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [verify, api-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: api-deploy
+    # One deploy at a time. A newer merge waits for the running one instead of cancelling it
+    # halfway through a migration.
+    concurrency:
+      group: deploy-api
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - run: dotnet restore app/api --locked-mode
+      - run: dotnet tool restore
+      - name: Build the migration bundle
+        # Building constructs the DbContext, which needs some connection string. This one is
+        # never contacted; the bundle reads the real one when it runs.
+        env:
+          ConnectionStrings__Database: Host=bundle-build.invalid;Database=unused
+        run: dotnet ef migrations bundle --project app/api --configuration Release --output efbundle --force
+      - name: Trust the Supabase root CA
+        # The connection string uses SSL Mode=VerifyFull, as on Render (ADR-011).
+        run: |
+          sudo cp app/api/certs/prod-ca-2021.crt /usr/local/share/ca-certificates/supabase-root-2021.crt
+          sudo update-ca-certificates
+      - name: Apply pending migrations
+        env:
+          ConnectionStrings__Database: ${{ secrets.DATABASE_MIGRATION_CONNECTION_STRING }}
+        run: |
+          test -n "$ConnectionStrings__Database" ||
+            { echo "::error::Set the DATABASE_MIGRATION_CONNECTION_STRING secret in the api-deploy environment."; exit 1; }
+          ./efbundle
+      - name: Deploy this commit to Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          test -n "$RENDER_DEPLOY_HOOK_URL" ||
+            { echo "::error::Set the RENDER_DEPLOY_HOOK_URL secret in the api-deploy environment."; exit 1; }
+          curl --silent --show-error --fail --request POST --output /dev/null "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}"
