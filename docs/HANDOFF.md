@@ -9,15 +9,21 @@
   (ADR-042) existed, so every signed-in navigation failed.
 - Completed: the gate now logs the failure (with the status, and a hint that 401 means
   `Auth__Issuer` differs from `BETTER_AUTH_URL`) and lets the page render without the cookie.
-  The session check still fails closed. ADR-042 and DEPLOYMENT.md updated; DEPLOYMENT.md
-  examples now use `https://spec-thread.com` as the issuer.
+  The session check still fails closed. Recorded as ADR-045. DEPLOYMENT.md examples now use
+  `https://spec-thread.com` as the issuer, and its troubleshooting covers the log line.
 - Changed files: `app/web/src/proxy.ts`, `tests/e2e/onboarding.spec.ts`,
   `docs/{DECISIONS,DEPLOYMENT,HANDOFF}.md`.
 - Assumption: the live failure is most likely Render's `Auth__Issuer` still naming the old
   vercel.app origin after the move to spec-thread.com. Not verified: Vercel and Render
   settings and logs were not reachable from this environment.
-- Checks: the new browser test failed against the old gate (dashboard never loaded) and
-  passes with the fix; see the PR for lint, typecheck, and the full suite.
+- Checks:
+  - `CI= npx playwright test --project=chromium tests/e2e/onboarding.spec.ts -g "setup check fails"`:
+    failed against the old gate (the dashboard never loaded; the server logged "Account setup
+    could not be checked."), passes with the fix.
+  - Onboarding, landing, protection, shell, and teams browser specs: 39 passed. Without the
+    new test, no "Onboarding check failed" line is logged.
+  - `npm run lint`, `npm run typecheck`, `git diff --check`: passed.
+  - `CI=1 npm test`, one full run: 324 passed.
 - Exact next step: merge, then confirm Render `Auth__Issuer` equals Vercel `BETTER_AUTH_URL`
   (`https://spec-thread.com`) and that Vercel logs show no "Onboarding check failed" line.
 

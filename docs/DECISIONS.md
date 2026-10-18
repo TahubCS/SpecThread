@@ -981,10 +981,6 @@ setup. Rotating BETTER_AUTH_SECRET invalidates the cookie, which costs one API c
 per user. The API answers and authorizes every read as before, so the parallel reads
 change no access rules; a requirement in another project still shows the not-found
 page before anything renders.
-If the setup check itself fails (the API is unreachable, misconfigured, or answers an
-error), the gate logs the status and lets the page render without setting the cookie,
-so the next navigation asks again. Before, the gate threw and every signed-in page
-answered a bare 500; pages that need the API now show their own error states.
 
 ADR-043: No token on every session read, and small database pools
 
@@ -1045,6 +1041,26 @@ after a deploy that no longer uses it. Rollback stays manual (`dotnet ef databas
 <previous migration>` or the matching rollback script). If the job is skipped or fails,
 deploy the API from the Render dashboard only after the migrations are applied. The web
 app still deploys from Vercel on merge, independently of this job.
+
+ADR-045: A failed setup check is logged and skipped, not fatal
+
+Status: Accepted
+
+Context: The page gate (ADR-023) asks the API whether first-team setup is finished until
+the cookie of ADR-042 exists. When that call failed (the API unreachable, misconfigured, or
+rejecting the web app's tokens), the gate threw, and every signed-in page answered a bare
+500. On spec-thread.com the landing Dashboard link then did nothing and team pages showed
+"Internal Server Error".
+
+Decision: When the setup check fails, the gate logs the status (or the error and its cause)
+and lets the page render without setting the cookie, so the next navigation asks again.
+The session check before it is unchanged and still fails closed. This refines ADR-042,
+which assumed the check succeeds.
+
+Consequences: Pages that need the API show their own error states instead of a bare 500.
+While the API is failing, a user who has not finished setup can open workspace pages
+instead of being sent to /onboarding; the API still refuses project creation before
+setup, so this changes no access rule.
 
 ADR-NNN: Title
 

@@ -12,7 +12,7 @@ import { ONBOARDED_COOKIE, ONBOARDED_MAX_AGE, isOnboardedCookie, onboardedCookie
  * Cookies Better Auth sets during the lookup (a refreshed session, or clearing an invalid one)
  * are forwarded, so the rolling session keeps extending while the user browses.
  * Finished first-team setup is remembered in a signed cookie, so only the first navigation
- * after signing in asks the API (ADR-042). If that check fails it is logged and skipped.
+ * after signing in asks the API (ADR-042). If that check fails it is logged and skipped (ADR-045).
  */
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
  * Asks the API whether first-team setup is finished, or returns null when it cannot tell. The setup
  * redirect is guidance, not access control: the API itself refuses project creation before setup.
  * So an unreachable or misconfigured API is logged and skipped here, and the page's own error state
- * reports it, instead of every signed-in page answering a bare 500 (ADR-042).
+ * reports it, instead of every signed-in page answering a bare 500 (ADR-045).
  */
 async function onboardingCompleted(headers: Headers): Promise<boolean | null> {
   try {
@@ -51,7 +51,10 @@ async function onboardingCompleted(headers: Headers): Promise<boolean | null> {
     console.error(`Onboarding check failed (status ${state.status}); continuing without it.` +
       (state.status === 401 ? " A 401 usually means the API's Auth__Issuer differs from BETTER_AUTH_URL." : ""));
   } catch (error) {
-    console.error("Onboarding check failed; continuing without it.", error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error");
+    // A failed fetch says only "fetch failed"; its cause names the problem, such as ECONNREFUSED.
+    const cause = error instanceof Error && error.cause instanceof Error ? ` (cause: ${error.cause.message})` : "";
+    console.error("Onboarding check failed; continuing without it.",
+      error instanceof Error ? `${error.name}: ${error.message}${cause}` : "Unknown error");
   }
   return null;
 }

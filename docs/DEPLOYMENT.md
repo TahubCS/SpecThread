@@ -269,8 +269,9 @@ page requests. Deploy the API and schema before the matching web release:
    Verify resend rotates the link and Copy link remains available if delivery fails.
 
 An API configured for one issuer rejects tokens from previews with a different
-Better Auth origin. Give previews their own matching API/database. A failed
-onboarding check fails closed; the API's availability now affects protected pages.
+Better Auth origin. Give previews their own matching API/database. Only the session
+check fails closed; a failed onboarding check is logged and skipped (ADR-045), so pages
+that need the API show their own error states when it is unavailable.
 Render's free plan can cold-start slowly; pages provide loading/retry states.
 The project creation form must send `teamId`, and management controls use `teamRole`;
 Claude owns those global project pages/forms. Team archive restoration uses the
@@ -279,11 +280,13 @@ existing project restore API and rechecks current Owner/Admin permission.
 ## 3. Post-Deployment Verification
 
 If signed-in pages fail or the Vercel logs show `Onboarding check failed (status 401)`,
-the API is rejecting the web app's tokens: Render's `Auth__Issuer` must equal Vercel's
-`BETTER_AUTH_URL` exactly, including after a domain change. Any other status, or a
-failure with no status, means the API is unreachable or failing; check
+the API rejected the web app's token. Check first that Render's `Auth__Issuer` equals
+Vercel's `BETTER_AUTH_URL` exactly, including after a domain change; that is the most
+likely cause. Other token problems (an expired token, a signing key the API cannot
+fetch from the web app's JWKS, or a wrong audience) also answer 401. Any other status,
+or a failure with no status, means the API is unreachable or failing; check
 `SPECTHREAD_API_URL` and the Render service. The page gate logs and skips a failed setup
-check rather than failing the page (ADR-042).
+check rather than failing the page (ADR-045).
 
 ### Web Verification
 - Open `https://your-app.vercel.app/` in your browser. Verify the home page, responsive layout, and skip link.
