@@ -199,7 +199,7 @@ migration and deploy wait for approval. To deploy by hand, apply the migrations 
 1. In the Render Dashboard, click **New > Blueprint**.
 2. Connect the **SpecThread** repository.
 3. Render will detect [`render.yaml`](../render.yaml) and configure the `specthread-api` web service automatically.
-4. Enter the required values for `ConnectionStrings__Database` and `Auth__Issuer` (the web app's exact origin, e.g. `https://web-alpha-lovat-61.vercel.app`, no trailing slash).
+4. Enter the required values for `ConnectionStrings__Database` and `Auth__Issuer` (the web app's exact origin, the same value as Vercel's `BETTER_AUTH_URL`, e.g. `https://spec-thread.com`, no trailing slash).
 5. Click **Apply**.
 
 ### Method B: Manual Web Service Setup
@@ -215,7 +215,7 @@ migration and deploy wait for approval. To deploy by hand, apply the migrations 
    * **Health Check Path**: `/health` (returns `{"status":"ok"}`)
    * **Environment Variables**:
      * `ASPNETCORE_ENVIRONMENT`: `Production`
-     * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://web-alpha-lovat-61.vercel.app`). Required for authenticated endpoints; see ADR-015.
+     * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://spec-thread.com`). Required for authenticated endpoints; see ADR-015.
      * `ConnectionStrings__Database`: Your Supabase Npgsql connection string (e.g. `Host=aws-0-us-west-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.hgcjtecsglksdbsmtcxt;Password=<PASSWORD>;SSL Mode=VerifyFull;`)
 5. Click **Deploy Web Service**.
 
@@ -277,6 +277,13 @@ Claude owns those global project pages/forms. Team archive restoration uses the
 existing project restore API and rechecks current Owner/Admin permission.
 
 ## 3. Post-Deployment Verification
+
+If signed-in pages fail or the Vercel logs show `Onboarding check failed (status 401)`,
+the API is rejecting the web app's tokens: Render's `Auth__Issuer` must equal Vercel's
+`BETTER_AUTH_URL` exactly, including after a domain change. Any other status, or a
+failure with no status, means the API is unreachable or failing; check
+`SPECTHREAD_API_URL` and the Render service. The page gate logs and skips a failed setup
+check rather than failing the page (ADR-042).
 
 ### Web Verification
 - Open `https://your-app.vercel.app/` in your browser. Verify the home page, responsive layout, and skip link.

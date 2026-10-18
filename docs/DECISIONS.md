@@ -981,6 +981,10 @@ setup. Rotating BETTER_AUTH_SECRET invalidates the cookie, which costs one API c
 per user. The API answers and authorizes every read as before, so the parallel reads
 change no access rules; a requirement in another project still shows the not-found
 page before anything renders.
+If the setup check itself fails (the API is unreachable, misconfigured, or answers an
+error), the gate logs the status and lets the page render without setting the cookie,
+so the next navigation asks again. Before, the gate threw and every signed-in page
+answered a bare 500; pages that need the API now show their own error states.
 
 ADR-043: No token on every session read, and small database pools
 

@@ -1,5 +1,26 @@
 # Shared handoff
 
+## Current task: Signed-in pages answered a bare 500 (2026-10-18)
+
+- Branch: `fix/onboarding-gate-failure`, from `main` at `5173f56`.
+- Problem: on spec-thread.com, a signed-in user's landing **Dashboard** link did nothing and
+  team pages showed a plain "Internal Server Error". The page gate (`app/web/src/proxy.ts`)
+  threw whenever its `GET /onboarding` call to the API failed, before the setup cookie
+  (ADR-042) existed, so every signed-in navigation failed.
+- Completed: the gate now logs the failure (with the status, and a hint that 401 means
+  `Auth__Issuer` differs from `BETTER_AUTH_URL`) and lets the page render without the cookie.
+  The session check still fails closed. ADR-042 and DEPLOYMENT.md updated; DEPLOYMENT.md
+  examples now use `https://spec-thread.com` as the issuer.
+- Changed files: `app/web/src/proxy.ts`, `tests/e2e/onboarding.spec.ts`,
+  `docs/{DECISIONS,DEPLOYMENT,HANDOFF}.md`.
+- Assumption: the live failure is most likely Render's `Auth__Issuer` still naming the old
+  vercel.app origin after the move to spec-thread.com. Not verified: Vercel and Render
+  settings and logs were not reachable from this environment.
+- Checks: the new browser test failed against the old gate (dashboard never loaded) and
+  passes with the fix; see the PR for lint, typecheck, and the full suite.
+- Exact next step: merge, then confirm Render `Auth__Issuer` equals Vercel `BETTER_AUTH_URL`
+  (`https://spec-thread.com`) and that Vercel logs show no "Onboarding check failed" line.
+
 ## Current task: Apply migrations and deploy the API from CI (2026-10-18)
 
 - Branch: `feature/ci-db-migrations`, from `main` at `3d8d68e`, with `main` merged in at

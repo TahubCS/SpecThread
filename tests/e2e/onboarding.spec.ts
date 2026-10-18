@@ -1,5 +1,6 @@
 import { ONBOARDED_COOKIE, onboardedCookieValue } from "../../app/web/src/lib/onboarding-cookie";
 import { createTestSession, expect, test } from "./fixtures";
+import { clearApiFaults, failApi } from "../support/api-faults";
 
 const secret = () => process.env.SPECTHREAD_TEST_AUTH_SECRET!;
 
@@ -107,4 +108,30 @@ test("finished setup is remembered in a cookie bound to the user", async ({ brow
     await page.goto("/settings");
     await expect(page).toHaveURL(/\/settings$/);
   } finally { await context.close(); await done.remove(); await pending.remove(); }
+});
+
+test("when the setup check fails, signed-in pages still load and the landing Dashboard link still works", async ({ browser }) => {
+  const user = await createTestSession("Check fails");
+  const context = await browser.newContext({ baseURL: "http://127.0.0.1:3100" });
+  try {
+    await context.addCookies([user.cookie]);
+    const page = await context.newPage();
+    // 401 is what a mismatched Auth__Issuer answers; 500 and a dropped connection cover a broken API.
+    for (const fault of [{ status: 401 }, { status: 500 }, { close: true }]) {
+      await failApi(user.userId, { method: "GET", path: "^/onboarding$", ...fault });
+      await page.goto("/");
+      await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Dashboard" }).click();
+      await expect(page).toHaveURL(/\/dashboard$/);
+      await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
+      const response = await page.goto("/teams");
+      expect(response?.status(), JSON.stringify(fault)).toBe(200);
+      // Nothing was confirmed, so nothing is remembered.
+      expect((await context.cookies()).some(cookie => cookie.name === ONBOARDED_COOKIE)).toBe(false);
+      await clearApiFaults(user.userId);
+    }
+    // Once the API answers again, the check succeeds and is remembered as before.
+    await page.goto("/teams");
+    await expect(page).toHaveURL(/\/teams$/);
+    expect((await context.cookies()).some(cookie => cookie.name === ONBOARDED_COOKIE)).toBe(true);
+  } finally { await clearApiFaults(user.userId); await context.close(); await user.remove(); }
 });
