@@ -1,6 +1,44 @@
 # Shared handoff
 
-## Current task: Stabilize the current features (2026-10-17)
+## Current task: Page load time (2026-10-18)
+
+- Branch: `fix/page-load-time`, rebuilt on `main` at `3d8d68e` (PR #16 merged). One pull
+  request into `main`.
+- Problem: every page took about two seconds against the hosted database, and the dev
+  server's log showed Supabase refusing connections ("max clients reached in session
+  mode ... pool_size: 15").
+- Completed (ADR-043):
+  - `app/web/src/lib/create-auth.ts`: the jwt plugin no longer signs a token on every
+    session read (`disableSettingJwtHeader`).
+  - `app/web/src/lib/auth.ts`: one auth instance, and so one database pool, per process.
+  - `app/web/src/lib/auth-config.ts`: the web pool holds at most 4 connections.
+  - `app/api/Program.cs`: the API pool holds at most 5 unless the connection string sets
+    `Maximum Pool Size`. `docs/DATABASE.md` explains the shared 15-connection limit.
+- Merged with PR #16, which did overlapping work (ADR-042). Kept `main`'s version where
+  both sides did the same thing: the signed onboarding cookie instead of this branch's
+  one-hour in-memory cache, React `cache()` for the per-render token instead of this
+  branch's 60-second token cache, and per-test client IPs instead of clearing the
+  `rateLimit` table in `tests/e2e/home.spec.ts`. The project page parallel reads were
+  already identical. So `app/web/src/lib/request-cache.ts` and
+  `tests/api/request-cache.spec.ts` are not in this branch; the earlier version is in
+  `git stash` ("fix/page-load-time local work before merging main") on Muhammad's machine.
+- Checks on the merged code: `npm run lint`, `npm run typecheck`, `npm run build:api`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `npm run build` passed.
+  Tests were not run locally (they run in CI); no test changed in this branch.
+- Known issues and risks:
+  - **Not measured against the hosted database**, and the earlier statement counts
+    (dashboard 170 to 27, requirement page 300 to 69) were taken with the replaced
+    caches, so they have not been measured for this combination.
+  - The 15-connection limit is shared by local development, Vercel, and Render when they
+    use the same session pooler. The caps make exhaustion unlikely, not impossible; the
+    transaction pooler (port 6543) is the lasting fix and is not set up or tested.
+  - About one session read per prefetched link remains. Reducing it needs a decision:
+    let the gate trust a recent session check (sign-out would take that long to apply),
+    or prefetch fewer links.
+- Next step: review and merge the pull request after CI is green, then try the app
+  against the hosted database and decide on the remaining session reads.
+
+## Previous task: Stabilize the current features (2026-10-17)
 
 - Branch: `fix/stabilize-current-features`, from `main` at `c1928d9`. Fixes only; no new
   features. Opened as one pull request into `main`.
@@ -61,7 +99,7 @@
 - Exact next step: review and merge the pull request after its CI is green, then protect
   `main` in the repository settings and require both `verify` and `api-image`.
 
-## Current task: Merge main (teams) into feature/project-ui (2026-10-08)
+## Previous task: Merge main (teams) into feature/project-ui (2026-10-08)
 
 - Branch: `feature/project-ui`, merging `origin/main` at `0e6077b` (PR #14, teams).
   The merge is resolved in the working tree and **not committed**; `git commit`

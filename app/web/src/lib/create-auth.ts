@@ -66,8 +66,11 @@ export function createAuth(env: Record<string, string | undefined>, overrides: {
       },
     },
     plugins: [
-      // ES256 so the ASP.NET API can validate tokens natively (ADR-015).
-      jwt({ jwks: { keyPairConfig: { alg: "ES256" } } }),
+      // ES256 so the ASP.NET API can validate tokens natively (ADR-015). By default the plugin
+      // also signs a token on every session read and returns it in a header, which costs a
+      // database read each time and hands the browser a token nothing uses. Tokens are
+      // created only where the server calls the API (lib/api.ts).
+      jwt({ jwks: { keyPairConfig: { alg: "ES256" } }, disableSettingJwtHeader: true }),
       ...(config.dashboardApiKey ? [dash({ apiKey: config.dashboardApiKey })] : []),
     ],
     advanced: {
