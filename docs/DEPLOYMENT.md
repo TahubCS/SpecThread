@@ -9,6 +9,13 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 
 ## 1. Web Deployment (Vercel)
 
+### Region
+
+`app/web/vercel.json` runs the web app's server code in `pdx1` (Portland, Oregon), next to
+the Supabase project (us-west-2) and the Render API (oregon). Each page makes several
+sequential calls to both; from Vercel's default `iad1` every one crossed the country
+(ADR-046). If the database or API moves, move this region with it.
+
 ### Setup Steps
 1. Navigate to [vercel.com](https://vercel.com) and click **Add New > Project**.
 2. Connect your GitHub account and select the **SpecThread** repository.
@@ -22,7 +29,7 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 |---|---|---|
 | `BETTER_AUTH_SECRET` | Required random secret, at least 32 characters; no fallback | Generate via `openssl rand -hex 32` |
 | `BETTER_AUTH_URL` | Canonical public URL of your Vercel deployment | `https://your-app.vercel.app` |
-| `DATABASE_URL` | Supabase connection string for Better Auth auth tables | `postgres://postgres.[ref]:[pass]@[host]:5432/postgres` |
+| `DATABASE_URL` | Supabase **transaction pooler** connection string for Better Auth auth tables (port 6543; see DATABASE.md, ADR-046) | `postgres://postgres.[ref]:[pass]@[host]:6543/postgres?sslmode=require` |
 | `DATABASE_CA_CERT` | Full PEM contents of the project's CA certificate when not trusted by Node | Copy the certificate contents, not its local path |
 | `GITHUB_CLIENT_ID` | Client ID from your GitHub OAuth App | `Ov23li...` |
 | `GITHUB_CLIENT_SECRET` | Client Secret from your GitHub OAuth App | `<secret>` |
@@ -199,7 +206,7 @@ migration and deploy wait for approval. To deploy by hand, apply the migrations 
 1. In the Render Dashboard, click **New > Blueprint**.
 2. Connect the **SpecThread** repository.
 3. Render will detect [`render.yaml`](../render.yaml) and configure the `specthread-api` web service automatically.
-4. Enter the required values for `ConnectionStrings__Database` and `Auth__Issuer` (the web app's exact origin, e.g. `https://web-alpha-lovat-61.vercel.app`, no trailing slash).
+4. Enter the required values for `ConnectionStrings__Database` and `Auth__Issuer` (the web app's exact origin, the same value as Vercel's `BETTER_AUTH_URL`, e.g. `https://spec-thread.com`, no trailing slash).
 5. Click **Apply**.
 
 ### Method B: Manual Web Service Setup
@@ -215,7 +222,7 @@ migration and deploy wait for approval. To deploy by hand, apply the migrations 
    * **Health Check Path**: `/health` (returns `{"status":"ok"}`)
    * **Environment Variables**:
      * `ASPNETCORE_ENVIRONMENT`: `Production`
-     * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://web-alpha-lovat-61.vercel.app`). Required for authenticated endpoints; see ADR-015.
+     * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://spec-thread.com`). Required for authenticated endpoints; see ADR-015.
      * `ConnectionStrings__Database`: Your Supabase Npgsql connection string (e.g. `Host=aws-0-us-west-2.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.hgcjtecsglksdbsmtcxt;Password=<PASSWORD>;SSL Mode=VerifyFull;`)
 5. Click **Deploy Web Service**.
 
@@ -269,14 +276,24 @@ page requests. Deploy the API and schema before the matching web release:
    Verify resend rotates the link and Copy link remains available if delivery fails.
 
 An API configured for one issuer rejects tokens from previews with a different
-Better Auth origin. Give previews their own matching API/database. A failed
-onboarding check fails closed; the API's availability now affects protected pages.
+Better Auth origin. Give previews their own matching API/database. Only the session
+check fails closed; a failed onboarding check is logged and skipped (ADR-045), so pages
+that need the API show their own error states when it is unavailable.
 Render's free plan can cold-start slowly; pages provide loading/retry states.
 The project creation form must send `teamId`, and management controls use `teamRole`;
 Claude owns those global project pages/forms. Team archive restoration uses the
 existing project restore API and rechecks current Owner/Admin permission.
 
 ## 3. Post-Deployment Verification
+
+If signed-in pages fail or the Vercel logs show `Onboarding check failed (status 401)`,
+the API rejected the web app's token. Check first that Render's `Auth__Issuer` equals
+Vercel's `BETTER_AUTH_URL` exactly, including after a domain change; that is the most
+likely cause. Other token problems (an expired token, a signing key the API cannot
+fetch from the web app's JWKS, or a wrong audience) also answer 401. Any other status,
+or a failure with no status, means the API is unreachable or failing; check
+`SPECTHREAD_API_URL` and the Render service. The page gate logs and skips a failed setup
+check rather than failing the page (ADR-045).
 
 ### Web Verification
 - Open `https://your-app.vercel.app/` in your browser. Verify the home page, responsive layout, and skip link.

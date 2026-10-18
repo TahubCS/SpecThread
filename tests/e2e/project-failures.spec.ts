@@ -39,6 +39,30 @@ test("the project list shows an error page, and Try again recovers once the API 
 });
 
 for (const [label, failure] of [
+  ["fails", serverError],
+  ["is unavailable", { status: 503 }],
+  ["is unreachable", unreachable],
+] as const) {
+  test(`a read that ${label} once is retried, so the page shows its data`, async ({ page }) => {
+    await failApi(owner.userId, { method: "GET", path: "^/projects$", ...failure, times: 1 });
+    await page.goto("/projects");
+    await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
+  });
+}
+
+test("a write that fails once is not retried, so it runs at most once", async ({ page }) => {
+  // If the failed create were retried, the second attempt would reach the API and succeed.
+  await failApi(owner.userId, { method: "POST", path: "^/projects$", ...serverError, times: 1 });
+  await page.goto("/projects/new");
+  await page.getByLabel("Project name").fill("Only once");
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  await expect(page).toHaveURL(/\/projects\/new$/);
+  await page.goto("/projects");
+  await expect(page.getByText("Your teams have no projects yet.")).toBeVisible();
+});
+
+for (const [label, failure] of [
   ["is unreachable", unreachable],
   ["answers with something that is not a project list", { status: 200, body: { items: [] } }],
   ["rejects the token", { status: 401 }],

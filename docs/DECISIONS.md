@@ -1042,6 +1042,52 @@ after a deploy that no longer uses it. Rollback stays manual (`dotnet ef databas
 deploy the API from the Render dashboard only after the migrations are applied. The web
 app still deploys from Vercel on merge, independently of this job.
 
+ADR-045: A failed setup check is logged and skipped, not fatal
+
+Status: Accepted
+
+Context: The page gate (ADR-023) asks the API whether first-team setup is finished until
+the cookie of ADR-042 exists. When that call failed (the API unreachable, misconfigured, or
+rejecting the web app's tokens), the gate threw, and every signed-in page answered a bare
+500. On spec-thread.com the landing Dashboard link then did nothing and team pages showed
+"Internal Server Error".
+
+Decision: When the setup check fails, the gate logs the status (or the error and its cause)
+and lets the page render without setting the cookie, so the next navigation asks again.
+The session check before it is unchanged and still fails closed. This refines ADR-042,
+which assumed the check succeeds.
+
+Consequences: Pages that need the API show their own error states instead of a bare 500.
+While the API is failing, a user who has not finished setup can open workspace pages
+instead of being sent to /onboarding; the API still refuses project creation before
+setup, so this changes no access rule.
+
+ADR-046: Serve the web app next to its data, and absorb brief failures
+
+Status: Accepted
+
+Context: On spec-thread.com pages sometimes showed their error state, and a refresh loaded
+them; pages were also slow. The web app ran in Vercel's default region (Washington, D.C.)
+while Supabase (us-west-2) and the Render API (oregon) are in Oregon, so each of a page's
+sequential database and API calls crossed the country. Every Vercel instance and preview
+opened its own pool against the session pooler, which allows 15 connections in total.
+`apiFetch` had no timeout or retry, an idle connection the database dropped crashed the
+process through pg's unhandled "error" event, and the sidebar replaced a team list it
+already showed with an error whenever a refresh failed.
+
+Decision: Run the web app's server code in Vercel's `pdx1` region. Connect the deployed web
+app through Supabase's transaction pooler (port 6543), with at most 4 connections per
+instance and a 10-second idle timeout; the API keeps the session pooler. Handle the pool's
+"error" event by logging it. `apiFetch` gives every call a 10-second timeout and retries a
+GET once, after 300 ms, on a network error, a timeout, or 500/502/503/504; writes are never
+retried. The token exchange is retried once the same way. The sidebar keeps a list it
+already shows when a refresh fails, and retries a failed first load once.
+
+Consequences: Fewer cross-country round trips per page, and a brief failure costs a
+300 ms retry instead of an error page. A GET that fails for good takes one retry longer to
+show its error. Vercel's `DATABASE_URL` must point at port 6543; the region must follow
+the database and API if they move.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

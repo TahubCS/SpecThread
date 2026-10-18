@@ -1,5 +1,59 @@
 # Shared handoff
 
+## Current task: Intermittent page errors and slow loads (2026-10-18)
+
+- Branch: `fix/onboarding-gate-failure` (PR #19, at the user's request, together with the
+  gate fix below).
+- Causes found: the web app ran in Vercel's `iad1` while Supabase and the API are in Oregon;
+  every Vercel instance and preview shared the session pooler's 15 connections; `apiFetch`
+  had no timeout or retry; an idle connection dropped by the database crashed the process
+  through pg's unhandled "error" event; the sidebar replaced its team list with an error
+  whenever a refresh failed.
+- Completed (ADR-046): `app/web/vercel.json` region `pdx1`; `apiFetch` timeout and one retry
+  for GETs (never writes) and for the token exchange; pool `idleTimeoutMillis` and a pool
+  "error" handler; sidebar keeps its list on a failed refresh and retries a failed first load.
+  The sidebar still refreshes on navigation, because creating, joining, and leaving a team
+  redirect server-side without the change event.
+- Changed files: `app/web/{vercel.json,src/lib/api.ts,src/lib/auth-config.ts,src/lib/create-auth.ts}`,
+  `app/web/src/components/teams/team-sidebar-links.tsx`,
+  `tests/e2e/{project-failures,teams}.spec.ts`, `docs/{DATABASE,DEPLOYMENT,DECISIONS,HANDOFF}.md`.
+- Your action: in Vercel (Production and Preview) set `DATABASE_URL` to the transaction
+  pooler, port 6543 with `?sslmode=require`; then confirm the Functions region shows `pdx1`.
+- Checks: `npm run lint`, `npm run typecheck`, `git diff --check`: passed. One full
+  `CI=1 npm test` run: 329 passed, with no `uncaughtException` in the server log (a dropped
+  idle connection had produced one before the pool "error" handler). New tests: one-time
+  500/503/dropped-connection reads are retried and the page shows data; a failed write is not
+  retried; a brief `/api/teams` failure recovers; a failed refresh keeps the shown teams.
+- Exact next step: merge PR #19, change `DATABASE_URL`, and compare Vercel request durations
+  and error logs before and after.
+
+## Current task: Signed-in pages answered a bare 500 (2026-10-18)
+
+- Branch: `fix/onboarding-gate-failure`, from `main` at `5173f56`.
+- Problem: on spec-thread.com, a signed-in user's landing **Dashboard** link did nothing and
+  team pages showed a plain "Internal Server Error". The page gate (`app/web/src/proxy.ts`)
+  threw whenever its `GET /onboarding` call to the API failed, before the setup cookie
+  (ADR-042) existed, so every signed-in navigation failed.
+- Completed: the gate now logs the failure (with the status, and a hint that 401 means
+  `Auth__Issuer` differs from `BETTER_AUTH_URL`) and lets the page render without the cookie.
+  The session check still fails closed. Recorded as ADR-045. DEPLOYMENT.md examples now use
+  `https://spec-thread.com` as the issuer, and its troubleshooting covers the log line.
+- Changed files: `app/web/src/proxy.ts`, `tests/e2e/onboarding.spec.ts`,
+  `docs/{DECISIONS,DEPLOYMENT,HANDOFF}.md`.
+- Assumption: the live failure is most likely Render's `Auth__Issuer` still naming the old
+  vercel.app origin after the move to spec-thread.com. Not verified: Vercel and Render
+  settings and logs were not reachable from this environment.
+- Checks:
+  - `CI= npx playwright test --project=chromium tests/e2e/onboarding.spec.ts -g "setup check fails"`:
+    failed against the old gate (the dashboard never loaded; the server logged "Account setup
+    could not be checked."), passes with the fix.
+  - Onboarding, landing, protection, shell, and teams browser specs: 39 passed. Without the
+    new test, no "Onboarding check failed" line is logged.
+  - `npm run lint`, `npm run typecheck`, `git diff --check`: passed.
+  - `CI=1 npm test`, one full run: 324 passed.
+- Exact next step: merge, then confirm Render `Auth__Issuer` equals Vercel `BETTER_AUTH_URL`
+  (`https://spec-thread.com`) and that Vercel logs show no "Onboarding check failed" line.
+
 ## Current task: Apply migrations and deploy the API from CI (2026-10-18)
 
 - Branch: `feature/ci-db-migrations`, from `main` at `3d8d68e`, with `main` merged in at

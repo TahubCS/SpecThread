@@ -31,13 +31,18 @@ On Windows the Supabase root CA is not trusted by default, so the API fails with
 `Root Certificate=<absolute path to app/api/certs/prod-ca-2021.crt>` to the local
 connection string. Render does not need it (docs/DEPLOYMENT.md).
 
-The session pooler accepts 15 connections in total for the project, shared by every
-running copy of the web app and the API, local and deployed. The web keeps a pool
-of 4 and the API a pool of 5 (set `Maximum Pool Size` in the connection string to
-choose another). "max clients reached in session mode" in a log means that limit
-was hit: stop spare dev servers, or move the running apps to the transaction pooler
-on port 6543, which is not set up or tested yet. Migrations need the session pooler
-or a direct connection.
+The session pooler (port 5432) accepts 15 connections in total for the project, shared
+by everything that uses it. The deployed web app therefore connects through the
+**transaction pooler** (same host, port 6543), which is meant for serverless apps and is
+not limited to those 15: every Vercel instance and preview opens its own small pool, and
+together they used to exhaust the session pooler (ADR-046). Better Auth's `pg` driver sends
+plain parameterized queries, which transaction mode supports. Each web pool keeps at most
+4 connections and closes idle ones after 10 s; a connection the pooler drops is logged and
+replaced. The API, one long-running server, keeps the session pooler with a pool of 5 (set
+`Maximum Pool Size` in the connection string to choose another), and migrations need the
+session pooler or a direct connection. "max clients reached in session mode" in a log means
+the session pooler's limit was hit: check that Vercel's `DATABASE_URL` uses port 6543 and
+stop spare local dev servers.
 
 Store the Npgsql connection string in .NET user-secrets under
 `ConnectionStrings:Database` for development, or in the API host's environment

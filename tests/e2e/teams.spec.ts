@@ -1,4 +1,4 @@
-import { createTestSession, expect, test } from "./fixtures";
+import { createTestSession, createTestTeam, expect, test } from "./fixtures";
 
 test.describe("Teams", () => {
   let session: Awaited<ReturnType<typeof createTestSession>>;
@@ -90,8 +90,10 @@ test.describe("Teams", () => {
     let release!: () => void;
     const waiting = new Promise<void>(resolve => { release = resolve; });
     let calls = 0;
+    // The first load is retried once automatically, so the error needs two failures in a row.
     await page.route("**/api/teams", async route => {
-      if (++calls === 1) { await waiting; await route.fulfill({ status: 503, json: {} }); }
+      if (++calls === 1) await waiting;
+      if (calls <= 2) await route.fulfill({ status: 503, json: {} });
       else await route.continue();
     });
     await page.goto("/dashboard");
@@ -99,8 +101,30 @@ test.describe("Teams", () => {
     await expect(nav.getByRole("status")).toHaveText("Loading teams…");
     release();
     await expect(nav.getByRole("status")).toContainText("Teams couldn’t be loaded.");
+    expect(calls).toBe(2);
     await nav.getByRole("button", { name: "Retry", exact: true }).click();
     await expect(nav.getByText("No teams yet", { exact: true })).toBeVisible();
+  });
+
+  test("a brief sidebar failure recovers on its own, and a failed refresh keeps the shown teams", async ({ page }) => {
+    await createTestTeam(session.userId, "Kept team");
+    let fail = 1;
+    await page.route("**/api/teams", async route => {
+      if (fail > 0) { fail--; await route.fulfill({ status: 503, json: {} }); }
+      else await route.continue();
+    });
+    await page.goto("/dashboard");
+    const nav = page.getByRole("navigation", { name: "Main navigation" });
+    await expect(nav.getByRole("link", { name: "Kept team", exact: true })).toBeVisible();
+    await expect(nav.getByText("Teams couldn’t be loaded.")).toHaveCount(0);
+
+    // Navigating in the app refreshes the list; if that refresh fails twice, the list stays.
+    fail = 2;
+    await nav.getByRole("link", { name: "Projects", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/projects$/);
+    await expect.poll(() => fail).toBe(0);
+    await expect(nav.getByRole("link", { name: "Kept team", exact: true })).toBeVisible();
+    await expect(nav.getByText("Teams couldn’t be loaded.")).toHaveCount(0);
   });
 });
 
