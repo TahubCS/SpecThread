@@ -9,6 +9,13 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 
 ## 1. Web Deployment (Vercel)
 
+### Region
+
+`app/web/vercel.json` runs the web app's server code in `pdx1` (Portland, Oregon), next to
+the Supabase project (us-west-2) and the Render API (oregon). Each page makes several
+sequential calls to both; from Vercel's default `iad1` every one crossed the country
+(ADR-046). If the database or API moves, move this region with it.
+
 ### Setup Steps
 1. Navigate to [vercel.com](https://vercel.com) and click **Add New > Project**.
 2. Connect your GitHub account and select the **SpecThread** repository.
@@ -22,7 +29,7 @@ SpecThread consists of two deployable applications hosted on cloud platforms:
 |---|---|---|
 | `BETTER_AUTH_SECRET` | Required random secret, at least 32 characters; no fallback | Generate via `openssl rand -hex 32` |
 | `BETTER_AUTH_URL` | Canonical public URL of your Vercel deployment | `https://your-app.vercel.app` |
-| `DATABASE_URL` | Supabase connection string for Better Auth auth tables | `postgres://postgres.[ref]:[pass]@[host]:5432/postgres` |
+| `DATABASE_URL` | Supabase **transaction pooler** connection string for Better Auth auth tables (port 6543; see DATABASE.md, ADR-046) | `postgres://postgres.[ref]:[pass]@[host]:6543/postgres?sslmode=require` |
 | `DATABASE_CA_CERT` | Full PEM contents of the project's CA certificate when not trusted by Node | Copy the certificate contents, not its local path |
 | `GITHUB_CLIENT_ID` | Client ID from your GitHub OAuth App | `Ov23li...` |
 | `GITHUB_CLIENT_SECRET` | Client Secret from your GitHub OAuth App | `<secret>` |

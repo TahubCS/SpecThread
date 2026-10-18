@@ -11,6 +11,10 @@ import { canUnlink, isUsableSignInMethod } from "./sign-in-methods";
 export function createAuth(env: Record<string, string | undefined>, overrides: { sendEmail?: SendEmail } = {}) {
   const config = readAuthConfig(env);
   const pool = new Pool(config.pool);
+  // The database or its pooler can close an idle connection at any time (a restart, a timeout).
+  // pg reports that as an "error" event on the pool; unhandled, it crashes the server process.
+  // The pool replaces the connection on the next query, so logging it is enough.
+  pool.on("error", error => console.error("An idle database connection was closed:", error.message));
   const sendEmail = overrides.sendEmail ?? createEmailSender(config.email);
 
   const auth = betterAuth({

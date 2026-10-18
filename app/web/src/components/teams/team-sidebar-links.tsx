@@ -12,7 +12,11 @@ import { updateTeamPreferences } from "./team-preferences";
 
 type State = { teams: Team[] } | { message: string } | null;
 
-/** Real team links refreshed after navigation or an explicit retry, without browser JWTs. */
+/**
+ * Real team links refreshed after navigation or an explicit retry, without browser JWTs.
+ * A failed refresh keeps the list already shown; a failed first load is retried once before
+ * the error appears, since such failures are usually brief.
+ */
 export function TeamSidebarLinks() {
   const pathname = usePathname();
   const [state, setState] = useState<State>(null);
@@ -26,14 +30,25 @@ export function TeamSidebarLinks() {
   }, []);
   useEffect(() => {
     const controller = new AbortController();
+    async function read() {
+      const response = await fetch("/api/teams", { signal: controller.signal, cache: "no-store" });
+      if (!response.ok) throw new Error("Team lookup failed.");
+      return parseTeams(await response.json());
+    }
     async function load() {
-      try {
-        const response = await fetch("/api/teams", { signal: controller.signal, cache: "no-store" });
-        if (!response.ok) throw new Error("Team lookup failed.");
-        const teams = parseTeams(await response.json());
-        if (!controller.signal.aborted) setState({ teams });
-      } catch {
-        if (!controller.signal.aborted) setState({ message: "Teams couldn’t be loaded." });
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const teams = await read();
+          if (!controller.signal.aborted) setState({ teams });
+          return;
+        } catch {
+          if (controller.signal.aborted) return;
+          if (attempt === 0) await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      // Keep a list that is already shown; only an empty sidebar shows the error.
+      if (!controller.signal.aborted) {
+        setState(previous => previous && "teams" in previous ? previous : { message: "Teams couldn’t be loaded." });
       }
     }
     void load();
