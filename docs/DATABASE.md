@@ -31,6 +31,14 @@ On Windows the Supabase root CA is not trusted by default, so the API fails with
 `Root Certificate=<absolute path to app/api/certs/prod-ca-2021.crt>` to the local
 connection string. Render does not need it (docs/DEPLOYMENT.md).
 
+The session pooler accepts 15 connections in total for the project, shared by every
+running copy of the web app and the API, local and deployed. The web keeps a pool
+of 4 and the API a pool of 5 (set `Maximum Pool Size` in the connection string to
+choose another). "max clients reached in session mode" in a log means that limit
+was hit: stop spare dev servers, or move the running apps to the transaction pooler
+on port 6543, which is not set up or tested yet. Migrations need the session pooler
+or a direct connection.
+
 Store the Npgsql connection string in .NET user-secrets under
 `ConnectionStrings:Database` for development, or in the API host's environment
 as `ConnectionStrings__Database`. The API `.env.example` documents the format;

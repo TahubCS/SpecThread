@@ -24,6 +24,14 @@ builder.Services.AddDbContext<SpecThreadDbContext>(options =>
             "Configure ConnectionStrings:Database before using EF Core. See docs/DATABASE.md.");
     }
 
+    // Supabase's session pooler allows 15 connections in total, shared with the web app and
+    // every other running copy of the API. Npgsql would open up to 100, so cap it unless the
+    // connection string sets its own limit. Requests beyond the cap wait for a free connection.
+    if (!connectionString.Contains("Pool Size", StringComparison.OrdinalIgnoreCase))
+    {
+        connectionString = new Npgsql.NpgsqlConnectionStringBuilder(connectionString) { MaxPoolSize = 5 }.ConnectionString;
+    }
+
     options.UseNpgsql(connectionString);
 });
 

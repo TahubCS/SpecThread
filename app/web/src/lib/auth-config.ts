@@ -58,7 +58,10 @@ export function readAuthConfig(env: Environment) {
   if (Boolean(clientId) !== Boolean(clientSecret)) {
     throw new Error("Configure both GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET, or leave both empty to disable GitHub sign-in.");
   }
+  // Supabase's session pooler allows 15 connections in total, shared with the API and with
+  // every other running copy of this app, so this pool stays small. Extra queries wait their turn.
   const pool: PoolConfig = {
+    max: 4,
     connectionString: database.toString(),
     ssl: loopback(database.hostname) ? false : { rejectUnauthorized: true, ...(ca ? { ca } : {}) },
   };

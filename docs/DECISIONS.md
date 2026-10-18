@@ -982,6 +982,38 @@ per user. The API answers and authorizes every read as before, so the parallel r
 change no access rules; a requirement in another project still shows the not-found
 page before anything renders.
 
+ADR-043: No token on every session read, and small database pools
+
+Status: Accepted
+
+Context: Pages took about two seconds against the hosted database. Counting database
+statements for one page view in the browser-test stack showed that, besides the work
+ADR-042 removes, the jwt plugin signed a token on every session read (reading the
+signing key each time) and returned it in a header nothing used. Separately, the dev
+server's log showed Supabase refusing connections ("max clients reached in session
+mode ... pool_size: 15"): the web opened up to 10 connections per copy of its auth
+module (the page gate and the pages each had one, and every dev reload added another)
+and the API up to 100, against 15 shared by every running copy of both.
+
+Decision:
+- The jwt plugin no longer signs a token on every session read
+  (`disableSettingJwtHeader`). Tokens are created only where the server calls the API
+  (`app/web/src/lib/api.ts`), so the browser is no longer handed a token for the API.
+- One auth instance, and so one database pool, per web server process
+  (`app/web/src/lib/auth.ts` keeps it on `globalThis`). A change to the auth setup
+  needs a dev server restart to take effect.
+- The web's pool holds at most 4 connections (`auth-config.ts`). The API's holds at
+  most 5 unless the connection string sets its own `Maximum Pool Size`
+  (`app/api/Program.cs`). Requests beyond the cap wait for a free connection.
+
+Consequences: Access rules are unchanged. The caps make running out of the session
+pooler's 15 connections unlikely, not impossible, when local development, Vercel, and
+Render share it; Supabase's transaction pooler (port 6543) is the lasting fix for the
+running apps and is not set up or tested. An earlier version of this work also cached
+API tokens for 60 seconds and finished onboarding for an hour in server memory; ADR-042
+replaced both, so the statement counts measured with that version (dashboard 170 to
+27, requirement page 300 to 69) have not been measured again for this combination.
+
 ADR-044: CI applies migrations after a merge, then deploys the API
 
 Status: Accepted
@@ -990,8 +1022,7 @@ Context: Migrations were applied by hand (`dotnet ef database update` or the scr
 docs/schema), and Render deployed the API on every commit to `main` by itself. Each
 migration had to reach Supabase before the API that needs it, so a merge meant a manual
 step that was easy to forget or to do in the wrong order. ADR-007 forbids applying
-migrations on API startup and any second migration history. (ADR-043 is used by the
-open page-load pull request.)
+migrations on API startup and any second migration history.
 
 Decision: The CI job `deploy-api` (.github/workflows/ci.yml) runs on pushes to `main`
 only, after `verify` and `api-image` pass. It builds an EF Core migration bundle, applies
