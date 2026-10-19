@@ -1115,7 +1115,8 @@ endpoint disables antiforgery because the API authenticates bearer tokens, not c
 
 In the web, Documentation is a project tab (ADR-028) with a list, an upload page, and a
 page per document with its download link and the archive action, which asks for
-confirmation. A Next.js route handler streams downloads and answers 404 when the
+confirmation. A Next.js route handler reads each download in full within the API call's
+timeout, so a failed transfer returns 502 rather than a truncated file, and answers 404 when the
 document belongs to a different project than the address says. Server actions accept
 5 MB bodies for the upload form. `apiFetch` sets a JSON content type only for string
 bodies, so multipart uploads keep their boundary.
@@ -1124,7 +1125,7 @@ Consequences: Files count against the database size (500 MB on Supabase's free p
 and archiving frees nothing; a size report or purge job may be needed later. Larger
 files need direct-to-storage uploads, which would supersede this decision. DOC and DOCX
 contents beyond the header are not inspected, and files are not virus scanned. A
-download reads the whole file into API memory, which the size limit bounds, and costs
+download reads the whole file into API and web memory, which the size limit bounds, and costs
 two API calls from the web (metadata, then content). Requirement references to
 documents, search, renaming, and unarchiving are future work. Migration
 ProjectDocuments adds both tables with RLS on and browser grants revoked; CI applies it

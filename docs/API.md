@@ -73,7 +73,7 @@ file's leading bytes against its extension and stores the content type for that
 extension. A missing title becomes the file name without its extension. Upload with
 `apiFetch(path, { method: "POST", body: formData })`; `apiFetch` sets a JSON content type
 only for string bodies. Downloads stay available for archived documents and projects; the
-web streams them through `/projects/{projectId}/documents/{documentId}/download`.
+web serves them, read in full, through `/projects/{projectId}/documents/{documentId}/download`.
 
 `reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
 40 hex digits, a release tag, or the github.com address of any of them, in the

@@ -16,7 +16,7 @@
     (empty state; no upload button on archived projects) and an upload page that checks
     files in the browser and shows the server's messages.
   - A page per document shows its details, a Download link, and archive with
-    confirmation. A route streams downloads and answers 404 when the address names
+    confirmation. A route serves downloads (read in full, so a failed transfer is a 502) and answers 404 when the address names
     another project.
   - The user asked for a project "sub menu"; on `main` project sections are tabs
     (ADR-028), so it is a tab.

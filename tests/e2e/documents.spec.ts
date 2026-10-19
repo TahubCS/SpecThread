@@ -123,6 +123,11 @@ test("archived projects keep documents downloadable but take no new ones", async
   const response = await page.request.get(`/projects/${projectId}/documents/${documentId}/download`);
   expect(response.status()).toBe(200);
   expect(response.headers()["content-disposition"]).toMatch(/^attachment; filename=brief\.pdf/);
+  expect(response.headers()["content-length"]).toBe(String(pdf.length));
+
+  // A failed transfer from the API is reported, not passed on as a truncated file.
+  await failApi(owner.userId, { method: "GET", path: "/content$", status: 500 });
+  expect((await page.request.get(`/projects/${projectId}/documents/${documentId}/download`)).status()).toBe(502);
 });
 
 test("a document opened under another project's address is not found", async ({ page }) => {
