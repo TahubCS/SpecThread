@@ -8,7 +8,10 @@ test("OpenAPI describes the product endpoints", async ({ request }) => {
     "/projects/{projectId}/requirements", "/requirements/{requirementId}", "/requirements/{requirementId}/archive",
     "/projects/{projectId}/members", "/projects/{projectId}/members/{userId}",
     "/github/repositories", "/projects/{projectId}/repository", "/requirements/{requirementId}/reviews",
+    "/projects/{projectId}/documents", "/documents/{documentId}", "/documents/{documentId}/content",
+    "/documents/{documentId}/archive",
   ]));
+  expect(Object.keys(paths["/projects/{projectId}/documents"].post.requestBody.content)).toContain("multipart/form-data");
   expect(paths["/requirements/{requirementId}"].put.responses).toEqual(
     expect.objectContaining({ "200": expect.anything(), "400": expect.anything(), "401": expect.anything(), "404": expect.anything(), "409": expect.anything() }));
   expect(paths["/projects/{projectId}"].patch.responses["403"]).toBeDefined();
@@ -22,5 +25,10 @@ test("product endpoints reject anonymous requests before touching the database",
     await request.put("/requirements/00000000-0000-0000-0000-000000000000", { data: { title: "x", version: 1 } }),
     await request.post("/github/repositories", { data: { githubToken: "x" } }),
     await request.get("/projects/00000000-0000-0000-0000-000000000000/repository"),
+    await request.get("/projects/00000000-0000-0000-0000-000000000000/documents"),
+    await request.post("/projects/00000000-0000-0000-0000-000000000000/documents", {
+      multipart: { file: { name: "a.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") } },
+    }),
+    await request.get("/documents/00000000-0000-0000-0000-000000000000/content"),
   ]) expect(response.status()).toBe(401);
 });

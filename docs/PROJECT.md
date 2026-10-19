@@ -58,6 +58,8 @@ creating, viewing, editing, and archiving requirements;
 
 writing testable acceptance criteria;
 
+uploading project reference documents (PDF, DOC, DOCX) that every member of the project's team can download (ADR-047); citing them from requirements comes later;
+
 connecting one GitHub repository;
 
 linking GitHub issues and pull requests to a requirement;

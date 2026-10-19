@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const tabs = [
   { label: "Overview", segment: "" },
   { label: "Requirements", segment: "/requirements" },
+  { label: "Documentation", segment: "/documents" },
   { label: "Settings", segment: "/settings" },
 ] as const;
 

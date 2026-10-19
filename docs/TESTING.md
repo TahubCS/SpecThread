@@ -68,7 +68,7 @@ which the release evidence test uses to check that stable answers are not asked 
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
-The Teams API tests use 5116, team management 5117, and invitations 5118 (moved from
+The Teams API tests use 5116, team management 5117, invitations 5118, and documents 5119 (moved from
 5107 to 5109 when the branches were merged, because the proxy and GitHub stand-ins
 below already use those).
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
@@ -238,6 +238,15 @@ currently require network access during the web build.
   removal, inactive legacy memberships, retired membership writes, isolated team
   project/archive lists, and active requirement counts. Ordered criteria/stale-version
   and archived-item checks remain. OpenAPI and anonymous checks run without a DB.
+- Documents (schema suite, API on 5119 against Docker Postgres): PDF, DOC, and DOCX
+  upload; newest-first lists; byte-identical downloads with attachment and nosniff
+  headers; idempotent archive; rejection of wrong types, mismatched contents, empty,
+  oversized (400) and far oversized (413) files and long titles; 404 for non-members;
+  409 for archived projects; table constraints and RLS. Browser tests cover the
+  Documentation tab, upload, download, archive with confirmation, the form's browser
+  and server messages, a failed upload, archived projects, and a document opened
+  under another project's address. The test API proxy forwards `Content-Disposition`
+  so downloads keep their file names.
 - Teams: real API-backed creation, search, empty/error/retry and member-only access;
   reference Home, independent saved sidebar groups, personal favorites sorting first,
   keyboard team menu, and desktop/mobile screenshots. Required onboarding resumes

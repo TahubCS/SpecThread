@@ -255,6 +255,6 @@ test("the migration protects the new table and its rollback removes only that ta
   await database.pool.query(await readFile("docs/schema/project-repositories-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='project_repositories'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('projects','requirements','rateLimit')")).toBe(3);
-  // Everything else remains: the two initial migrations, four for teams, four later ones for evidence, and RequirementReviews.
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(11);
+  // Everything else remains: the two initial migrations, four for teams, four later ones for evidence, RequirementReviews, and ProjectDocuments.
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(12);
 });

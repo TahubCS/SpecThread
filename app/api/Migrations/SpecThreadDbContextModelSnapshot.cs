@@ -313,6 +313,86 @@ namespace SpecThread.Api.Migrations
                     b.ToTable("verification", "public");
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.Document", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime?>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archived_at");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content_type");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("file_name");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("uploaded_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("uploaded_by");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("UploadedBy");
+
+                    b.ToTable("documents", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_documents_content_type", "content_type IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')");
+
+                            t.HasCheckConstraint("ck_documents_file_name", "length(btrim(file_name)) > 0");
+
+                            t.HasCheckConstraint("ck_documents_size", "size_bytes BETWEEN 1 AND 4194304");
+
+                            t.HasCheckConstraint("ck_documents_title", "length(btrim(title)) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.DocumentContent", b =>
+                {
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.HasKey("DocumentId");
+
+                    b.ToTable("document_contents", "public");
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.Project", b =>
                 {
                     b.Property<Guid>("Id")
@@ -937,6 +1017,30 @@ namespace SpecThread.Api.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.Document", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.DocumentContent", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.Document", null)
+                        .WithOne()
+                        .HasForeignKey("SpecThread.Api.Data.DocumentContent", "DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

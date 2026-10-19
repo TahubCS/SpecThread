@@ -13,9 +13,9 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and eight product tables in
-`public`, with the InitialSchema, AuthRateLimits, Teams, TeamNavigationOnboarding,
-TeamProjects, and TeamInvitations migrations. Startup never calls `EnsureCreated`, `Migrate`, or a database
+`SpecThreadDbContext` maps six Better Auth tables and thirteen product tables in
+`public`, with the migrations listed under "Combined migration order" below, ending
+with ProjectDocuments. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -325,7 +325,29 @@ evidence and review tables refer only to projects, requirements, and users.
 Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 `dotnet ef database update <Name>` would also undo the other branch's migrations
 that come later in time. scripts/test-database.mjs applies the teams scripts first
-and then the evidence and review scripts.
+and then the evidence and review scripts. ProjectDocuments comes after all of them.
+
+## Project documents migration
+
+ProjectDocuments (ADR-047) adds `documents` (metadata, with check constraints on title,
+file name, content type, and a 1 to 4,194,304 byte size) and `document_contents` (the
+bytea file, keyed by document ID). Both reference their parents with restrict deletes,
+have RLS enabled with no allow policies, and revoke PUBLIC, anon, and authenticated
+grants.
+
+```sh
+dotnet ef migrations add ProjectDocuments --project app/api --configuration Release
+node scripts/generate-project-documents.mjs
+```
+
+The second command adds the RLS and grant statements and generates
+docs/schema/project-documents.sql and project-documents-rollback.sql.
+
+CI applies it after the merge, before the API that needs it is deployed (ADR-044); it
+only adds tables, so the running API is unaffected. Rollback:
+`dotnet ef database update RequirementReviews --project app/api`, or the rollback
+script. It drops both tables and permanently deletes every uploaded file, so export
+them first.
 
 ## Supabase tooling
 

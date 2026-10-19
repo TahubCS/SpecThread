@@ -7,7 +7,7 @@ import { auth } from "./auth";
  * Calls the SpecThread API as the signed-in user (ADR-024). Server-only: use it from
  * server components, server actions, or route handlers, never from client components.
  * Exchanges the Better Auth session for a short-lived JWT and sends it as a bearer
- * token. Returns the raw Response so callers handle 400/403/404/409 themselves;
+ * token. String bodies are sent as JSON. Returns the raw Response so callers handle 400/403/404/409 themselves;
  * see docs/API.md. Throws when SPECTHREAD_API_URL is not configured or there is no session.
  * Within one server render every call shares a single token exchange.
  *
@@ -23,7 +23,8 @@ export async function apiFetch(path: `/${string}`, init: RequestInit = {}, incom
   const { token } = incomingHeaders ? await auth.api.getToken({ headers: incomingHeaders }) : await requestToken();
   const requestHeaders = new Headers(init.headers);
   requestHeaders.set("authorization", `Bearer ${token}`);
-  if (init.body !== undefined && !requestHeaders.has("content-type")) {
+  // FormData bodies need fetch to set the multipart boundary, so only JSON strings get a type.
+  if (typeof init.body === "string" && !requestHeaders.has("content-type")) {
     requestHeaders.set("content-type", "application/json");
   }
   const send = () => fetch(url, { ...init, headers: requestHeaders, cache: "no-store", signal: withTimeout(init.signal) });
