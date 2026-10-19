@@ -7,6 +7,7 @@ import {
   isUuid, parseMembers, parseProject, parseRequirementSummaries,
   type Project, type ProjectMember, type RequirementSummary,
 } from "./projects";
+import { parseDocument, parseDocuments, type ProjectDocument } from "./documents";
 import { parseEvidenceList, type Evidence } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
 import { parseReviews, type Review } from "./reviews";
@@ -74,4 +75,23 @@ export const listReviews = cache(async (requirementId: string): Promise<Review[]
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/reviews`) : null;
   if (body === null) notFound();
   return parseReviews(body);
+});
+
+/** Lists a project's active documents, newest first. Call after `requireProject`. */
+export const listDocuments = cache(async (projectId: string): Promise<ProjectDocument[]> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/documents`) : null;
+  if (body === null) notFound();
+  return parseDocuments(body);
+});
+
+/**
+ * Loads a document of the given project, or shows the not-found page when it does not exist,
+ * the user is not a member, or it belongs to a different project than the address says.
+ */
+export const requireDocument = cache(async (projectId: string, documentId: string): Promise<ProjectDocument> => {
+  const body = isUuid(documentId) ? await read(`/documents/${documentId}`) : null;
+  if (body === null) notFound();
+  const document = parseDocument(body);
+  if (document.projectId !== projectId) notFound();
+  return document;
 });

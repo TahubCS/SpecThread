@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
+using SpecThread.Api.Documents;
 using SpecThread.Api.GitHub;
 using SpecThread.Api.Projects;
 using SpecThread.Api.Requirements;
@@ -61,6 +62,7 @@ app.MapGet("/me", (ClaimsPrincipal user) =>
 app.MapProjectEndpoints();
 app.MapMemberEndpoints();
 app.MapRequirementEndpoints();
+app.MapDocumentEndpoints();
 app.MapRepositoryEndpoints();
 app.MapEvidenceEndpoints();
 app.MapReviewEndpoints();

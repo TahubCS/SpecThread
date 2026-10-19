@@ -62,6 +62,18 @@ to the project's team; non-members get 404 as if the project did not exist.
 | DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
 | GET | `/requirements/{requirementId}/reviews` | member | | 200 `Review[]` (newest first) |
 | POST | `/requirements/{requirementId}/reviews` | member, not the requirement's author | `{ decision, note?, version }` | 201 `Review` |
+| GET | `/projects/{projectId}/documents` | member | | 200 `Document[]` (active only, newest first) |
+| POST | `/projects/{projectId}/documents` | member | multipart: `file`, optional `title` | 201 `Document` |
+| GET | `/documents/{documentId}` | member | | 200 `Document` (archived included) |
+| GET | `/documents/{documentId}/content` | member | | 200 file bytes, as an attachment |
+| POST | `/documents/{documentId}/archive` | member | | 200 `Document` (idempotent) |
+
+Documents (ADR-047) are PDF, DOC, or DOCX files of at most 4 MiB. The API checks the
+file's leading bytes against its extension and stores the content type for that
+extension. A missing title becomes the file name without its extension. Upload with
+`apiFetch(path, { method: "POST", body: formData })`; `apiFetch` sets a JSON content type
+only for string bodies. Downloads stay available for archived documents and projects; the
+web serves them, read in full, through `/projects/{projectId}/documents/{documentId}/download`.
 
 `reference` is an issue or pull request number (`42` or `#42`), a commit SHA of 7 to
 40 hex digits, a release tag, or the github.com address of any of them, in the
@@ -126,6 +138,10 @@ type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string; createdBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];
 };
+type Document = {
+  id: string; projectId: string; title: string; fileName: string; contentType: string; sizeBytes: number;
+  uploadedBy: string; uploadedByName: string; uploadedAt: string; archivedAt: string | null;
+};
 type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean; role: "owner" | "admin" | "member" };
 type AvailableRepository = {
   installationId: number; repositoryId: number; owner: string; name: string; fullName: string; isPrivate: boolean;
@@ -179,7 +195,7 @@ Errors are problem details (`application/problem+json`) with `title`, `status`, 
 
 | Status | Meaning | Suggested UI |
 |---|---|---|
-| 400 | Validation failed; `errors` maps fields such as `title` or `acceptanceCriteria[2]` to messages | Show the messages next to the fields |
+| 400 | Validation failed; `errors` maps fields such as `title`, `file`, or `acceptanceCriteria[2]` to messages | Show the messages next to the fields |
 | 401 | Missing or invalid token | Send the user to sign in |
 | 403 | Insufficient team role, a decision by the requirement's author, or the account record is missing | Show the `detail` |
 | 404 | Not found, or not a member | Show a not-found state |
@@ -187,7 +203,9 @@ Errors are problem details (`application/problem+json`) with `title`, `status`, 
 | 410 | Individual project membership writes retired | Manage membership through the team |
 
 Limits: project names and requirement titles 1-200 characters, descriptions up to 10,000,
-up to 50 acceptance criteria of 1-2,000 characters each, and emails up to 254 characters.
+up to 50 acceptance criteria of 1-2,000 characters each, emails up to 254 characters,
+document titles up to 200 characters, and file names up to 255. An upload body well over
+4 MiB returns 413.
 
 ## Teams navigation and onboarding (ADR-039/040)
 

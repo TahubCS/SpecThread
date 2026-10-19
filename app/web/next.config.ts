@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    /** Document uploads (up to 4 MB, ADR-047) pass through a server action; the default limit is 1 MB. */
+    serverActions: { bodySizeLimit: "5mb" },
+  },
   /**
    * Baseline protections for every response: no framing by other sites, no MIME sniffing, and
    * only the origin in cross-site referrers. Pages may still set a stricter referrer policy.

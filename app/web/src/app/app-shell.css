@@ -430,3 +430,11 @@ a.row:focus-visible { outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) {
   .app-shell *, .app-shell *::before, .app-shell *::after { transition: none; }
 }
+
+/* Documents (ADR-047) */
+.document-intro { margin: -6px 0 20px; color: var(--app-text-2); }
+.document-form > * + * { margin-top: 20px; }
+.app-main .field input[type="file"] { height: auto; padding: 7px 12px; color: var(--app-text-2); }
+.document-details { margin: 4px 0 0; }
+.row .row-meta + .document-row-date { margin-left: 16px; }
+@media (max-width: 560px) { .document-row-date { display: none; } }

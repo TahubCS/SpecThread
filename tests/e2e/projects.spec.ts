@@ -119,7 +119,7 @@ test("project tabs show its requirements, planned sections keep the frame, and t
   await expect(page.getByRole("list", { name: "Requirements" }).getByRole("link")).toHaveCount(2);
 
   // Membership will be managed on the team, so a project has no members page.
-  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Requirements", "Settings"]);
+  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Requirements", "Documentation", "Settings"]);
   await page.goto(`/projects/${projectId}/members`);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 

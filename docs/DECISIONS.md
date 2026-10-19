@@ -1088,6 +1088,49 @@ Consequences: Fewer cross-country round trips per page, and a brief failure cost
 show its error. Vercel's `DATABASE_URL` must point at port 6543; the region must follow
 the database and API if they move.
 
+ADR-047: Project reference documents stored in PostgreSQL, in a Documentation tab
+
+Status: Accepted
+
+Context: Teams need one place in each project for reference documents (PDF, DOC, DOCX)
+that everyone on the project's team can read; requirements will cite them in a later
+task. The user chose PostgreSQL storage over Supabase Storage to avoid a new service and
+secret. The web runs on Vercel, whose functions accept and return at most 4.5 MB bodies,
+and browsers reach the API only through Next.js (ADR-024).
+
+Decision: Metadata lives in `documents` and the bytes in `document_contents` (bytea, one
+row per document), so lists never read file contents. Files are at most 4 MiB
+(4,194,304 bytes) and must be .pdf, .doc, or .docx; the API checks that the file starts
+with that format's signature (`%PDF-`, the OLE header, or the ZIP header) and stores a
+content type derived from the extension, never the client's. File names lose any path
+and control characters and are at most 255 characters; titles are optional (default:
+the file name without its extension), at most 200. Database check constraints repeat
+the type and size rules. Any member of the project's team uploads (multipart
+POST /projects/{id}/documents), lists, downloads, and archives, like requirements
+(ADR-041); writes lock the project's team as other project writes do. There is no
+delete. Archived documents leave the list but stay downloadable, and archived projects
+refuse uploads and archiving (409). Downloads are attachments with
+`X-Content-Type-Options: nosniff` and `Cache-Control: private, no-store`. The upload
+endpoint disables antiforgery because the API authenticates bearer tokens, not cookies.
+
+In the web, Documentation is a project tab (ADR-028) with a list, an upload page, and a
+page per document with its download link and the archive action, which asks for
+confirmation. A Next.js route handler reads each download in full within the API call's
+timeout, so a failed transfer returns 502 rather than a truncated file, and answers 404 when the
+document belongs to a different project than the address says. Server actions accept
+5 MB bodies for the upload form. `apiFetch` sets a JSON content type only for string
+bodies, so multipart uploads keep their boundary.
+
+Consequences: Files count against the database size (500 MB on Supabase's free plan),
+and archiving frees nothing; a size report or purge job may be needed later. Larger
+files need direct-to-storage uploads, which would supersede this decision. DOC and DOCX
+contents beyond the header are not inspected, and files are not virus scanned. A
+download reads the whole file into API and web memory, which the size limit bounds, and costs
+two API calls from the web (metadata, then content). Requirement references to
+documents, search, renaming, and unarchiving are future work. Migration
+ProjectDocuments adds both tables with RLS on and browser grants revoked; CI applies it
+(ADR-044).
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

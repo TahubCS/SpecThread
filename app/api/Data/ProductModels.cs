@@ -109,3 +109,23 @@ public sealed class RequirementReview
     public required string DecidedBy { get; set; }
     public DateTime DecidedAt { get; set; }
 }
+
+// Metadata only; the bytes live in DocumentContent so lists never load files (ADR-047).
+public sealed class Document
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public required string Title { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public long SizeBytes { get; set; }
+    public required string UploadedBy { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public DateTime? ArchivedAt { get; set; }
+}
+
+public sealed class DocumentContent
+{
+    public Guid DocumentId { get; set; }
+    public required byte[] Content { get; set; }
+}

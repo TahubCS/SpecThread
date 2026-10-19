@@ -1,6 +1,72 @@
 # Shared handoff
 
-## Current task: Intermittent page errors and slow loads (2026-10-18)
+## Current task: Project documentation tab (2026-10-18)
+
+- Branch: `feature/project-docs`, rebuilt on `origin/main` at `35b407c`. The first version
+  was written before the teams, tabs, and black-and-white work reached `main`; it is kept
+  locally as `backup/project-docs-v1` and was ported, not merged. The pre-existing
+  uncommitted deletion of `app/api/.env.example` is unrelated and was left untouched.
+- Completed (ADR-047):
+  - The API lets any member of a project's team upload PDF, DOC, and DOCX files of up to
+    4 MiB, list them newest first, download them, and archive them. Writes lock the team
+    like other project writes.
+  - The API checks each file's leading bytes against its extension. Non-members get 404.
+    Archived projects refuse uploads and archiving with 409.
+  - Web: a Documentation project tab, between Requirements and Settings. It has a list
+    (empty state; no upload button on archived projects) and an upload page that checks
+    files in the browser and shows the server's messages.
+  - A page per document shows its details, a Download link, and archive with
+    confirmation. A route serves downloads (read in full, so a failed transfer is a 502) and answers 404 when the address names
+    another project.
+  - The user asked for a project "sub menu"; on `main` project sections are tabs
+    (ADR-028), so it is a tab.
+  - Tickets (bug, issue or task, and user story, with states) were also requested.
+    They are deferred to a separate task.
+- Changed files:
+  - API: `app/api/Documents/DocumentEndpoints.cs` (new), `Data/ProductModels.cs`,
+    `Data/SpecThreadDbContext.cs`, `Program.cs`, migration `*_ProjectDocuments*`, and
+    the model snapshot.
+  - Schema: `scripts/generate-project-documents.mjs` (new), generated
+    `docs/schema/project-documents.sql` and `project-documents-rollback.sql`,
+    `scripts/test-database.mjs`.
+  - Web, new: `lib/documents.ts`, `app/projects/document-actions.ts`,
+    `components/document-upload-form.tsx`, `components/document-archive.tsx`, and
+    `app/projects/[projectId]/documents/**`.
+  - Web, changed: `lib/project-data.ts` (`listDocuments`, `requireDocument`),
+    `lib/api.ts` (JSON content type only for string bodies), `components/project-tabs.tsx`,
+    `app-shell.css`, and `next.config.ts` (server action body limit 5 MB).
+  - Tests: `tests/schema/documents-api.spec.ts`, `tests/api/document-files.spec.ts`,
+    `tests/e2e/documents.spec.ts` (new), and `tests/api/products.spec.ts`.
+  - Tests, adjusted: `tests/e2e/projects.spec.ts` (tab list); the migration-history
+    counts in `tests/schema/evidence.spec.ts`, `github-repository.spec.ts`, and
+    `reviews.spec.ts`, each one higher; `scripts/test-api-proxy.mjs`, which now forwards
+    `Content-Disposition`.
+  - Docs: DECISIONS (ADR-047), API, DATABASE, ARCHITECTURE, PROJECT (MVP scope), TESTING.
+    DATABASE and ARCHITECTURE said "eight product tables"; the model has thirteen with
+    this change (eleven before it), so both now say thirteen.
+- Decisions and assumptions:
+  - Files are stored as bytea in PostgreSQL (the user's choice). The 4 MiB limit
+    follows from Vercel's 4.5 MB function body limit.
+  - Access follows team membership like requirements, so any team Member may archive.
+  - Documents are archived, never deleted. There is no unarchive yet.
+- Checks:
+  - Passed: `dotnet format app/api --verify-no-changes`, `npm run lint`,
+    `npm run typecheck`, `dotnet ef migrations has-pending-model-changes` (none), and
+    `git diff --check`.
+  - `npm test`: 341 passed on the last two full runs.
+  - The first full run after the port also failed `documents-api` "uploads are
+    checked…" and `auth-jwt-runtime` once each. Their errors were not captured, and
+    neither recurred in two full runs or in 15 repeats of the documents spec in one worker.
+- Known issues and risks:
+  - CI applies ProjectDocuments on merge (ADR-044); rollback deletes every uploaded file.
+  - Files use database space (500 MB on the free plan), and archiving frees none.
+  - There is no virus scanning, and DOC/DOCX contents past the header are not inspected.
+  - After a server-side rejection the file input is cleared (React's form reset); the
+    title is kept.
+- Next step: review and merge the PR. Follow-ups are citing documents from requirements,
+  and Tickets.
+
+## Previous task: Intermittent page errors and slow loads (2026-10-18)
 
 - Branch: `fix/onboarding-gate-failure` (PR #19, at the user's request, together with the
   gate fix below).

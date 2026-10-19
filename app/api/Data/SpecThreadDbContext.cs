@@ -16,6 +16,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<UserOnboarding> UserOnboardings => Set<UserOnboarding>();
     public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
+    public DbSet<Document> Documents => Set<Document>();
+    public DbSet<DocumentContent> DocumentContents => Set<DocumentContent>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -254,5 +256,34 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         review.HasIndex(x => new { x.RequirementId, x.DecidedAt });
         review.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         review.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.DecidedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var document = model.Entity<Document>();
+        document.ToTable("documents", table =>
+        {
+            table.HasCheckConstraint("ck_documents_title", "length(btrim(title)) > 0");
+            table.HasCheckConstraint("ck_documents_file_name", "length(btrim(file_name)) > 0");
+            table.HasCheckConstraint("ck_documents_content_type",
+                "content_type IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')");
+            table.HasCheckConstraint("ck_documents_size", "size_bytes BETWEEN 1 AND 4194304");
+        });
+        document.HasKey(x => x.Id);
+        document.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        document.Property(x => x.ProjectId).HasColumnName("project_id");
+        document.Property(x => x.Title).HasColumnName("title");
+        document.Property(x => x.FileName).HasColumnName("file_name");
+        document.Property(x => x.ContentType).HasColumnName("content_type");
+        document.Property(x => x.SizeBytes).HasColumnName("size_bytes");
+        document.Property(x => x.UploadedBy).HasColumnName("uploaded_by");
+        document.Property(x => x.UploadedAt).HasColumnName("uploaded_at").HasDefaultValueSql("now()");
+        document.Property(x => x.ArchivedAt).HasColumnName("archived_at");
+        document.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        document.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UploadedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var content = model.Entity<DocumentContent>();
+        content.ToTable("document_contents");
+        content.HasKey(x => x.DocumentId);
+        content.Property(x => x.DocumentId).HasColumnName("document_id");
+        content.Property(x => x.Content).HasColumnName("content");
+        content.HasOne<Document>().WithOne().HasForeignKey<DocumentContent>(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict);
     }
 }

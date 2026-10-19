@@ -72,7 +72,7 @@ export function startApiProxy({ port, upstream }) {
       });
       const answer = Buffer.from(await forwarded.arrayBuffer());
       const answerHeaders = {};
-      for (const name of ["content-type", "location", "www-authenticate"]) {
+      for (const name of ["content-type", "content-disposition", "location", "www-authenticate"]) {
         const value = forwarded.headers.get(name);
         if (value) answerHeaders[name] = value;
       }
