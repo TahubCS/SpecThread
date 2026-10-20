@@ -162,7 +162,8 @@ internal static class RequirementEndpoints
 
     // Like FindForMember, but locks the project's team first and then reads the requirement, so
     // the archived states and membership it sees cannot change before this transaction ends.
-    private static async Task<MemberRequirement?> LockForMember(
+    // Call inside a transaction. Every requirement-scoped write (evidence, reviews) uses it.
+    internal static async Task<MemberRequirement?> LockForMember(
         SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel)
     {
         var projectId = await db.Requirements.Where(r => r.Id == requirementId).Select(r => (Guid?)r.ProjectId).SingleOrDefaultAsync(cancel);
@@ -209,7 +210,10 @@ internal static class RequirementEndpoints
         r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
         criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList());
 
-    private sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived);
+    internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
+    {
+        public bool Archived => ProjectArchived || Requirement.ArchivedAt is not null;
+    }
 
     private sealed record ValidInput(string Title, string Description, List<string> Criteria);
 }

@@ -86,6 +86,14 @@ internal static class RepositoryEndpoints
         }
         if (installation != GitHubFailure.None) return Failed(installation);
 
+        // GitHub was asked without holding the team lock. Take it now and check the caller's role
+        // and the project's state again, so a demotion or an archive in the meantime wins.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var locked = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
+        if (locked is null) return TypedResults.NotFound();
+        if (!await db.CanManageTeam(locked.TeamId, userId, cancel)) return ProjectEndpoints.ManagersOnly();
+        if (locked.ArchivedAt is not null) return ProjectEndpoints.Archived();
+
         var repository = await db.ProjectRepositories.SingleOrDefaultAsync(r => r.ProjectId == projectId, cancel);
         if (repository is null)
         {
@@ -108,6 +116,7 @@ internal static class RepositoryEndpoints
             // Two connects at once: the other one created the row first.
             return TypedResults.Problem("The repository connection changed while saving. Reload and try again.", statusCode: StatusCodes.Status409Conflict);
         }
+        await transaction.CommitAsync(cancel);
 
         return TypedResults.Ok(new ProjectRepositoryEnvelope(ToResponse(repository)));
     }
@@ -116,13 +125,16 @@ internal static class RepositoryEndpoints
         Guid projectId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         var userId = user.CallerId();
-        var project = await db.ProjectsFor(userId).AsNoTracking().SingleOrDefaultAsync(p => p.Id == projectId, cancel);
+        // Serialize with archiving and role changes in this project's team.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var project = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
         if (project is null) return TypedResults.NotFound();
         if (!await db.CanManageTeam(project.TeamId, userId, cancel)) return ProjectEndpoints.ManagersOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
         // Idempotent: disconnecting a project with no repository succeeds.
         await db.ProjectRepositories.Where(r => r.ProjectId == projectId).ExecuteDeleteAsync(cancel);
+        await transaction.CommitAsync(cancel);
         return TypedResults.NoContent();
     }
 

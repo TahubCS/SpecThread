@@ -10,6 +10,9 @@ import { formatDate } from "@/lib/projects";
 
 type Props = PageProps<"/projects/[projectId]/requirements/[requirementId]">;
 
+/** The evidence actions on this page may read GitHub for up to a minute (ADR-048). */
+export const maxDuration = 60;
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { projectId, requirementId } = await params;
   return { title: (await requireRequirement(projectId, requirementId)).title };

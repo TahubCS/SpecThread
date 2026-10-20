@@ -1,6 +1,60 @@
 # Shared handoff
 
-## Current task: Project documentation tab (2026-10-18)
+## Current task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
+
+- Branch: `fix/evidence-locks-and-timeouts`, from `main` at `dac2bcd`. Fixes only; no new
+  features and no schema change.
+- Problems (from a full scan of `main`, where every check passed):
+  - Refreshing evidence failed in the browser once it took longer than `apiFetch`'s 10-second
+    limit, which a requirement with about 20 or more linked pull requests reaches.
+  - A refresh that met a concurrent unlink answered an unhandled 500.
+  - Evidence link/refresh/unlink, review decisions, and repository connect/disconnect did not
+    take the team lock, so they could commit into a project being archived or for a member
+    being removed. Two links at once could pass the 50-link limit.
+  - `docs/API.md` and `docs/ARCHITECTURE.md` disagreed with the code.
+- Completed (ADR-048):
+  - Those six writes run in a transaction that locks the project's team and re-reads
+    membership and archived state (`RequirementEndpoints.LockForMember`, now internal, or
+    `ProjectEndpoints.LockProjectForCaller`). Link, refresh, and connect read GitHub first,
+    without the lock, then lock, check again (member, not archived, same repository), and
+    save. Link counts links again under the lock. A row removed while GitHub was read answers
+    409 "The evidence changed while it was being read from GitHub. Reload and try again."
+  - `apiFetch` takes an optional `timeoutMs`; link and refresh use 55 seconds, and the
+    requirement page sets `maxDuration = 60`. Every other call keeps 10 seconds and the GET retry.
+  - Docs: repository connect/disconnect is team Owner/Admin; the retired add-member paragraph,
+    a stray code fence that turned the rest of API.md into code, and two stale
+    ownership notes are removed; ARCHITECTURE no longer calls the GitHub App pending.
+- Changed files:
+  - API: `GitHub/EvidenceEndpoints.cs`, `GitHub/RepositoryEndpoints.cs`,
+    `Requirements/RequirementEndpoints.cs`, `Requirements/ReviewEndpoints.cs`.
+  - Web: `lib/api.ts`, `app/projects/evidence-actions.ts`,
+    `app/projects/[projectId]/requirements/[requirementId]/page.tsx`.
+  - Tests: new `tests/support/team-lock.ts` (holds a team's row lock from the test database);
+    new cases in `tests/schema/{evidence,reviews,github-repository}.spec.ts` and
+    `tests/e2e/evidence.spec.ts`.
+  - Docs: `API.md`, `ARCHITECTURE.md`, `DECISIONS.md` (ADR-048), this file.
+- Decisions and assumptions: GitHub is never read while the team lock is held, so a slow
+  GitHub cannot stall the team's other writes. A refresh that loses a race is refused rather
+  than merged. 55 seconds leaves the server action time to answer before Vercel's 60.
+- Checks:
+  - The six new tests failed against the old code: the lock tests completed without waiting,
+    and the browser refresh hit the 10-second timeout. All six pass with the fix.
+  - Passed: `npm run lint`, `npm run typecheck`, `npm run build:api`,
+    `dotnet format app/api --verify-no-changes --no-restore`,
+    `dotnet ef migrations has-pending-model-changes` (no changes), and `git diff --check`.
+  - `CI=1 npm test`: 347 passed (341 before, plus the six new tests). Run with Chromium 141
+    instead of the version Playwright 1.63 expects.
+- Known issues and risks:
+  - The first refresh of a requirement with many releases and many merged pull requests can
+    still approach 55 seconds (one GitHub compare per release and change pair).
+  - `maxDuration = 60` is not verified on Vercel from here.
+  - Still out of scope from the scan: the Playwright verification feature, audit history,
+    evidence policies, suggested links and webhooks, the sample dashboard, and the
+    placeholder pages.
+- Next step: review and merge the pull request, then refresh a requirement with many links on
+  spec-thread.com and confirm it completes.
+
+## Previous task: Project documentation tab (2026-10-18)
 
 - Branch: `feature/project-docs`, rebuilt on `origin/main` at `35b407c`. The first version
   was written before the teams, tabs, and black-and-white work reached `main`; it is kept

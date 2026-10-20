@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startApi } from "../support/api-process";
+import { stillWaiting, withTeamLock } from "../support/team-lock";
 
 // The review API (ADR-038) called directly, against a disposable PostgreSQL database.
 // Evidence links are inserted as rows, so GitHub is not involved.
@@ -180,6 +181,25 @@ test("a decision on a version the reviewer did not see, or on something archived
   expect((await author.post(`/projects/${projectId}/archive`)).status()).toBe(200);
   expect((await reviewer.post(`/requirements/${other.id}/reviews`, { decision: "accepted", version: 1 })).status()).toBe(409);
   expect(await (await reviewer.get(`/requirements/${other.id}/reviews`)).json()).toEqual([]);
+});
+
+test("a decision waits for the team lock, then is refused if the project was archived or the requirement edited meanwhile", async ({ request }) => {
+  const { projectId, requirementId, path } = await setUp(request);
+  const reviewer = await as(request, "reviewer");
+  for (const [name, change] of [
+    ["archived", "UPDATE public.projects SET archived_at = now() WHERE id = $1"],
+    ["edited", "UPDATE public.requirements SET version = version + 1 WHERE project_id = $1"],
+  ] as const) {
+    const pending = await withTeamLock(database.pool, projectId, async client => {
+      const response = reviewer.post(path, { decision: "accepted", version: 1 });
+      expect(await stillWaiting(response), name).toBe(true);
+      await client.query(change, [projectId]);
+      return { response };
+    });
+    expect((await pending.response).status(), name).toBe(409);
+    await database.pool.query("UPDATE public.projects SET archived_at = NULL WHERE id = $1", [projectId]);
+  }
+  expect((await database.pool.query("SELECT count(*)::int AS count FROM public.requirement_reviews WHERE requirement_id = $1", [requirementId])).rows[0].count).toBe(0);
 });
 
 test("requirement lists carry the latest decision and whether it still describes the requirement", async ({ request }) => {

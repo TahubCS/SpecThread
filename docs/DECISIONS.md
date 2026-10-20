@@ -1131,6 +1131,38 @@ documents, search, renaming, and unarchiving are future work. Migration
 ProjectDocuments adds both tables with RLS on and browser grants revoked; CI applies it
 (ADR-044).
 
+ADR-048: Writes that read GitHub lock the team only to save, and get a longer web timeout
+
+Status: Accepted
+
+Context: Requirement, project, and document writes lock the team row so they cannot
+commit into a project being archived or for a member being removed (ADR-040, ADR-047).
+Evidence link, refresh, and unlink, review decisions, and repository connect and
+disconnect did not, and a refresh that met a concurrent unlink failed with an unhandled
+500. Two links at once could also pass the 50-link limit. Separately, the web app gave
+every API call 10 seconds (ADR-046), while a refresh makes several GitHub calls per
+linked item and one per release and change pair, so refreshing a requirement with
+many links failed in the browser.
+
+Decision: Every evidence, review, and repository write runs in a transaction that locks
+the project's team and then re-reads membership and archived state, through
+`RequirementEndpoints.LockForMember` or `ProjectEndpoints.LockProjectForCaller`.
+Writes that read GitHub (link, refresh, connect) read it first, without the lock, so
+a slow GitHub never holds up the team's other writes; they then lock, check again
+that the caller is a member, nothing is archived, and the same repository is still
+connected, and save. Link counts the links again under the lock. A row that changed
+or disappeared while GitHub was being read answers 409 ("reload and try again")
+instead of saving partial results. `apiFetch` accepts a per-call `timeoutMs`; link and
+refresh use 55 seconds, and the requirement page sets `maxDuration = 60` so Vercel lets
+its server actions run that long. Every other call keeps the 10-second limit and the
+GET retry.
+
+Consequences: A write can wait briefly for another write in the same team. A refresh
+that loses a race is refused, not merged, so the user refreshes again. The first refresh
+of a requirement with many releases and many merged pull requests can still approach
+the 55-second limit, because each release and change pair is a GitHub compare call;
+later refreshes reuse earlier "included" answers. No schema change.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

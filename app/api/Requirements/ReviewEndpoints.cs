@@ -28,7 +28,7 @@ internal static class ReviewEndpoints
     private static async Task<Results<Ok<List<ReviewResponse>>, NotFound>> List(
         Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
-        if (await FindAsync(db, user.CallerId(), requirementId, cancel) is null) return TypedResults.NotFound();
+        if (!await IsMemberAsync(db, user.CallerId(), requirementId, cancel)) return TypedResults.NotFound();
         var reviews = await db.RequirementReviews.AsNoTracking().Where(r => r.RequirementId == requirementId)
             .OrderByDescending(r => r.DecidedAt).ThenByDescending(r => r.Id).ToListAsync(cancel);
         return TypedResults.Ok(reviews.ConvertAll(ToResponse));
@@ -46,16 +46,20 @@ internal static class ReviewEndpoints
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var userId = user.CallerId();
-        var scope = await FindAsync(db, userId, requirementId, cancel);
-        if (scope is null) return TypedResults.NotFound();
-        if (scope.Archived) return ProjectEndpoints.Archived();
+        // Serialize with edits, archiving, and membership changes in this project's team, so the
+        // decision is checked against what is there when it is saved.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
+        if (found is null) return TypedResults.NotFound();
+        if (found.Archived) return ProjectEndpoints.Archived();
+        var requirement = found.Requirement;
         // A second person has to look: nobody decides on a requirement they wrote.
-        if (scope.CreatedBy == userId)
+        if (requirement.CreatedBy == userId)
         {
             return TypedResults.Problem("You created this requirement, so another project member has to review it.", statusCode: StatusCodes.Status403Forbidden);
         }
         // Nobody decides on text they have not seen.
-        if (scope.Version != request.Version)
+        if (requirement.Version != request.Version)
         {
             return TypedResults.Problem("This requirement changed since it was loaded. Reload it and review the current version.", statusCode: StatusCodes.Status409Conflict);
         }
@@ -69,13 +73,14 @@ internal static class ReviewEndpoints
             RequirementId = requirementId,
             Decision = decision!,
             Note = note!,
-            RequirementVersion = scope.Version,
+            RequirementVersion = requirement.Version,
             Evidence = JsonSerializer.Serialize(evidence.ConvertAll(e => new ReviewedEvidence(e.Id, e.Kind, Label(e), e.Title, e.State)), SnapshotJson),
             DecidedBy = userId,
             DecidedAt = Clock.UtcNow(),
         };
         db.RequirementReviews.Add(review);
         await db.SaveChangesAsync(cancel);
+        await transaction.CommitAsync(cancel);
         return TypedResults.Created($"/requirements/{requirementId}/reviews/{review.Id}", ToResponse(review));
     }
 
@@ -94,17 +99,14 @@ internal static class ReviewEndpoints
         _ => evidence.Sha is { Length: >= 7 } sha ? sha[..7] : "",
     };
 
-    // Null when the requirement does not exist or the caller is not a member of its project.
-    private static Task<Scope?> FindAsync(SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel) =>
-        db.Requirements.AsNoTracking().Where(r => r.Id == requirementId)
-            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id,
-                (r, p) => new Scope(r.CreatedBy, r.Version, r.ArchivedAt != null || p.ArchivedAt != null))
-            .SingleOrDefaultAsync(cancel);
+    // False when the requirement does not exist or the caller is not a member of its project.
+    private static Task<bool> IsMemberAsync(SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel) =>
+        db.Requirements.Where(r => r.Id == requirementId)
+            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => r.Id)
+            .AnyAsync(cancel);
 
     private static ReviewResponse ToResponse(RequirementReview r) =>
         new(r.Id, r.RequirementId, r.Decision, r.Note, r.RequirementVersion, ReadSnapshot(r), r.DecidedBy, r.DecidedAt);
-
-    private sealed record Scope(string CreatedBy, int Version, bool Archived);
 }
 
 internal sealed record RecordReviewRequest(string? Decision, string? Note, int? Version);
