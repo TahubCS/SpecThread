@@ -5,6 +5,7 @@ import type { Server } from "node:http";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startFakeGitHub } from "../../scripts/test-github.mjs";
 import { startApi } from "../support/api-process";
+import { stillWaiting, withTeamLock } from "../support/team-lock";
 
 // The evidence API (ADR-033) called directly, against a disposable PostgreSQL database and a
 // local stand-in for GitHub.
@@ -193,6 +194,64 @@ test("a requirement holds at most 50 links", async ({ request }) => {
   const refused = await owner.post(path, { reference: "60" });
   expect(refused.status()).toBe(409);
   expect((await refused.json()).detail).toBe("A requirement can have at most 50 evidence links.");
+  expect(await (await owner.get(path)).json()).toHaveLength(50);
+});
+
+test("linking, refreshing, and unlinking wait for the team lock and refuse once the project is archived", async ({ request }) => {
+  const { path, projectId } = await setUp(request, [item(1, "One"), item(2, "Two")]);
+  const member = await as(request, "member");
+  const linked = await (await member.post(path, { reference: "1" })).json();
+  const archive = "UPDATE public.projects SET archived_at = now() WHERE id = $1";
+
+  for (const [name, send] of [
+    ["link", () => member.post(path, { reference: "2" })],
+    ["refresh", () => member.post(`${path}/refresh`)],
+    ["unlink", () => member.delete(`${path}/${linked.id}`)],
+  ] as const) {
+    const pending = await withTeamLock(database.pool, projectId, async client => {
+      const response = send();
+      expect(await stillWaiting(response), name).toBe(true);
+      await client.query(archive, [projectId]);
+      return { response };
+    });
+    expect((await pending.response).status(), name).toBe(409);
+    await database.pool.query("UPDATE public.projects SET archived_at = NULL WHERE id = $1", [projectId]);
+  }
+  expect((await (await member.get(path)).json()).map((e: { number: number }) => e.number)).toEqual([1]);
+});
+
+test("a refresh that races an unlink answers 409 and saves nothing", async ({ request }) => {
+  const { path, projectId, repositoryId } = await setUp(request, [item(1, "One"), item(2, "Two")]);
+  const member = await as(request, "member");
+  await member.post(path, { reference: "1" });
+  const removed = await (await member.post(path, { reference: "2" })).json();
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/items`, { data: { items: [item(1, "One (renamed)"), item(2, "Two")] } });
+
+  const pending = await withTeamLock(database.pool, projectId, async client => {
+    const response = member.post(`${path}/refresh`);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query("DELETE FROM public.requirement_evidence WHERE id = $1", [removed.id]);
+    return { response };
+  });
+  const refreshed = await pending.response;
+  expect(refreshed.status()).toBe(409);
+  expect((await refreshed.json()).detail).toBe("The evidence changed while it was being read from GitHub. Reload and try again.");
+  expect((await (await member.get(path)).json()).map((e: { title: string }) => e.title)).toEqual(["One"]);
+});
+
+test("two links added at once never take a requirement past 50", async ({ request }) => {
+  const { path, projectId, requirementId, repositoryId } = await setUp(request, [item(60, "Sixty"), item(61, "Sixty-one")]);
+  await database.pool.query(`INSERT INTO public.requirement_evidence
+    (requirement_id,kind,repository_id,repository_owner,repository_name,number,title,state,url,github_created_at,github_updated_at,linked_by)
+    SELECT $1,'issue',$2,'acme','web',n,'Seeded','open','https://github.com/acme/web/issues/'||n,now(),now(),'owner' FROM generate_series(1,49) AS n`,
+    [requirementId, repositoryId]);
+  const owner = await as(request, "owner");
+  const responses = await withTeamLock(database.pool, projectId, async () => {
+    const both = [owner.post(path, { reference: "60" }), owner.post(path, { reference: "61" })];
+    expect(await stillWaiting(Promise.all(both))).toBe(true);
+    return both;
+  });
+  expect((await Promise.all(responses)).map(response => response.status()).sort()).toEqual([201, 409]);
   expect(await (await owner.get(path)).json()).toHaveLength(50);
 });
 

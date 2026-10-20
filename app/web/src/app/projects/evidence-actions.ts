@@ -10,6 +10,11 @@ export type EvidenceActionState = { error: string | null };
 
 const GITHUB_DOWN = "GitHub could not be reached. Try again in a moment.";
 const GITHUB_NOT_SET_UP = "GitHub is not set up for this SpecThread deployment yet.";
+/**
+ * Linking and refreshing read GitHub, one call per linked item and per release to compare, so
+ * they get longer than an ordinary API call. Keep this below the page's maxDuration (ADR-048).
+ */
+const GITHUB_WRITE_TIMEOUT_MS = 55_000;
 
 const refresh = (projectId: string, requirementId: string) =>
   revalidatePath(`/projects/${projectId}/requirements/${requirementId}`);
@@ -29,9 +34,10 @@ export async function linkEvidence(
   if (!isUuid(projectId) || !isUuid(requirementId)) return fail(failed);
 
   try {
-    const response = await apiFetch(`/requirements/${requirementId}/evidence`, { method: "POST", body: JSON.stringify({ reference }) });
+    const response = await apiFetch(`/requirements/${requirementId}/evidence`, { method: "POST", body: JSON.stringify({ reference }), timeoutMs: GITHUB_WRITE_TIMEOUT_MS });
     if (response.status === 400) return fail(fieldError(await response.json(), "reference") ?? failed);
-    // 409 explains itself: no repository, already linked, archived, the limit, or the app uninstalled.
+    // 409 explains itself: no repository, already linked, archived, the limit, the app uninstalled,
+    // or the evidence changing while GitHub was read.
     if (response.status === 409) return fail(problemDetail(await response.json()) ?? failed);
     if (response.status === 502) return fail(GITHUB_DOWN);
     if (response.status === 503) return fail(GITHUB_NOT_SET_UP);
@@ -50,7 +56,7 @@ export async function refreshEvidence(projectId: string, requirementId: string):
   const failed = "The evidence could not be refreshed. Please try again.";
   if (!isUuid(projectId) || !isUuid(requirementId)) return { error: failed };
   try {
-    const response = await apiFetch(`/requirements/${requirementId}/evidence/refresh`, { method: "POST" });
+    const response = await apiFetch(`/requirements/${requirementId}/evidence/refresh`, { method: "POST", timeoutMs: GITHUB_WRITE_TIMEOUT_MS });
     if (response.status === 409) return { error: problemDetail(await response.json()) ?? failed };
     if (response.status === 502) return { error: GITHUB_DOWN };
     if (response.status === 503) return { error: GITHUB_NOT_SET_UP };

@@ -11,12 +11,15 @@ import { auth } from "./auth";
  * see docs/API.md. Throws when SPECTHREAD_API_URL is not configured or there is no session.
  * Within one server render every call shares a single token exchange.
  *
- * Every call times out after API_TIMEOUT_MS. A GET that fails with a network error, a timeout,
- * or 500/502/503/504 is retried once, because those are usually brief (a database connection
- * refused for a moment, a restarting API) and a refresh would succeed. Writes are never
- * retried, so nothing runs twice (ADR-046).
+ * Every call times out after API_TIMEOUT_MS, or after `timeoutMs` when the caller knows the API
+ * needs longer, such as a write that reads many items from GitHub (ADR-048). A GET that fails
+ * with a network error, a timeout, or 500/502/503/504 is retried once, because those are
+ * usually brief (a database connection refused for a moment, a restarting API) and a refresh
+ * would succeed. Writes are never retried, so nothing runs twice (ADR-046).
  */
-export async function apiFetch(path: `/${string}`, init: RequestInit = {}, incomingHeaders?: Headers): Promise<Response> {
+export async function apiFetch(
+  path: `/${string}`, { timeoutMs = API_TIMEOUT_MS, ...init }: RequestInit & { timeoutMs?: number } = {}, incomingHeaders?: Headers,
+): Promise<Response> {
   const base = apiBaseUrl(process.env.SPECTHREAD_API_URL);
   const url = new URL(path, base);
   if (url.origin !== base.origin) throw new Error("apiFetch path must stay on the API origin.");
@@ -27,7 +30,7 @@ export async function apiFetch(path: `/${string}`, init: RequestInit = {}, incom
   if (typeof init.body === "string" && !requestHeaders.has("content-type")) {
     requestHeaders.set("content-type", "application/json");
   }
-  const send = () => fetch(url, { ...init, headers: requestHeaders, cache: "no-store", signal: withTimeout(init.signal) });
+  const send = () => fetch(url, { ...init, headers: requestHeaders, cache: "no-store", signal: withTimeout(init.signal, timeoutMs) });
   if ((init.method ?? "GET").toUpperCase() !== "GET") return send();
   try {
     const response = await send();
@@ -47,8 +50,8 @@ const RETRY_DELAY_MS = 300;
 const RETRYABLE_STATUSES = new Set([500, 502, 503, 504]);
 
 /** The caller's abort signal, if any, combined with this call's timeout. */
-function withTimeout(signal: AbortSignal | null | undefined) {
-  const timeout = AbortSignal.timeout(API_TIMEOUT_MS);
+function withTimeout(signal: AbortSignal | null | undefined, timeoutMs: number) {
+  const timeout = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 

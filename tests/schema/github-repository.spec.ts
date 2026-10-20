@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startFakeGitHub } from "../../scripts/test-github.mjs";
 import { startApi } from "../support/api-process";
+import { stillWaiting, withTeamLock } from "../support/team-lock";
 
 // The repository connection API (ADR-032) called directly, as any signed-in user could,
 // against a disposable PostgreSQL database and a local stand-in for GitHub.
@@ -115,6 +116,34 @@ test("only the owner changes the connection; members read it; others cannot tell
   expect((await owner.put(`/projects/${projectId}/repository`, body)).status()).toBe(409);
   expect((await owner.delete(`/projects/${projectId}/repository`)).status()).toBe(409);
   expect((await (await member.get(`/projects/${projectId}/repository`)).json()).repository.fullName).toBe("acme/web");
+});
+
+test("connecting and disconnecting wait for the team lock and refuse once the project is archived", async ({ request }) => {
+  const projectId = await createProject(request);
+  const owner = await as(request, "owner");
+  await gitHubShows(request, "lock-token", [{ id: 71, repositories: [{ id: 701, owner: "acme", name: "web" }] }]);
+  const archive = "UPDATE public.projects SET archived_at = now() WHERE id = $1";
+  const body = { installationId: 71, repositoryId: 701, githubToken: "lock-token" };
+
+  const connect = await withTeamLock(database.pool, projectId, async client => {
+    const response = owner.put(`/projects/${projectId}/repository`, body);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query(archive, [projectId]);
+    return { response };
+  });
+  expect((await connect.response).status()).toBe(409);
+  expect(await (await owner.get(`/projects/${projectId}/repository`)).json()).toEqual({ repository: null });
+
+  await database.pool.query("UPDATE public.projects SET archived_at = NULL WHERE id = $1", [projectId]);
+  expect((await owner.put(`/projects/${projectId}/repository`, body)).status()).toBe(200);
+  const disconnect = await withTeamLock(database.pool, projectId, async client => {
+    const response = owner.delete(`/projects/${projectId}/repository`);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query(archive, [projectId]);
+    return { response };
+  });
+  expect((await disconnect.response).status()).toBe(409);
+  expect((await (await owner.get(`/projects/${projectId}/repository`)).json()).repository).toMatchObject({ repositoryId: 701 });
 });
 
 test("a repository is connected only when GitHub shows it to that user through that installation", async ({ request }) => {

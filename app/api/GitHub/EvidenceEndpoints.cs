@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using SpecThread.Api.Data;
 using SpecThread.Api.Projects;
+using SpecThread.Api.Requirements;
 
 namespace SpecThread.Api.GitHub;
 
@@ -72,10 +73,7 @@ internal static partial class EvidenceEndpoints
         var here = existing.FindAll(e => e.RepositoryId == repository.RepositoryId);
         if (reference.Number is { } number && here.Exists(e => e.Number == number)) return AlreadyLinked($"#{number}");
         if (reference.Tag is { } wanted && here.Exists(e => e.Kind == "release" && e.Tag == wanted)) return AlreadyLinked($"Release {wanted}");
-        if (existing.Count >= MaxEvidence)
-        {
-            return TypedResults.Problem($"A requirement can have at most {MaxEvidence} evidence links.", statusCode: StatusCodes.Status409Conflict);
-        }
+        if (existing.Count >= MaxEvidence) return LimitReached();
 
         var found = reference switch
         {
@@ -126,16 +124,33 @@ internal static partial class EvidenceEndpoints
             : await ReadContentsAsync(github, repository, here.FindAll(e => e.Kind == "release"), [evidence], cancel);
         if (contents != GitHubFailure.None) return Failed(contents, fullName);
 
+        // GitHub was read without holding the team lock. Take it now and check again what the reads relied on.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
+        {
+            case Recheck.NotFound: return TypedResults.NotFound();
+            case Recheck.Archived: return ProjectEndpoints.Archived();
+            case Recheck.Changed: return Changed();
+        }
+        // Counted again under the lock, so links added at the same time cannot pass the limit together.
+        if (await db.RequirementEvidence.CountAsync(e => e.RequirementId == requirementId, cancel) >= MaxEvidence) return LimitReached();
+
         db.RequirementEvidence.Add(evidence);
         try
         {
             await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A linked release this link updates was removed meanwhile.
+            return Changed();
         }
         catch (DbUpdateException)
         {
             // Two links of the same item at once: a unique index refused this one.
             return AlreadyLinked(Label(found.Value));
         }
+        await transaction.CommitAsync(cancel);
         return TypedResults.Created($"/requirements/{requirementId}/evidence/{evidence.Id}", ToResponse(evidence));
     }
 
@@ -145,7 +160,8 @@ internal static partial class EvidenceEndpoints
     private static async Task<Results<Ok<List<EvidenceResponse>>, NotFound, ProblemHttpResult>> Refresh(
         Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, IGitHubClient github, CancellationToken cancel)
     {
-        var scope = await FindAsync(db, user.CallerId(), requirementId, cancel);
+        var userId = user.CallerId();
+        var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
@@ -185,17 +201,39 @@ internal static partial class EvidenceEndpoints
             (release, change) => before[release.Id].Sha == release.Sha && before[change.Id].Change == ChangeSha(change) &&
                 before[release.Id].Contains.GetValueOrDefault(change.Id));
         if (contents != GitHubFailure.None) return Failed(contents, fullName);
-        await db.SaveChangesAsync(cancel);
+
+        // GitHub was read without holding the team lock, which can take a while. Take it now and
+        // check again what the reads relied on.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
+        {
+            case Recheck.NotFound: return TypedResults.NotFound();
+            case Recheck.Archived: return ProjectEndpoints.Archived();
+            case Recheck.Changed: return Changed();
+        }
+        try
+        {
+            await db.SaveChangesAsync(cancel);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A link was removed while GitHub was being read. Nothing is saved.
+            return Changed();
+        }
+        await transaction.CommitAsync(cancel);
         return TypedResults.Ok(await ReadAsync(db, requirementId, cancel));
     }
 
     private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> Unlink(
         Guid requirementId, Guid evidenceId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
-        var scope = await FindAsync(db, user.CallerId(), requirementId, cancel);
-        if (scope is null) return TypedResults.NotFound();
-        if (scope.Archived) return ProjectEndpoints.Archived();
+        // Serialize with archiving and membership changes in this project's team.
+        await using var transaction = await db.Database.BeginTransactionAsync(cancel);
+        var found = await RequirementEndpoints.LockForMember(db, user.CallerId(), requirementId, cancel);
+        if (found is null) return TypedResults.NotFound();
+        if (found.Archived) return ProjectEndpoints.Archived();
         var deleted = await db.RequirementEvidence.Where(e => e.Id == evidenceId && e.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
+        await transaction.CommitAsync(cancel);
         return deleted == 0 ? TypedResults.NotFound() : TypedResults.NoContent();
     }
 
@@ -204,6 +242,22 @@ internal static partial class EvidenceEndpoints
         db.Requirements.AsNoTracking().Where(r => r.Id == requirementId)
             .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new Scope(p.Id, r.ArchivedAt != null || p.ArchivedAt != null))
             .SingleOrDefaultAsync(cancel);
+
+    private enum Recheck { Ready, NotFound, Archived, Changed }
+
+    // Call inside a transaction, after reading GitHub and before saving. Locks the project's team,
+    // then confirms that what the reads relied on still holds: the caller is a member, nothing is
+    // archived, and the same repository is still connected.
+    private static async Task<Recheck> LockAndRecheckAsync(
+        SpecThreadDbContext db, string userId, Guid requirementId, ProjectRepository repository, CancellationToken cancel)
+    {
+        var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
+        if (found is null) return Recheck.NotFound;
+        if (found.Archived) return Recheck.Archived;
+        var connected = await db.ProjectRepositories.AnyAsync(r => r.ProjectId == found.Requirement.ProjectId &&
+            r.InstallationId == repository.InstallationId && r.RepositoryId == repository.RepositoryId, cancel);
+        return connected ? Recheck.Ready : Recheck.Changed;
+    }
 
     // Oldest first by GitHub's own date, so the list reads as a timeline.
     private static async Task<List<EvidenceResponse>> ReadAsync(SpecThreadDbContext db, Guid requirementId, CancellationToken cancel) =>
@@ -411,6 +465,12 @@ internal static partial class EvidenceEndpoints
 
     private static ProblemHttpResult NoRepository() =>
         TypedResults.Problem("Connect a GitHub repository to this project first.", statusCode: StatusCodes.Status409Conflict);
+
+    private static ProblemHttpResult LimitReached() =>
+        TypedResults.Problem($"A requirement can have at most {MaxEvidence} evidence links.", statusCode: StatusCodes.Status409Conflict);
+
+    private static ProblemHttpResult Changed() => TypedResults.Problem(
+        "The evidence changed while it was being read from GitHub. Reload and try again.", statusCode: StatusCodes.Status409Conflict);
 
     private static ProblemHttpResult AlreadyLinked(string label) =>
         TypedResults.Problem($"{label} is already linked to this requirement.", statusCode: StatusCodes.Status409Conflict);

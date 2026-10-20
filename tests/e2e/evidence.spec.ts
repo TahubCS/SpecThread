@@ -406,6 +406,20 @@ test("refreshing reads the current state from GitHub and keeps items GitHub no l
   await expect(rows(page).nth(2)).toContainText("Open issue");
 });
 
+test("a refresh that takes longer than an ordinary API call still completes", async ({ page }) => {
+  test.slow();
+  const { projectId, requirementId, url } = await createRequirement(page);
+  const { repositoryId } = await connect(projectId, [issue(4, "Bug")]);
+  await page.goto(url);
+  await link(page, "4");
+  await setGitHubItems(repositoryId, [issue(4, "Bug (confirmed)")]);
+  // Past the 10-second limit ordinary API calls have, as a refresh of many links can be.
+  await failApi(owner.userId, { method: "POST", path: `^/requirements/${requirementId}/evidence/refresh$`, delayMs: 11_000, times: 1 });
+  await page.getByRole("button", { name: "Refresh from GitHub" }).click();
+  await expect(rows(page).nth(0)).toContainText("Bug (confirmed)", { timeout: 20_000 });
+  await expect(page.getByText("The evidence could not be refreshed. Please try again.")).toHaveCount(0);
+});
+
 test("a link is removed without touching the others", async ({ page }) => {
   const { projectId, url } = await createRequirement(page);
   await connect(projectId, [issue(1, "Keep"), issue(2, "Remove")]);

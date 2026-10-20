@@ -53,8 +53,8 @@ to the project's team; non-members get 404 as if the project did not exist.
 
 | POST | `/github/repositories` | any user | `{ githubToken }` | 200 `{ installUrl, repositories: AvailableRepository[], truncated }` |
 | GET | `/projects/{projectId}/repository` | member | | 200 `{ repository: ProjectRepository \| null }` |
-| PUT | `/projects/{projectId}/repository` | owner | `{ installationId, repositoryId, githubToken }` | 200 `{ repository: ProjectRepository }` |
-| DELETE | `/projects/{projectId}/repository` | owner | | 204 (idempotent) |
+| PUT | `/projects/{projectId}/repository` | team Owner/Admin | `{ installationId, repositoryId, githubToken }` | 200 `{ repository: ProjectRepository }` |
+| DELETE | `/projects/{projectId}/repository` | team Owner/Admin | | 204 (idempotent) |
 
 | GET | `/requirements/{requirementId}/evidence` | member | | 200 `Evidence[]` (oldest first by GitHub's created time) |
 | POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
@@ -87,8 +87,14 @@ results of pull requests and commits (ADR-035), and what each release contains; 
 commit itself is not re-read. `source` in the
 request is ignored: links made through this endpoint are always `manual` (ADR-036).
 409 carries the reason in `detail`: already linked, 50 links reached, no repository
-connected, the app uninstalled, or an archived requirement or project. 502 and 503
-mean the same as for repositories.
+connected, the app uninstalled, an archived requirement or project, or the evidence
+or connected repository changed while GitHub was being read (reload and retry). 502
+and 503 mean the same as for repositories.
+
+Link and refresh read GitHub first and only then take the team lock and save, so a
+large refresh may take tens of seconds; the web app allows these two calls 55 seconds
+(ADR-048). Every evidence, review, and repository write serializes with archiving
+and membership changes in the project's team, like requirement writes.
 
 `githubToken` is the signed-in user's own GitHub token for the SpecThread GitHub App
 (ADR-032). In the web app use `gitHubAccess()` from `@/lib/github-data`; never send
@@ -98,8 +104,6 @@ that installation is 400 on `repositoryId`; an installation the app can no longe
 on is 400 on `installationId`. GitHub being unreachable is 502. Missing or rejected
 app credentials are 503.
 
-Adding a member needs the email of an existing SpecThread account with a verified
-address. The match ignores case. Otherwise the response is 400 with an error on `email`.
 Every team member can read every project and edit its requirements. Only the team
 Owner/Admin manage projects. `teamId` is required on creation and immutable on
 rename. Missing/empty IDs return 400 field errors; unknown/inaccessible teams return
@@ -181,7 +185,6 @@ author gets 403, and an archived requirement or project 409. Decisions are only
 added: there is no update or delete. A decision is `outdated` when the requirement's
 version, or the set of its evidence link IDs, differs from what was reviewed;
 refreshing evidence does not change that.
-```
 
 `ownerUserId` on Project is retained historical creator provenance. Use `teamRole`
 for management controls; project creation does not grant independent ownership.
@@ -267,9 +270,7 @@ from protected pages to /onboarding, and POST /projects returns 409 with
 `code: "onboarding_required"` for an incomplete existing account. Anonymous requests
 remain 401, and an account without a user row remains 403. Project access follows the containing team as described above.
 
-Not yet available: activity and audit history. Claude owns global
-project pages and creation/deletion forms; this branch implements team tables and
-the C# access contract.
+Not yet available: activity and audit history.
 
 
 Team management uses authenticated server actions. Role changes require explicit
