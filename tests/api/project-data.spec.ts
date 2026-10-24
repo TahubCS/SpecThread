@@ -95,10 +95,15 @@ test("a requirement response is accepted only in the documented shape, with crit
   expect(parsed.updatedBy).toBe("u2");
   expect(parsed.documents).toEqual([document]);
   for (const value of [null, {}, { ...requirement, description: null }, { ...requirement, createdBy: 1 },
-    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }, { ...requirement, documents: undefined },
-    { ...requirement, updatedBy: null }]) {
+    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }, { ...requirement, documents: null },
+    { ...requirement, updatedBy: null }, { ...requirement, updatedBy: undefined, createdBy: 1 }]) {
     expect(() => parseRequirement(value)).toThrow("unexpected requirement");
   }
+  // The previous API sends neither field; the page reads them as the creator and no documents.
+  const previous: Record<string, unknown> = { ...requirement };
+  delete previous.updatedBy;
+  delete previous.documents;
+  expect(parseRequirement(previous)).toMatchObject({ updatedBy: "u1", documents: [] });
   expect(() => parseRequirement({ ...requirement, acceptanceCriteria: [{ id: "c", text: 1, position: 0 }] })).toThrow("unexpected acceptance criterion");
   for (const value of [null, { ...document, title: 1 }, { ...document, archivedAt: "soon" }, { ...document, linkedBy: null }]) {
     expect(() => parseRequirement({ ...requirement, documents: [value] }), JSON.stringify(value)).toThrow("unexpected linked document");

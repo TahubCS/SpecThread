@@ -62,21 +62,26 @@ export type RequirementErrors = {
   form?: string;
 };
 
-/** Validates one requirement from an API response. Throws when the shape is not the documented one. */
+/**
+ * Validates one requirement from an API response. Throws when the shape is not the documented one.
+ * Vercel deploys the web before CI deploys the API (ADR-044), so a response from the previous
+ * API may lack `updatedBy` and `documents`: they read as the creator and no documents.
+ */
 export function parseRequirement(value: unknown): Requirement {
   const item = value as Record<string, unknown> | null;
   const isDate = (date: unknown) => typeof date === "string" && !Number.isNaN(Date.parse(date));
   const criteria = item?.acceptanceCriteria;
-  const documents = item?.documents;
+  const documents = item?.documents === undefined ? [] : item.documents;
+  const updatedBy = item?.updatedBy === undefined ? item?.createdBy : item.updatedBy;
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
-      typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" || typeof item.updatedBy !== "string" ||
+      typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" || typeof updatedBy !== "string" ||
       typeof item.version !== "number" || !isDate(item.createdAt) || !isDate(item.updatedAt) ||
       (item.archivedAt !== null && typeof item.archivedAt !== "string") || !Array.isArray(criteria) || !Array.isArray(documents)) {
     throw new Error("The API returned an unexpected requirement.");
   }
   return {
     id: item.id, projectId: item.projectId, title: item.title, description: item.description, createdBy: item.createdBy,
-    updatedBy: item.updatedBy,
+    updatedBy,
     version: item.version, createdAt: item.createdAt as string, updatedAt: item.updatedAt as string, archivedAt: item.archivedAt,
     acceptanceCriteria: criteria.map((entry: unknown) => {
       const criterion = entry as Record<string, unknown> | null;
