@@ -125,6 +125,8 @@ test("editing replaces the title, description, and criteria and raises the versi
 
   await expect(page.getByRole("heading", { name: "Guest checkout v2", level: 1 })).toBeVisible();
   await expect(page.getByText("Version 2")).toBeVisible();
+  // The save records who made it and when.
+  await expect(page.getByText(/Updated by Requirement tester on [A-Z][a-z]{2} \d{1,2}, \d{4}/)).toBeVisible();
   await expect(page.getByText("Now with a description.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Second", "Third"]);
 });
@@ -151,7 +153,7 @@ test("a save made after someone else saved is refused and nothing is overwritten
   await expect(page.getByText("Version 2")).toBeVisible();
 });
 
-test("a requirement is archived only after confirming, then is read-only and off the list", async ({ page }) => {
+test("a requirement is archived only after confirming, is read-only under Archived, and is restored", async ({ page }, testInfo) => {
   const projectId = await createProject(page, "Checkout");
   const requirementId = await createRequirement(page, projectId, "Short lived", ["Only one"]);
   await page.getByRole("button", { name: "Archive requirement" }).click();
@@ -163,14 +165,54 @@ test("a requirement is archived only after confirming, then is read-only and off
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements$`));
   await expect(page.getByText("This project has no requirements yet.")).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/requirements/${requirementId}`);
-  await expect(page.getByText(/This requirement was archived on/)).toBeVisible();
+  // Hidden from the default list, but listed under Archived and still opens, read-only.
+  await page.getByRole("link", { name: "Archived" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements\\?archived=true$`));
+  await expect(page.getByRole("heading", { name: "Archived requirements", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "New requirement" })).toHaveCount(0);
+  const archivedRow = page.getByRole("list", { name: "Archived requirements" }).getByRole("link", { name: /Short lived/ });
+  await expect(archivedRow).toContainText(/Archived [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+  await page.screenshot({ path: testInfo.outputPath("requirements-archived.png"), fullPage: true });
+  await archivedRow.click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements/${requirementId}$`));
+  await expect(page.getByText(/This requirement was archived on .*It can't be edited or reviewed until it is restored\./)).toBeVisible();
   await expect(page.getByRole("link", { name: "Edit" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Archive requirement" })).toHaveCount(0);
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Only one"]);
   await page.goto(`/projects/${projectId}/requirements/${requirementId}/edit`);
-  await expect(page.getByText("This requirement is archived and can no longer be changed.")).toBeVisible();
+  await expect(page.getByText("This requirement is archived. Restore it to edit it again.")).toBeVisible();
   await expect(page.getByLabel("Title")).toHaveCount(0);
+
+  // Restoring brings back editing and the list entry, at the same version.
+  await page.getByRole("link", { name: "Restore it" }).click();
+  await expect(page.getByRole("button", { name: "Restore requirement" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("requirement-archived-detail.png"), fullPage: true });
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("link", { name: "Edit" })).toBeVisible();
+  await expect(page.getByText(/This requirement was archived on/)).toHaveCount(0);
+  await expect(page.getByText("Version 1")).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("link", { name: /Short lived/ })).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements?archived=true`);
+  await expect(page.getByText("This project has no archived requirements.")).toBeVisible();
+});
+
+test("restoring is refused with an explanation when the project was archived meanwhile, or the API fails", async ({ page }) => {
+  const projectId = await createProject(page, "Checkout");
+  const requirementId = await createRequirement(page, projectId, "Keep me");
+  await runTestSql(`UPDATE public.requirements SET archived_at = now() WHERE id = '${requirementId}'`);
+  await page.goto(`/projects/${projectId}/requirements/${requirementId}`);
+  await failApi(owner.userId, { method: "POST", path: `^/requirements/${requirementId}/restore$`, status: 500, body: { status: 500 } });
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "The requirement could not be restored. Please try again." })).toBeVisible();
+  await clearApiFaults(owner.userId);
+
+  await runTestSql(`UPDATE public.projects SET archived_at = now() WHERE id = '${projectId}'`);
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "This project is archived, so its requirements can't be restored." })).toBeVisible();
+  // In an archived project nothing offers a restore.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Restore requirement" })).toHaveCount(0);
 });
 
 test("an archived project keeps its requirements readable but offers no way to change them", async ({ page }) => {

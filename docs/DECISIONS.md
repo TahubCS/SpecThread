@@ -575,7 +575,7 @@ position in an API field message always matches the field on screen. The edit fo
 sends the version it was loaded with. When the API refuses a save with 409, the
 action reads the requirement again to say whether it was archived, changed by someone
 else, or belongs to an archived project. Archiving a requirement asks for
-confirmation because the API has no unarchive. Archived requirements and
+confirmation because the API has no unarchive (ADR-050 later adds restore). Archived requirements and
 requirements of archived projects stay readable and show no edit or archive
 controls. A requirement opened under a different project's address shows not-found.
 The author's name comes from the project's member list; someone no longer a member
@@ -1197,6 +1197,36 @@ need to change without editing the requirement. A document's page does not yet l
 requirements that link it. Migration RequirementDocuments adds the table with RLS on
 and browser grants revoked; CI applies it (ADR-044), and its rollback removes only the
 links.
+
+ADR-050: Requirements record their last editor, list archives on request, and can be restored
+
+Status: Accepted
+
+Context: The requirements story asks that edits save the editor's name and a timestamp,
+that archived requirements leave the default list but still open read-only, and that
+they can't be edited or reviewed until restored. Requirements stored only when they
+were last changed, the web had no way to list archived ones, and archiving could not be
+undone (ADR-024).
+
+Decision: `requirements.updated_by` records who saved the current version, next to the
+existing `updated_at`; create and every save set both. Only the latest edit is kept;
+an edit history was considered and deferred (the user's choice). The column is
+nullable so that the API still running during a deploy (ADR-044) can keep creating
+requirements; the migration backfills existing rows with their creator, and the API
+reports the creator for any row left empty. The page reads "Updated by <name> on <date>".
+
+`GET /projects/{id}/requirements` stays active-only by default and takes
+`archived=true` for archived ones, like team projects; the Requirements tab links to an
+Archived view. `POST /requirements/{id}/restore` clears `archived_at`. Any team member
+restores, as any member archives (ADR-041), and both are refused in an archived
+project. Restoring does not raise the version or change the last editor, so a review
+that was current before archiving still is. While archived, saves, evidence changes,
+and review decisions keep answering 409.
+
+Consequences: Who made earlier edits, and what they changed, is not recorded; a
+history table would extend this. Archiving is no longer final, so anyone in the team can
+undo it. Migration RequirementUpdatedBy adds the column, its index, and a foreign key to
+`user`; its rollback drops only the column.
 
 ADR-NNN: Title
 

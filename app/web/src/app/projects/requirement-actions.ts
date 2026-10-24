@@ -74,7 +74,7 @@ export async function updateRequirement(
   redirect(`/projects/${projectId}/requirements/${requirementId}`);
 }
 
-/** Archives a requirement, then returns to the project's requirement list. Archiving cannot be undone. */
+/** Archives a requirement, then returns to the project's requirement list. `restoreRequirement` undoes it. */
 export async function archiveRequirement(projectId: string, requirementId: string): Promise<RequirementArchiveState> {
   const failed = "The requirement could not be archived. Please try again.";
   if (!isUuid(projectId) || !isUuid(requirementId)) return { error: failed };
@@ -88,6 +88,22 @@ export async function archiveRequirement(projectId: string, requirementId: strin
   }
   revalidatePath(`/projects/${projectId}`, "layout");
   redirect(`/projects/${projectId}/requirements`);
+}
+
+/** Restores an archived requirement, then reopens it so it can be edited and reviewed again. */
+export async function restoreRequirement(projectId: string, requirementId: string): Promise<RequirementArchiveState> {
+  const failed = "The requirement could not be restored. Please try again.";
+  if (!isUuid(projectId) || !isUuid(requirementId)) return { error: failed };
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/restore`, { method: "POST" });
+    if (response.status === 409) return { error: "This project is archived, so its requirements can't be restored." };
+    if (!response.ok) throw new Error(`Restore requirement returned ${response.status}.`);
+  } catch (error) {
+    console.error("Restore requirement failed", error);
+    return { error: failed };
+  }
+  revalidatePath(`/projects/${projectId}`, "layout");
+  redirect(`/projects/${projectId}/requirements/${requirementId}`);
 }
 
 /** Explains a refused save by looking at the requirement as it is now: archived, or changed by someone else. */

@@ -554,6 +554,10 @@ namespace SpecThread.Api.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("updated_by");
+
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAdd()
@@ -566,6 +570,8 @@ namespace SpecThread.Api.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("ProjectId");
+
+                    b.HasIndex("UpdatedBy");
 
                     b.ToTable("requirements", "public", t =>
                         {
@@ -1132,6 +1138,11 @@ namespace SpecThread.Api.Migrations
                         .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("SpecThread.Api.Data.RequirementDocument", b =>

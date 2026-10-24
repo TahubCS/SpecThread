@@ -260,6 +260,15 @@ currently require network access during the web build.
   ticking a document and opening it from the requirement, an archived link marked and
   then unticked, ticks kept after a refused save with the API's message beside them,
   and keyboard ticking at 390px. Not exercised: 20 documents through the browser.
+- Last editor, archive view, and restore (ADR-050): tests/schema/product-api.spec.ts
+  checks `updatedBy` after create and after another member's save; default and
+  `archived=true` lists; an archived requirement readable but refusing saves and
+  reviews; restore (member, idempotent, 404 for outsiders) keeping the version and last
+  editor, then editing again; and the migration's backfill, empty-value fallback,
+  foreign key, and rollback. tests/schema/reviews.spec.ts records a decision after a
+  restore and refuses archive and restore in an archived project. Browser tests: the
+  "Updated by" line, the Archived view and its empty state, the read-only page and edit
+  notice, restoring, a failed restore, and a restore refused once the project is archived.
 - Teams: real API-backed creation, search, empty/error/retry and member-only access;
   reference Home, independent saved sidebar groups, personal favorites sorting first,
   keyboard team menu, and desktop/mobile screenshots. Required onboarding resumes

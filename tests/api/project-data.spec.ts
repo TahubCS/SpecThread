@@ -85,16 +85,18 @@ test("dates are shown as short UTC dates", () => {
 test("a requirement response is accepted only in the documented shape, with criteria in order", () => {
   const document = { id: "d1", title: "Design the Box", fileName: "box.pdf", contentType: "application/pdf", archivedAt: null,
     linkedBy: "u1", linkedAt: "2026-10-01T10:00:00Z" };
-  const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", description: "", createdBy: "u1", version: 2,
+  const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", description: "", createdBy: "u1", updatedBy: "u2", version: 2,
     createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null,
     acceptanceCriteria: [{ id: "c2", text: "Second", position: 1 }, { id: "c1", text: "First", position: 0 }],
     documents: [{ ...document, extra: 1 }] };
   const parsed = parseRequirement(requirement);
   expect(parsed.acceptanceCriteria.map(criterion => criterion.text)).toEqual(["First", "Second"]);
   expect(parsed.createdAt).toBe("2026-10-01T10:00:00Z");
+  expect(parsed.updatedBy).toBe("u2");
   expect(parsed.documents).toEqual([document]);
   for (const value of [null, {}, { ...requirement, description: null }, { ...requirement, createdBy: 1 },
-    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }, { ...requirement, documents: undefined }]) {
+    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }, { ...requirement, documents: undefined },
+    { ...requirement, updatedBy: null }]) {
     expect(() => parseRequirement(value)).toThrow("unexpected requirement");
   }
   expect(() => parseRequirement({ ...requirement, acceptanceCriteria: [{ id: "c", text: 1, position: 0 }] })).toThrow("unexpected acceptance criterion");

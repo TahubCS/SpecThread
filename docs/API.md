@@ -42,11 +42,12 @@ to the project's team; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/archive` | team Owner/Admin | | 200 `Project` (idempotent) |
 | POST | `/projects/{projectId}/restore` | team Owner/Admin | | 200 `Project` (idempotent) |
 | GET | `/teams/{teamId}/projects` | team member | query `archived=true` for archive; default false | 200 `Project[]`, by name then ID |
-| GET | `/projects/{projectId}/requirements` | member | | 200 `RequirementSummary[]` (active only, oldest first) |
+| GET | `/projects/{projectId}/requirements` | member | query `archived=true` for archived only; default active only | 200 `RequirementSummary[]` (oldest first) |
 | POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria, documentIds? }` | 201 `Requirement` |
 | GET | `/requirements/{requirementId}` | member | | 200 `Requirement` |
 | PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria, documentIds?, version }` | 200 `Requirement` |
 | POST | `/requirements/{requirementId}/archive` | member | | 200 `Requirement` (idempotent) |
+| POST | `/requirements/{requirementId}/restore` | member | | 200 `Requirement` (idempotent; 409 in an archived project) |
 | GET | `/projects/{projectId}/members` | member | | 200 `ProjectMember[]` (owner first, then by name) |
 | POST | `/projects/{projectId}/members` | member | | 410 (retired) |
 | DELETE | `/projects/{projectId}/members/{userId}` | member | | 410 (retired) |
@@ -121,6 +122,12 @@ every save; a document that stays linked keeps its `linkedBy` and `linkedAt` (AD
 A document can be newly linked only while it is active; one archived after it was linked
 stays linked. Anything else is 400 on `documentIds`.
 
+Create and every save set `updatedBy` to the caller and `updatedAt` to now (ADR-050).
+An archived requirement stays readable but refuses saves, evidence changes, and review
+decisions with 409 until it is restored. Restoring is not an edit: it keeps the
+version, `updatedBy`, `updatedAt`, and the recorded decisions. Neither archive nor
+restore is possible while the project is archived (409).
+
 ## Shapes
 
 ```ts
@@ -145,7 +152,8 @@ type Review = {
   decidedBy: string; decidedAt: string;
 };
 type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
-  description: string; createdBy: string; // createdAt comes from RequirementSummary
+  description: string; createdBy: string; // createdAt and updatedAt come from RequirementSummary
+  updatedBy: string; // who saved the current version; the creator until someone edits it
   acceptanceCriteria: { id: string; text: string; position: number }[];
   // Linked project documents, by title. archivedAt is the document's own archive time.
   documents: { id: string; title: string; fileName: string; contentType: string; archivedAt: string | null;

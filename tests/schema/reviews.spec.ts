@@ -176,11 +176,20 @@ test("a decision on a version the reviewer did not see, or on something archived
   expect(archived.status()).toBe(409);
   expect((await archived.json()).detail).toBe("Archived items cannot be changed.");
   expect(await (await reviewer.get(path)).json()).toHaveLength(1);
+  // Restoring makes it reviewable again, at the same version, with the earlier decision kept.
+  const restored = await reviewer.post(`/requirements/${requirementId}/restore`);
+  expect(restored.status()).toBe(200);
+  expect(await restored.json()).toMatchObject({ archivedAt: null, version: 2 });
+  expect((await reviewer.post(path, { decision: "rejected", note: "Late.", version: 2 })).status()).toBe(201);
+  expect(await (await reviewer.get(path)).json()).toHaveLength(2);
 
   const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts", acceptanceCriteria: ["Done"] })).json();
   expect((await author.post(`/projects/${projectId}/archive`)).status()).toBe(200);
   expect((await reviewer.post(`/requirements/${other.id}/reviews`, { decision: "accepted", version: 1 })).status()).toBe(409);
   expect(await (await reviewer.get(`/requirements/${other.id}/reviews`)).json()).toEqual([]);
+  // Nothing in an archived project can be restored either.
+  expect((await author.post(`/requirements/${requirementId}/archive`)).status()).toBe(409);
+  expect((await author.post(`/requirements/${other.id}/restore`)).status()).toBe(409);
 });
 
 test("a decision waits for the team lock, then is refused if the project was archived or the requirement edited meanwhile", async ({ request }) => {
@@ -290,5 +299,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(14); // Every migration through RequirementDocuments.
+  expect(history).toBe(15); // Every migration through RequirementUpdatedBy.
 });

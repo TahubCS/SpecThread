@@ -24,15 +24,19 @@ internal static class RequirementEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
         requirements.MapPost("/{requirementId:guid}/archive", Archive).WithName("ArchiveRequirement")
             .ProducesProblem(StatusCodes.Status409Conflict);
+        requirements.MapPost("/{requirementId:guid}/restore", Restore).WithName("RestoreRequirement")
+            .ProducesProblem(StatusCodes.Status409Conflict);
     }
 
+    // Active requirements by default; `archived=true` lists only the archived ones (ADR-050).
     private static async Task<Results<Ok<List<RequirementSummary>>, NotFound>> List(
-        Guid projectId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
+        Guid projectId, bool? archived, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         if (!await db.ProjectsFor(user.CallerId()).AnyAsync(p => p.Id == projectId, cancel)) return TypedResults.NotFound();
 
+        var wantArchived = archived == true;
         var requirements = await db.Requirements.AsNoTracking()
-            .Where(r => r.ProjectId == projectId && r.ArchivedAt == null)
+            .Where(r => r.ProjectId == projectId && (r.ArchivedAt != null) == wantArchived)
             .OrderBy(r => r.CreatedAt).ThenBy(r => r.Id)
             .ToListAsync(cancel);
 
@@ -77,6 +81,7 @@ internal static class RequirementEndpoints
             CreatedBy = userId,
             CreatedAt = now,
             UpdatedAt = now,
+            UpdatedBy = userId,
             Version = 1,
         };
         db.Requirements.Add(requirement);
@@ -131,6 +136,7 @@ internal static class RequirementEndpoints
         requirement.Title = input.Title;
         requirement.Description = input.Description;
         requirement.UpdatedAt = now;
+        requirement.UpdatedBy = userId;
         requirement.Version++;
         var criteria = AddCriteria(db, requirementId, input.Criteria);
         LinkDocuments(db, requirementId, input.DocumentIds.Where(id => !linked.Contains(id)), userId, now);
@@ -148,16 +154,26 @@ internal static class RequirementEndpoints
         return TypedResults.Ok(ToResponse(requirement, criteria, documents));
     }
 
-    private static async Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
-        Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
+    private static Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
+        Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel) =>
+        SetArchived(requirementId, true, user, db, cancel);
+
+    // Any member restores, as any member archives. Restoring is not an edit: the version, the
+    // last editor, and the reviews stay as they were, so a decision that was current still is.
+    private static Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Restore(
+        Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel) =>
+        SetArchived(requirementId, false, user, db, cancel);
+
+    private static async Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> SetArchived(
+        Guid requirementId, bool archived, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await LockForMember(db, user.CallerId(), requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
         if (found.ProjectArchived) return ProjectEndpoints.Archived();
 
-        // Idempotent: archiving again keeps the original timestamp.
-        found.Requirement.ArchivedAt ??= Clock.UtcNow();
+        // Idempotent: archiving again keeps the original timestamp, and restoring an active one changes nothing.
+        found.Requirement.ArchivedAt = archived ? found.Requirement.ArchivedAt ?? Clock.UtcNow() : null;
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -265,7 +281,7 @@ internal static class RequirementEndpoints
 
     private static RequirementResponse ToResponse(
         Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents) => new(
-        r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
+        r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.UpdatedBy ?? r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
         criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents);
 
     internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
@@ -285,7 +301,7 @@ internal sealed record RequirementSummary(
     Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review);
 
 internal sealed record RequirementResponse(
-    Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, int Version,
+    Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, string UpdatedBy, int Version,
     DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, List<CriterionResponse> AcceptanceCriteria,
     List<LinkedDocumentResponse> Documents);
 

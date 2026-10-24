@@ -27,6 +27,9 @@ public sealed class Requirement
     public required string CreatedBy { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    // Who saved the current version. Null only for a requirement created by an API older than
+    // migration RequirementUpdatedBy after that migration ran; read it as the creator (ADR-050).
+    public string? UpdatedBy { get; set; }
     public DateTime? ArchivedAt { get; set; }
     public int Version { get; set; } = 1;
 }

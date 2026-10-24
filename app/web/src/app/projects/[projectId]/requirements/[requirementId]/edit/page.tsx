@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { updateRequirement } from "@/app/projects/requirement-actions";
 import { RequirementForm } from "@/components/requirement-form";
 import { listDocuments, requireProject, requireRequirement } from "@/lib/project-data";
@@ -22,8 +23,10 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       <header className="project-page-heading">
         <h1 id="page-title">Edit requirement</h1>
       </header>
-      {project.archivedAt || requirement.archivedAt
+      {project.archivedAt
         ? <p className="notice">This requirement is archived and can no longer be changed.</p>
+        : requirement.archivedAt
+        ? <p className="notice">This requirement is archived. <Link href={detail}>Restore it</Link> to edit it again.</p>
         : <RequirementForm key={requirement.version}
             action={updateRequirement.bind(null, project.id, requirement.id, requirement.version)}
             initial={{

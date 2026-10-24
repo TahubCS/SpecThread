@@ -15,7 +15,7 @@ dotnet build app/api --configuration Release
 
 `SpecThreadDbContext` maps six Better Auth tables and fourteen product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
-with ProjectDocuments and then RequirementDocuments. Startup never calls `EnsureCreated`, `Migrate`, or a database
+with ProjectDocuments, RequirementDocuments, and RequirementUpdatedBy. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -326,7 +326,7 @@ Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 `dotnet ef database update <Name>` would also undo the other branch's migrations
 that come later in time. scripts/test-database.mjs applies the teams scripts first
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
-then RequirementDocuments.
+then RequirementDocuments and RequirementUpdatedBy.
 
 ## Project documents migration
 
@@ -375,6 +375,25 @@ fails the CI run with "relation already exists", as ProjectDocuments did when an
 draft of it was applied first. Rollback: `dotnet ef database update ProjectDocuments
 --project app/api`, or the rollback script. It drops only the links; requirements and
 documents stay, and the links would have to be made again.
+
+## Requirement editor migration
+
+RequirementUpdatedBy (ADR-050) adds `requirements.updated_by` (text, nullable, indexed,
+foreign key to `user` with restrict delete) and fills it with `created_by` for every
+existing requirement. It stays nullable so the API that is still running while CI
+deploys can keep creating requirements; the new API sets it on every create and save
+and reports the creator when it is empty.
+
+```sh
+dotnet ef migrations add RequirementUpdatedBy --project app/api --configuration Release
+node scripts/generate-requirement-updated-by.mjs
+```
+
+The second command adds the backfill and generates docs/schema/requirement-updated-by.sql
+and requirement-updated-by-rollback.sql. CI applies it after the merge (ADR-044); don't
+apply it by hand first. Rollback: `dotnet ef database update RequirementDocuments
+--project app/api`, or the rollback script; it drops only the column, losing who made
+each requirement's latest edit.
 
 ## Supabase tooling
 

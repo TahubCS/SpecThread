@@ -1,6 +1,6 @@
 # Shared handoff
 
-## Current task: Requirement criteria rule, creation date, and linked documents (2026-10-23)
+## Current task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23)
 
 - Branch: `feature/requirements-documents`, from `main` at `b069093`.
 - Scope: the "create a requirement" story (Danielle, Tech Lead; source "Design the Box"
@@ -56,8 +56,40 @@
   - The uncommitted `app/api/packages.lock.json` change that was on `main` before this
     branch was overwritten by `dotnet` restores during the work; the file now matches
     the committed version.
-- Next step: review, then open a PR to `main`. Follow-ups: show linking requirements on
-  a document's page, and Tickets.
+- Part 2, same branch at the user's request (ADR-050): the story criteria "edits save the
+  editor's name and a timestamp", "archived requirements are hidden from the default list
+  but can still be opened read-only", and "archived requirements can't be edited or
+  reviewed until restored".
+  - Completed: `requirements.updated_by` records who saved the current version; the page
+    reads "Updated by <name> on <date>". The Requirements tab links to an Archived view
+    (`?archived=true`, API `archived=true`). `POST /requirements/{id}/restore` (any team
+    member, refused in an archived project) restores without raising the version or
+    changing the last editor; the archived page offers Restore, and its edit page links
+    to it. Archived requirements still refuse saves, evidence changes, and reviews (409).
+  - Decision: last editor only, not an edit history (the user's choice). The column is
+    nullable so the API still running during the deploy can create requirements; the
+    migration backfills the creator and the API reports the creator for an empty value.
+  - Changed files: `RequirementEndpoints.cs` (list filter, restore, `UpdatedBy`),
+    `ProductModels.cs`, `SpecThreadDbContext.cs`, migration
+    `20261024010934_RequirementUpdatedBy` and the snapshot,
+    `scripts/generate-requirement-updated-by.mjs` with generated
+    `docs/schema/requirement-updated-by.sql` and `-rollback.sql`, `scripts/test-database.mjs`;
+    web `lib/project-data.ts`, `lib/requirements.ts`, `requirement-actions.ts`,
+    `components/requirement-archive.tsx` (adds `RequirementRestore`),
+    `components/requirement-rows.tsx`, the requirement list, detail, and edit pages;
+    tests in `tests/schema/product-api.spec.ts`, `reviews.spec.ts`, history counts in
+    `evidence.spec.ts` and `github-repository.spec.ts`, `tests/api/project-data.spec.ts`,
+    and `tests/e2e/requirements.spec.ts`; docs DECISIONS (ADR-050, ADR-024 note), API,
+    DATABASE, ARCHITECTURE, PROJECT, TESTING.
+  - Checks: lint, typecheck, `dotnet format --verify-no-changes`,
+    `has-pending-model-changes` (none), `git diff --check` passed; `npm test` 359 passed,
+    none flaky. The EF bundle applied RequirementDocuments then RequirementUpdatedBy to a
+    Postgres at the ProjectDocuments state with one existing requirement, whose
+    `updated_by` became its creator.
+  - Risks: who made earlier edits isn't recorded. Any team member can now undo an archive.
+- Next step: review, then open a PR to `main` (it carries both migrations, which CI
+  applies in order). Follow-ups: an edit history on the Requirement history page, show
+  linking requirements on a document's page, and Tickets.
 
 ## Previous task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
 

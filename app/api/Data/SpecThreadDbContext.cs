@@ -144,10 +144,12 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         requirement.Property(x => x.CreatedBy).HasColumnName("created_by");
         requirement.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         requirement.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
+        requirement.Property(x => x.UpdatedBy).HasColumnName("updated_by");
         requirement.Property(x => x.ArchivedAt).HasColumnName("archived_at");
         requirement.Property(x => x.Version).HasColumnName("version").HasDefaultValue(1).IsConcurrencyToken();
         requirement.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         requirement.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+        requirement.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UpdatedBy).OnDelete(DeleteBehavior.Restrict);
 
         var criterion = model.Entity<AcceptanceCriterion>();
         criterion.ToTable("acceptance_criteria", table =>

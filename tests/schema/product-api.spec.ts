@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startApi } from "../support/api-process";
@@ -140,6 +141,10 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   const fetched = await (await owner.get(`/requirements/${requirement.id}`)).json();
   expect(fetched.version).toBe(2);
   expect(fetched.createdBy).toBe("owner");
+  // Each save records who made it; the creator's own edit and a member's edit both count.
+  expect(requirement.updatedBy).toBe("owner");
+  expect(fetched.updatedBy).toBe("member");
+  expect(Date.parse(fetched.updatedAt)).toBeGreaterThanOrEqual(Date.parse(requirement.updatedAt));
   expect(fetched.createdAt).toBe(requirement.createdAt);
   expect(fetched.updatedAt).toBe((await updated.json()).updatedAt);
   expect(fetched.acceptanceCriteria.map((c: { text: string; position: number }) => [c.position, c.text])).toEqual([
@@ -298,4 +303,55 @@ test("legacy project membership writes cannot bypass invitation acceptance, and 
     await member.put(`/requirements/${requirement.id}`, { title: "Revoked", acceptanceCriteria: ["Done"], version: 1 }),
   ]) expect(response.status()).toBe(404);
   expect(await (await member.get("/projects")).json()).not.toContainEqual(expect.objectContaining({ id: project.id }));
+});
+
+test("archived requirements leave the default list, are listed on request, and are read-only until restored", async ({ request }) => {
+  const project = await createProject(request);
+  const owner = await as(request, "owner");
+  const member = await as(request, "member");
+  const outsider = await as(request, "outsider");
+  const active = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Active", acceptanceCriteria: ["Done"] })).json();
+  const shelved = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Shelved", acceptanceCriteria: ["Done"] })).json();
+  expect((await member.post(`/requirements/${shelved.id}/archive`)).status()).toBe(200);
+
+  const ids = async (query: string) => (await (await owner.get(`/projects/${project.id}/requirements${query}`)).json()).map((r: { id: string }) => r.id);
+  expect(await ids("")).toEqual([active.id]);
+  expect(await ids("?archived=false")).toEqual([active.id]);
+  expect(await ids("?archived=true")).toEqual([shelved.id]);
+  expect((await outsider.get(`/projects/${project.id}/requirements?archived=true`)).status()).toBe(404);
+
+  // Still readable, but neither editable nor reviewable.
+  expect(await (await member.get(`/requirements/${shelved.id}`)).json()).toMatchObject({ title: "Shelved", archivedAt: expect.any(String) });
+  expect((await owner.put(`/requirements/${shelved.id}`, { title: "Edited", acceptanceCriteria: ["Done"], version: 1 })).status()).toBe(409);
+  expect((await member.post(`/requirements/${shelved.id}/reviews`, { decision: "accepted", version: 1 })).status()).toBe(409);
+
+  expect((await outsider.post(`/requirements/${shelved.id}/restore`)).status()).toBe(404);
+  const restored = await member.post(`/requirements/${shelved.id}/restore`);
+  expect(restored.status()).toBe(200);
+  // Restoring is not an edit: the version and last editor stay as they were.
+  expect(await restored.json()).toMatchObject({ archivedAt: null, version: 1, updatedBy: "owner" });
+  expect((await member.post(`/requirements/${shelved.id}/restore`)).status()).toBe(200);
+  expect(await ids("")).toEqual([active.id, shelved.id]);
+  expect(await ids("?archived=true")).toEqual([]);
+  const edited = await member.put(`/requirements/${shelved.id}`, { title: "Edited", acceptanceCriteria: ["Done"], version: 1 });
+  expect(edited.status()).toBe(200);
+  expect(await edited.json()).toMatchObject({ version: 2, updatedBy: "member", createdBy: "owner" });
+});
+
+test("the updated_by migration starts existing requirements with their creator, and its rollback removes only the column", async ({ request }) => {
+  const project = await createProject(request);
+  const owner = await as(request, "owner");
+  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Before", acceptanceCriteria: ["Done"] })).json();
+  const read = (path: string) => readFile(path, "utf8").then(text => text.replace(/^\uFEFF/, ""));
+  const column = "SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirements' AND column_name='updated_by'";
+
+  await database.pool.query(await read("docs/schema/requirement-updated-by-rollback.sql"));
+  expect((await database.pool.query(column)).rows[0].count).toBe(0);
+  expect((await database.pool.query("SELECT title FROM requirements WHERE id=$1", [requirement.id])).rows).toEqual([{ title: "Before" }]);
+  await database.pool.query(await read("docs/schema/requirement-updated-by.sql"));
+  expect((await database.pool.query("SELECT updated_by FROM requirements WHERE id=$1", [requirement.id])).rows).toEqual([{ updated_by: "owner" }]);
+  // A row written by an older API leaves updated_by empty; the API then reports the creator.
+  await database.pool.query("UPDATE requirements SET updated_by = NULL WHERE id=$1", [requirement.id]);
+  expect((await (await owner.get(`/requirements/${requirement.id}`)).json()).updatedBy).toBe("owner");
+  await expect(database.pool.query("UPDATE requirements SET updated_by = 'missing-user' WHERE id=$1", [requirement.id])).rejects.toThrow(/foreign key/);
 });

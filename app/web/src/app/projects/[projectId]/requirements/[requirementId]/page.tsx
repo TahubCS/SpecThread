@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidencePanel } from "@/components/evidence-panel";
-import { RequirementArchive } from "@/components/requirement-archive";
+import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
@@ -32,7 +32,7 @@ export default async function Page({ params }: Props) {
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
-  const author = members.find(member => member.userId === requirement.createdBy)?.name ?? "a former member";
+  const nameOf = (userId: string) => people[userId] ?? "a former member";
   const editable = !project.archivedAt && !requirement.archivedAt;
   const base = `/projects/${project.id}/requirements`;
 
@@ -45,11 +45,13 @@ export default async function Page({ params }: Props) {
         {editable && <Link className="button secondary" href={`${base}/${requirement.id}/edit`}><Pencil size={14} aria-hidden="true" /> Edit</Link>}
       </header>
       <p className="requirement-meta">
-        Version {requirement.version} · Created by {author} on <time dateTime={requirement.createdAt}>{formatDate(requirement.createdAt)}</time>
-        {" "}· Updated <time dateTime={requirement.updatedAt}>{formatDate(requirement.updatedAt)}</time>
+        Version {requirement.version} · Created by {nameOf(requirement.createdBy)} on <time dateTime={requirement.createdAt}>{formatDate(requirement.createdAt)}</time>
+        {" "}· Updated by {nameOf(requirement.updatedBy)} on <time dateTime={requirement.updatedAt}>{formatDate(requirement.updatedAt)}</time>
       </p>
       {requirement.archivedAt && (
-        <p className="notice">This requirement was archived on {formatDate(requirement.archivedAt)} and can no longer be changed.</p>
+        <p className="notice">
+          This requirement was archived on {formatDate(requirement.archivedAt)}. It can&apos;t be edited or reviewed until it is restored.
+        </p>
       )}
       <section className="requirement-section" aria-labelledby="description-heading">
         <h2 id="description-heading">Description</h2>
@@ -113,6 +115,7 @@ export default async function Page({ params }: Props) {
           soloTeam={members.length === 1 ? { name: project.teamName, invitations: `/teams/${project.teamId}/invitations` } : null} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
+      {requirement.archivedAt && !project.archivedAt && <RequirementRestore projectId={project.id} requirementId={requirement.id} />}
     </article>
   );
 }

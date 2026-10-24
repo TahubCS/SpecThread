@@ -10,6 +10,8 @@ export type LinkedDocument = {
 export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string;
   createdBy: string;
+  /** Who saved the current version (the creator until someone edits it). */
+  updatedBy: string;
   acceptanceCriteria: { id: string; text: string; position: number }[];
   documents: LinkedDocument[];
 };
@@ -67,13 +69,14 @@ export function parseRequirement(value: unknown): Requirement {
   const criteria = item?.acceptanceCriteria;
   const documents = item?.documents;
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
-      typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" ||
+      typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" || typeof item.updatedBy !== "string" ||
       typeof item.version !== "number" || !isDate(item.createdAt) || !isDate(item.updatedAt) ||
       (item.archivedAt !== null && typeof item.archivedAt !== "string") || !Array.isArray(criteria) || !Array.isArray(documents)) {
     throw new Error("The API returned an unexpected requirement.");
   }
   return {
     id: item.id, projectId: item.projectId, title: item.title, description: item.description, createdBy: item.createdBy,
+    updatedBy: item.updatedBy,
     version: item.version, createdAt: item.createdAt as string, updatedAt: item.updatedAt as string, archivedAt: item.archivedAt,
     acceptanceCriteria: criteria.map((entry: unknown) => {
       const criterion = entry as Record<string, unknown> | null;

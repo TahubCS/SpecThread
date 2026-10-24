@@ -4,7 +4,7 @@ import { evidenceCountText } from "@/lib/evidence";
 import { formatDate, type RequirementSummary } from "@/lib/projects";
 import { decisionText } from "@/lib/reviews";
 
-/** Renders requirements as linked rows with each one's evidence count, latest decision, and the date it was last changed. */
+/** Renders requirements as linked rows with each one's evidence count, latest decision, and the date it was last changed or archived. */
 export function RequirementRows({ requirements, label }: { requirements: RequirementSummary[]; label: string }) {
   return (
     <ul className="row-list" aria-label={label}>
@@ -19,7 +19,9 @@ export function RequirementRows({ requirements, label }: { requirements: Require
                 <span aria-hidden="true" />{decisionText[requirement.review.decision]}{requirement.review.outdated && ", outdated"}
               </span>
             ) : <span className="badge review-badge">Not reviewed</span>}
-            <time className="row-meta" dateTime={requirement.updatedAt}>Updated {formatDate(requirement.updatedAt)}</time>
+            {requirement.archivedAt
+              ? <time className="row-meta" dateTime={requirement.archivedAt}>Archived {formatDate(requirement.archivedAt)}</time>
+              : <time className="row-meta" dateTime={requirement.updatedAt}>Updated {formatDate(requirement.updatedAt)}</time>}
           </Link>
         </li>
       ))}
