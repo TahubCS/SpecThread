@@ -1127,7 +1127,7 @@ files need direct-to-storage uploads, which would supersede this decision. DOC a
 contents beyond the header are not inspected, and files are not virus scanned. A
 download reads the whole file into API and web memory, which the size limit bounds, and costs
 two API calls from the web (metadata, then content). Requirement references to
-documents, search, renaming, and unarchiving are future work. Migration
+documents (since added by ADR-049), search, renaming, and unarchiving are future work. Migration
 ProjectDocuments adds both tables with RLS on and browser grants revoked; CI applies it
 (ADR-044).
 
@@ -1162,6 +1162,41 @@ that loses a race is refused, not merged, so the user refreshes again. The first
 of a requirement with many releases and many merged pull requests can still approach
 the 55-second limit, because each release and change pair is a GitHub compare call;
 later refreshes reuse earlier "included" answers. No schema change.
+
+ADR-049: Requirements need a criterion and link project documents in the requirement form
+
+Status: Accepted
+
+Context: The "create a requirement" story (docs/PROJECT.md) says a requirement can't be
+saved without a title and at least one acceptance criterion, and records who created it
+and when. The API accepted zero criteria, and the requirement page showed when it was
+updated but not when it was created. The team also asked for requirements to link the
+project's reference documents (ADR-047), which that decision left for later.
+
+Decision: Create and save refuse an empty `acceptanceCriteria` with 400 on that field,
+and the web form checks the same rule; a form with no criteria starts with one empty
+row. The rule lives in the API, not a database constraint, because it counts rows. The
+page shows "Created by <name> on <date>" from the stored `created_by` and `created_at`.
+
+Documents are linked in the requirement form and saved with the requirement, like its
+criteria: `POST` and `PUT` take `documentIds`, and `PUT` replaces the list. A link
+belongs in the requirement's version, so changing links raises the version and marks
+an earlier review outdated, as other edits do. Links live in `requirement_documents`
+(requirement, document, `linked_by`, `linked_at`); a save keeps the rows of documents
+that stay linked and adds or removes only the difference, so each link records who made
+it and when. A requirement links at most 20 distinct documents, all from its own
+project, checked under the team lock. Only active documents can be newly linked. A
+document archived after it was linked stays linked, is marked archived on the page and
+in the form, and is unlinked by unticking it. `Requirement` responses carry the linked
+documents' metadata, ordered by title.
+
+Consequences: Existing requirements with no criteria stay readable but need one before
+their next save. Linking or unlinking a document needs a full requirement save and a
+new version; a separate link endpoint, as for evidence, would supersede this if links
+need to change without editing the requirement. A document's page does not yet list the
+requirements that link it. Migration RequirementDocuments adds the table with RLS on
+and browser grants revoked; CI applies it (ADR-044), and its rollback removes only the
+links.
 
 ADR-NNN: Title
 

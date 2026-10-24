@@ -438,3 +438,9 @@ a.row:focus-visible { outline-offset: -2px; }
 .document-details { margin: 4px 0 0; }
 .row .row-meta + .document-row-date { margin-left: 16px; }
 @media (max-width: 560px) { .document-row-date { display: none; } }
+.document-choices { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.document-choices label { display: flex; align-items: baseline; gap: 10px; padding: 6px 0; cursor: pointer; }
+.document-choices input { flex: none; }
+.document-choice-title { min-width: 0; overflow-wrap: anywhere; }
+.document-choices .muted { flex: none; font-size: 12.5px; }
+.criteria-fieldset > p.muted a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }

@@ -129,3 +129,12 @@ public sealed class DocumentContent
     public Guid DocumentId { get; set; }
     public required byte[] Content { get; set; }
 }
+
+// A project document a requirement cites, saved with the requirement like its criteria (ADR-049).
+public sealed class RequirementDocument
+{
+    public Guid RequirementId { get; set; }
+    public Guid DocumentId { get; set; }
+    public required string LinkedBy { get; set; }
+    public DateTime LinkedAt { get; set; }
+}

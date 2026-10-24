@@ -1,6 +1,65 @@
 # Shared handoff
 
-## Current task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
+## Current task: Requirement criteria rule, creation date, and linked documents (2026-10-23)
+
+- Branch: `feature/requirements-documents`, from `main` at `b069093`.
+- Scope: the "create a requirement" story (Danielle, Tech Lead; source "Design the Box"
+  F1, recorded in docs/PROJECT.md), plus linking project documents from requirements
+  (ADR-049). Two of the story's four criteria were already met: each criterion is its
+  own row and list item, and only team members can create (404 otherwise).
+- Completed:
+  - A requirement can't be created or saved without at least one acceptance criterion
+    (API 400 on `acceptanceCriteria`, same message in the form). The form starts with one
+    empty criterion row.
+  - The requirement page shows "Created by <name> on <date>" as well as the update date.
+  - Requirements link up to 20 documents from their own project, ticked in the
+    requirement form and saved with the requirement (the version rises). Kept links keep
+    who linked them and when. Archived documents can't be newly linked; ones linked
+    before archiving stay, marked Archived, until unticked. The page lists linked
+    documents, each opening its document page.
+- Changed files:
+  - API: `Requirements/RequirementEndpoints.cs`, `Projects/ProjectAccess.cs` (minimum
+    criterion, document limit), `Data/ProductModels.cs`, `Data/SpecThreadDbContext.cs`,
+    migration `20261024003629_RequirementDocuments` and the model snapshot.
+  - Schema: `scripts/generate-requirement-documents.mjs` (new), generated
+    `docs/schema/requirement-documents.sql` and `-rollback.sql`, `scripts/test-database.mjs`.
+  - Web: `lib/requirements.ts` (types, parsing, validation, `documentChoices`),
+    `components/requirement-form.tsx`, `app/projects/requirement-actions.ts`, the new,
+    edit, and detail requirement pages, `app-shell.css`.
+  - Tests: new `tests/schema/requirement-documents.spec.ts` (API on 5120); zero-criteria
+    and `createdAt` checks in `tests/schema/product-api.spec.ts`; requirement and document
+    e2e tests in `tests/e2e/requirements.spec.ts`; unit tests in
+    `tests/api/project-data.spec.ts`. Existing tests now send or fill one criterion
+    (schema: product-api, reviews, evidence, team-management; e2e: requirements, reviews,
+    evidence), and migration-history counts rose by one.
+  - Docs: DECISIONS (ADR-049, and an ADR-047 cross-reference), API, DATABASE,
+    ARCHITECTURE (fourteen product tables), PROJECT (the story), TESTING.
+- Decisions and assumptions:
+  - Links are saved with the requirement rather than through separate link endpoints,
+    so a link change is a new version and makes an earlier review outdated.
+  - The criterion minimum is an API rule, not a database constraint. Existing
+    requirements with no criteria stay readable but need one before their next save.
+  - Document checkboxes take their default from React state, so ticks survive the
+    form reset after a server-side rejection (a controlled checkbox did not).
+- Checks (all run on this branch):
+  - Passed: `npm run lint`, `npm run typecheck`, `dotnet format app/api
+    --verify-no-changes`, `dotnet ef migrations has-pending-model-changes` (none),
+    `git diff --check`.
+  - `npm test`: 356 passed, none flaky.
+  - CI's migration path: the EF bundle applied only RequirementDocuments to a Postgres 17
+    at the ProjectDocuments state (RLS on, anon has no SELECT, 14 history rows), and a
+    second run applied nothing.
+- Known issues and risks:
+  - CI applies RequirementDocuments on merge (ADR-044). Don't apply it to Supabase by hand
+    first; a draft applied early broke the ProjectDocuments deploy.
+  - A document's page doesn't list the requirements that link it yet.
+  - The uncommitted `app/api/packages.lock.json` change that was on `main` before this
+    branch was overwritten by `dotnet` restores during the work; the file now matches
+    the committed version.
+- Next step: review, then open a PR to `main`. Follow-ups: show linking requirements on
+  a document's page, and Tickets.
+
+## Previous task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
 
 - Branch: `fix/evidence-locks-and-timeouts`, from `main` at `dac2bcd`. Fixes only; no new
   features and no schema change.

@@ -55,7 +55,7 @@ internal static class RequirementEndpoints
     private static async Task<Results<Created<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Create(
         Guid projectId, RequirementRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
-        var input = Validate(request.Title, request.Description, request.AcceptanceCriteria, out var errors);
+        var input = Validate(request.Title, request.Description, request.AcceptanceCriteria, request.DocumentIds, out var errors);
         if (input is null) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var userId = user.CallerId();
@@ -64,6 +64,8 @@ internal static class RequirementEndpoints
         var project = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
         if (project is null) return TypedResults.NotFound();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
+        var refused = await CheckDocuments(db, projectId, input.DocumentIds, new HashSet<Guid>(), cancel);
+        if (refused is not null) return refused;
 
         var now = Clock.UtcNow();
         var requirement = new Requirement
@@ -79,10 +81,12 @@ internal static class RequirementEndpoints
         };
         db.Requirements.Add(requirement);
         var criteria = AddCriteria(db, requirement.Id, input.Criteria);
+        LinkDocuments(db, requirement.Id, input.DocumentIds, userId, now);
         await db.SaveChangesAsync(cancel);
+        var documents = await LoadDocuments(db, requirement.Id, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria));
+        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria, documents));
     }
 
     private static async Task<Results<Ok<RequirementResponse>, NotFound>> Get(
@@ -95,31 +99,41 @@ internal static class RequirementEndpoints
             .Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
-        return TypedResults.Ok(ToResponse(requirement.Requirement, criteria));
+        return TypedResults.Ok(ToResponse(requirement.Requirement, criteria, await LoadDocuments(db, requirementId, cancel)));
     }
 
-    // Replaces the whole criteria list; a stale version means someone else saved first.
+    // Replaces the whole criteria and document lists; a stale version means someone else saved first.
     private static async Task<Results<Ok<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Update(
         Guid requirementId, UpdateRequirementRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
-        var input = Validate(request.Title, request.Description, request.AcceptanceCriteria, out var errors);
+        var input = Validate(request.Title, request.Description, request.AcceptanceCriteria, request.DocumentIds, out var errors);
         if (request.Version is null) errors.Add("version", "Send the version you loaded.");
         if (input is null || errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
+        var userId = user.CallerId();
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
-        var found = await LockForMember(db, user.CallerId(), requirementId, cancel);
+        var found = await LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
         var requirement = found.Requirement;
         if (found.ProjectArchived || requirement.ArchivedAt is not null) return ProjectEndpoints.Archived();
         if (requirement.Version != request.Version) return Stale();
 
+        // Kept links keep who linked them and when; only removed ones go and only new ones are added.
+        var links = await db.RequirementDocuments.Where(l => l.RequirementId == requirementId).ToListAsync(cancel);
+        var linked = links.Select(l => l.DocumentId).ToHashSet();
+        var refused = await CheckDocuments(db, requirement.ProjectId, input.DocumentIds, linked, cancel);
+        if (refused is not null) return refused;
+        db.RequirementDocuments.RemoveRange(links.Where(l => !input.DocumentIds.Contains(l.DocumentId)));
+
         // Delete first so new positions never collide with the unique (requirement_id, position) index.
         await db.AcceptanceCriteria.Where(c => c.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
+        var now = Clock.UtcNow();
         requirement.Title = input.Title;
         requirement.Description = input.Description;
-        requirement.UpdatedAt = Clock.UtcNow();
+        requirement.UpdatedAt = now;
         requirement.Version++;
         var criteria = AddCriteria(db, requirementId, input.Criteria);
+        LinkDocuments(db, requirementId, input.DocumentIds.Where(id => !linked.Contains(id)), userId, now);
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -128,9 +142,10 @@ internal static class RequirementEndpoints
         {
             return Stale(); // Disposing the transaction rolls back the criteria deletion.
         }
+        var documents = await LoadDocuments(db, requirementId, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Ok(ToResponse(requirement, criteria));
+        return TypedResults.Ok(ToResponse(requirement, criteria, documents));
     }
 
     private static async Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
@@ -157,7 +172,7 @@ internal static class RequirementEndpoints
             .Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
-        return TypedResults.Ok(ToResponse(found.Requirement, criteria));
+        return TypedResults.Ok(ToResponse(found.Requirement, criteria, await LoadDocuments(db, requirementId, cancel)));
     }
 
     // Like FindForMember, but locks the project's team first and then reads the requirement, so
@@ -181,14 +196,56 @@ internal static class RequirementEndpoints
             .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new MemberRequirement(r, p.ArchivedAt != null))
             .SingleOrDefaultAsync(cancel);
 
-    private static ValidInput? Validate(string? title, string? description, IReadOnlyList<string?>? criteria, out InputErrors errors)
+    private static ValidInput? Validate(
+        string? title, string? description, IReadOnlyList<string?>? criteria, IReadOnlyList<Guid>? documentIds, out InputErrors errors)
     {
         errors = new InputErrors();
         var validTitle = errors.Required("title", title, InputErrors.MaxNameLength);
         var validDescription = errors.Optional("description", description, InputErrors.MaxDescriptionLength);
         var validCriteria = errors.Criteria("acceptanceCriteria", criteria);
-        return errors.Any ? null : new ValidInput(validTitle!, validDescription!, validCriteria!);
+        documentIds ??= [];
+        if (documentIds.Count > InputErrors.MaxRequirementDocuments)
+        {
+            errors.Add("documentIds", $"Link at most {InputErrors.MaxRequirementDocuments} documents.");
+        }
+        else if (documentIds.Distinct().Count() != documentIds.Count)
+        {
+            errors.Add("documentIds", "Link each document once.");
+        }
+        return errors.Any ? null : new ValidInput(validTitle!, validDescription!, validCriteria!, [.. documentIds]);
     }
+
+    // Documents come from the requirement's project. Archived ones stay linked but can't be newly linked.
+    // Call after locking the project's team, so a document can't be archived between this check and the save.
+    private static async Task<ValidationProblem?> CheckDocuments(
+        SpecThreadDbContext db, Guid projectId, List<Guid> documentIds, IReadOnlySet<Guid> linked, CancellationToken cancel)
+    {
+        if (documentIds.Count == 0) return null;
+        var found = await db.Documents.Where(d => d.ProjectId == projectId && documentIds.Contains(d.Id))
+            .Select(d => new { d.Id, d.ArchivedAt }).ToListAsync(cancel);
+        string? message = null;
+        if (found.Count != documentIds.Count) message = "Choose documents from this project's Documentation tab.";
+        else if (found.Any(d => d.ArchivedAt is not null && !linked.Contains(d.Id))) message = "An archived document can't be newly linked.";
+        return message is null ? null
+            : TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["documentIds"] = [message] });
+    }
+
+    private static void LinkDocuments(SpecThreadDbContext db, Guid requirementId, IEnumerable<Guid> documentIds, string userId, DateTime now) =>
+        db.RequirementDocuments.AddRange(documentIds.Select(id => new RequirementDocument
+        {
+            RequirementId = requirementId,
+            DocumentId = id,
+            LinkedBy = userId,
+            LinkedAt = now,
+        }));
+
+    private static Task<List<LinkedDocumentResponse>> LoadDocuments(SpecThreadDbContext db, Guid requirementId, CancellationToken cancel) =>
+        db.RequirementDocuments.AsNoTracking().Where(l => l.RequirementId == requirementId)
+            .Join(db.Documents, l => l.DocumentId, d => d.Id, (l, d) => new { Link = l, Document = d })
+            .OrderBy(x => x.Document.Title).ThenBy(x => x.Document.Id)
+            .Select(x => new LinkedDocumentResponse(x.Document.Id, x.Document.Title, x.Document.FileName, x.Document.ContentType,
+                x.Document.ArchivedAt, x.Link.LinkedBy, x.Link.LinkedAt))
+            .ToListAsync(cancel);
 
     private static List<AcceptanceCriterion> AddCriteria(SpecThreadDbContext db, Guid requirementId, List<string> texts)
     {
@@ -206,27 +263,33 @@ internal static class RequirementEndpoints
     private static ProblemHttpResult Stale() => TypedResults.Problem(
         "This requirement changed since it was loaded. Reload it and try again.", statusCode: StatusCodes.Status409Conflict);
 
-    private static RequirementResponse ToResponse(Requirement r, IEnumerable<AcceptanceCriterion> criteria) => new(
+    private static RequirementResponse ToResponse(
+        Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents) => new(
         r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
-        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList());
+        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents);
 
     internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
     {
         public bool Archived => ProjectArchived || Requirement.ArchivedAt is not null;
     }
 
-    private sealed record ValidInput(string Title, string Description, List<string> Criteria);
+    private sealed record ValidInput(string Title, string Description, List<string> Criteria, List<Guid> DocumentIds);
 }
 
-internal sealed record RequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria);
+internal sealed record RequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds);
 
-internal sealed record UpdateRequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria, int? Version);
+internal sealed record UpdateRequirementRequest(
+    string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds, int? Version);
 
 internal sealed record RequirementSummary(
     Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, int Version,
-    DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, List<CriterionResponse> AcceptanceCriteria);
+    DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, List<CriterionResponse> AcceptanceCriteria,
+    List<LinkedDocumentResponse> Documents);
 
 internal sealed record CriterionResponse(Guid Id, string Text, int Position);
+
+internal sealed record LinkedDocumentResponse(
+    Guid Id, string Title, string FileName, string ContentType, DateTime? ArchivedAt, string LinkedBy, DateTime LinkedAt);

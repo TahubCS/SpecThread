@@ -34,6 +34,7 @@ async function createRequirement(page: Page) {
   const projectId = page.url().split("/").at(-1)!;
   await page.goto(`/projects/${projectId}/requirements/new`);
   await page.getByLabel("Title").fill("Guest checkout");
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done");
   await page.getByRole("button", { name: "Create requirement" }).click();
   await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
   return { projectId, requirementId: page.url().split("/").at(-1)!, url: page.url() };

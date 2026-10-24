@@ -29,6 +29,7 @@ internal sealed class InputErrors
     public const int MaxDescriptionLength = 10_000;
     public const int MaxCriteria = 50;
     public const int MaxCriterionLength = 2_000;
+    public const int MaxRequirementDocuments = 20; // ADR-049
     public const int MaxEmailLength = 254;
 
     private readonly Dictionary<string, string[]> errors = [];
@@ -55,6 +56,12 @@ internal sealed class InputErrors
     public List<string>? Criteria(string field, IReadOnlyList<string?>? values)
     {
         values ??= [];
+        // A requirement says what "done" means before work starts, so it needs at least one.
+        if (values.Count == 0)
+        {
+            Add(field, "Add at least one acceptance criterion.");
+            return null;
+        }
         if (values.Count > MaxCriteria)
         {
             Add(field, $"Use at most {MaxCriteria} acceptance criteria.");

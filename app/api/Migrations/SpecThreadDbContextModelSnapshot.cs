@@ -575,6 +575,36 @@ namespace SpecThread.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementDocument", b =>
+                {
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("linked_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("LinkedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("linked_by");
+
+                    b.HasKey("RequirementId", "DocumentId");
+
+                    b.HasIndex("DocumentId");
+
+                    b.HasIndex("LinkedBy");
+
+                    b.ToTable("requirement_documents", "public");
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidence", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1100,6 +1130,27 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.Project", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementDocument", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.Document", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

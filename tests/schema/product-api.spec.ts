@@ -86,7 +86,7 @@ test("owners create, list, rename, and archive projects", async ({ request }) =>
   expect((await (await owner.get("/projects")).json()).map((p: { id: string }) => p.id)).not.toContain(project.id);
   expect((await owner.get(`/projects/${project.id}`)).status()).toBe(200);
   expect((await owner.patch(`/projects/${project.id}`, { name: "Late" })).status()).toBe(409);
-  expect((await owner.post(`/projects/${project.id}/requirements`, { title: "Late" })).status()).toBe(409);
+  expect((await owner.post(`/projects/${project.id}/requirements`, { title: "Late", acceptanceCriteria: ["Done"] })).status()).toBe(409);
 });
 
 test("members can read and write requirements but cannot manage the project", async ({ request }) => {
@@ -95,22 +95,22 @@ test("members can read and write requirements but cannot manage the project", as
   expect((await member.get(`/projects/${project.id}`)).status()).toBe(200);
   expect((await member.patch(`/projects/${project.id}`, { name: "Mine" })).status()).toBe(403);
   expect((await member.post(`/projects/${project.id}/archive`)).status()).toBe(403);
-  expect((await member.post(`/projects/${project.id}/requirements`, { title: "Pay by card" })).status()).toBe(201);
+  expect((await member.post(`/projects/${project.id}/requirements`, { title: "Pay by card", acceptanceCriteria: ["Done"] })).status()).toBe(201);
 });
 
 test("non-members cannot tell that a project or requirement exists", async ({ request }) => {
   const project = await createProject(request);
   const owner = await as(request, "owner");
-  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Refunds" })).json();
+  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Refunds", acceptanceCriteria: ["Done"] })).json();
   const outsider = await as(request, "outsider");
   const missing = "00000000-0000-0000-0000-000000000000";
   for (const response of [
     await outsider.get(`/projects/${project.id}`),
     await outsider.patch(`/projects/${project.id}`, { name: "Taken" }),
     await outsider.get(`/projects/${project.id}/requirements`),
-    await outsider.post(`/projects/${project.id}/requirements`, { title: "Sneaky" }),
+    await outsider.post(`/projects/${project.id}/requirements`, { title: "Sneaky", acceptanceCriteria: ["Done"] }),
     await outsider.get(`/requirements/${requirement.id}`),
-    await outsider.put(`/requirements/${requirement.id}`, { title: "Sneaky", version: 1 }),
+    await outsider.put(`/requirements/${requirement.id}`, { title: "Sneaky", acceptanceCriteria: ["Done"], version: 1 }),
     await outsider.post(`/requirements/${requirement.id}/archive`),
     await owner.get(`/requirements/${missing}`),
   ]) expect(response.status()).toBe(404);
@@ -121,12 +121,16 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   const project = await createProject(request);
   const owner = await as(request, "owner");
   const member = await as(request, "member");
+  const before = Date.now();
   const created = await owner.post(`/projects/${project.id}/requirements`, {
     title: "Guest checkout", description: "Buy without an account.", acceptanceCriteria: ["Email is required", "Card is charged once"],
   });
   expect(created.status()).toBe(201);
   const requirement = await created.json();
-  expect(requirement).toMatchObject({ version: 1, createdBy: "owner", description: "Buy without an account." });
+  expect(requirement).toMatchObject({ version: 1, createdBy: "owner", description: "Buy without an account.", documents: [] });
+  // Who created it and when is recorded once; later saves change neither.
+  expect(Date.parse(requirement.createdAt)).toBeGreaterThanOrEqual(before - 1_000);
+  expect(Date.parse(requirement.createdAt)).toBeLessThanOrEqual(Date.now() + 1_000);
   expect(requirement.acceptanceCriteria.map((c: { text: string }) => c.text)).toEqual(["Email is required", "Card is charged once"]);
 
   const updated = await member.put(`/requirements/${requirement.id}`, {
@@ -135,13 +139,14 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   expect(updated.status()).toBe(200);
   const fetched = await (await owner.get(`/requirements/${requirement.id}`)).json();
   expect(fetched.version).toBe(2);
+  expect(fetched.createdBy).toBe("owner");
   expect(fetched.createdAt).toBe(requirement.createdAt);
   expect(fetched.updatedAt).toBe((await updated.json()).updatedAt);
   expect(fetched.acceptanceCriteria.map((c: { text: string; position: number }) => [c.position, c.text])).toEqual([
     [0, "Card is charged once"], [1, "Receipt is emailed"], [2, "Email is required"],
   ]);
 
-  const stale = await owner.put(`/requirements/${requirement.id}`, { title: "Overwrite", acceptanceCriteria: [], version: 1 });
+  const stale = await owner.put(`/requirements/${requirement.id}`, { title: "Overwrite", acceptanceCriteria: ["Overwrite"], version: 1 });
   expect(stale.status()).toBe(409);
   expect((await (await owner.get(`/requirements/${requirement.id}`)).json()).title).toBe("Guest checkout");
 
@@ -152,7 +157,7 @@ test("requirements keep ordered acceptance criteria and reject stale updates", a
   expect(archivedAt).not.toBeNull();
   expect((await (await owner.get(`/requirements/${requirement.id}`)).json()).archivedAt).toBe(archivedAt);
   expect(await (await owner.get(`/projects/${project.id}/requirements`)).json()).toEqual([]);
-  expect((await owner.put(`/requirements/${requirement.id}`, { title: "Revive", version: 2 })).status()).toBe(409);
+  expect((await owner.put(`/requirements/${requirement.id}`, { title: "Revive", acceptanceCriteria: ["Done"], version: 2 })).status()).toBe(409);
 });
 
 test("requirement writes and project archiving serialize, so nothing changes after a project is archived", async ({ request }) => {
@@ -160,10 +165,10 @@ test("requirement writes and project archiving serialize, so nothing changes aft
   const member = await as(request, "member");
   for (let round = 0; round < 5; round++) {
     const project = await createProject(request, `Race ${round}`);
-    const existing = await (await member.post(`/projects/${project.id}/requirements`, { title: "Existing" })).json();
+    const existing = await (await member.post(`/projects/${project.id}/requirements`, { title: "Existing", acceptanceCriteria: ["Done"] })).json();
     const [archive, created, updated] = await Promise.all([
       owner.post(`/projects/${project.id}/archive`),
-      member.post(`/projects/${project.id}/requirements`, { title: "Racing create" }),
+      member.post(`/projects/${project.id}/requirements`, { title: "Racing create", acceptanceCriteria: ["Done"] }),
       member.put(`/requirements/${existing.id}`, { title: "Racing update", acceptanceCriteria: ["Changed"], version: 1 }),
     ]);
     expect(archive.status()).toBe(200);
@@ -196,9 +201,21 @@ test("invalid input is rejected with field errors", async ({ request }) => {
   const tooMany = await owner.post(`/projects/${project.id}/requirements`, { title: "Many", acceptanceCriteria: Array(51).fill("c") });
   expect((await tooMany.json()).errors).toHaveProperty("acceptanceCriteria");
 
-  const created = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Valid" })).json();
-  const noVersion = await owner.put(`/requirements/${created.id}`, { title: "Valid" });
+  // A requirement needs a title and at least one criterion, whether it is created or saved.
+  for (const body of [{ title: "None" }, { title: "Empty", acceptanceCriteria: [] }, { acceptanceCriteria: ["Done"] }]) {
+    const refused = await owner.post(`/projects/${project.id}/requirements`, body);
+    expect(refused.status(), JSON.stringify(body)).toBe(400);
+    expect(Object.keys((await refused.json()).errors)).toEqual([body.title ? "acceptanceCriteria" : "title"]);
+  }
+  expect(await (await owner.get(`/projects/${project.id}/requirements`)).json()).toEqual([]);
+
+  const created = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Valid", acceptanceCriteria: ["Done"] })).json();
+  const noVersion = await owner.put(`/requirements/${created.id}`, { title: "Valid", acceptanceCriteria: ["Done"] });
   expect((await noVersion.json()).errors).toHaveProperty("version");
+  const emptied = await owner.put(`/requirements/${created.id}`, { title: "Valid", acceptanceCriteria: [], version: 1 });
+  expect(emptied.status()).toBe(400);
+  expect((await emptied.json()).errors).toHaveProperty("acceptanceCriteria", ["Add at least one acceptance criterion."]);
+  expect((await (await owner.get(`/requirements/${created.id}`)).json()).acceptanceCriteria).toHaveLength(1);
   expect((await owner.get(`/projects/not-a-guid`)).status()).toBe(404);
 });
 
@@ -215,8 +232,8 @@ test("project lists inherit team membership, count active requirements, and isol
   const member = await as(request, "member");
   const otherTeam = await createTeam(request, "Separate team");
   const other = await (await owner.post("/projects", { name: "Other project", teamId: otherTeam.id })).json();
-  const first = await (await member.post(`/projects/${project.id}/requirements`, { title: "Active requirement" })).json();
-  const second = await (await member.post(`/projects/${project.id}/requirements`, { title: "Archived requirement" })).json();
+  const first = await (await member.post(`/projects/${project.id}/requirements`, { title: "Active requirement", acceptanceCriteria: ["Done"] })).json();
+  const second = await (await member.post(`/projects/${project.id}/requirements`, { title: "Archived requirement", acceptanceCriteria: ["Done"] })).json();
   await member.post(`/requirements/${second.id}/archive`);
   expect(await (await member.get(`/teams/${project.teamId}/projects`)).json()).toEqual([
     expect.objectContaining({ id: project.id, requirementCount: 1, teamRole: "member" }),
@@ -257,7 +274,7 @@ test("Owner and Admin manage all team projects; historical creators do not retai
   await database.pool.query("UPDATE team_members SET role='member' WHERE team_id=$1 AND user_id='second'", [team.id]);
   expect((await admin.patch(`/projects/${project.id}`, { name: "Creator bypass" })).status()).toBe(403);
   expect((await admin.post(`/projects/${project.id}/archive`)).status()).toBe(403);
-  expect((await admin.post(`/projects/${project.id}/requirements`, { title: "Still a member" })).status()).toBe(201);
+  expect((await admin.post(`/projects/${project.id}/requirements`, { title: "Still a member", acceptanceCriteria: ["Done"] })).status()).toBe(201);
 });
 
 test("legacy project membership writes cannot bypass invitation acceptance, and team removal revokes all access", async ({ request }) => {
@@ -265,7 +282,7 @@ test("legacy project membership writes cannot bypass invitation acceptance, and 
   const owner = await as(request, "owner");
   const member = await as(request, "member");
   const outsider = await as(request, "outsider");
-  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Private" })).json();
+  const requirement = await (await owner.post(`/projects/${project.id}/requirements`, { title: "Private", acceptanceCriteria: ["Done"] })).json();
   for (const caller of [owner, member]) {
     expect((await caller.post(`/projects/${project.id}/members`, { email: "outsider@example.invalid" })).status()).toBe(410);
     expect((await caller.delete(`/projects/${project.id}/members/member`)).status()).toBe(410);
@@ -278,7 +295,7 @@ test("legacy project membership writes cannot bypass invitation acceptance, and 
   for (const response of [
     await member.get(`/projects/${project.id}`), await member.get(`/projects/${project.id}/members`),
     await member.get(`/requirements/${requirement.id}`),
-    await member.put(`/requirements/${requirement.id}`, { title: "Revoked", version: 1 }),
+    await member.put(`/requirements/${requirement.id}`, { title: "Revoked", acceptanceCriteria: ["Done"], version: 1 }),
   ]) expect(response.status()).toBe(404);
   expect(await (await member.get("/projects")).json()).not.toContainEqual(expect.objectContaining({ id: project.id }));
 });

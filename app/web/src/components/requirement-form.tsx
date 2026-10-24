@@ -4,21 +4,25 @@ import { useActionState, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import type { RequirementFormState } from "@/app/projects/requirement-actions";
+import { documentTypeLabel } from "@/lib/documents";
 import {
-  CRITERIA_MAX, CRITERION_MAX, moveItem, REQUIREMENT_DESCRIPTION_MAX, REQUIREMENT_TITLE_MAX, type RequirementInput,
+  CRITERIA_MAX, CRITERION_MAX, moveItem, REQUIREMENT_DESCRIPTION_MAX, REQUIREMENT_TITLE_MAX, type DocumentChoice, type RequirementInput,
 } from "@/lib/requirements";
 
 type FormAction = (state: RequirementFormState, formData: FormData) => Promise<RequirementFormState>;
 
 /**
- * Renders the form for a requirement's title, description, and ordered acceptance criteria.
- * Criteria can be moved up and down; the order on screen is the order saved. Fields keep what
- * the user typed when the server rejects the form, and each message appears next to the field
- * it is about, also after its criterion has been moved.
+ * Renders the form for a requirement's title, description, ordered acceptance criteria, and
+ * linked project documents. Criteria can be moved up and down; the order on screen is the order
+ * saved. A requirement needs at least one criterion, so a form without any starts with an empty
+ * one. Fields keep what the user typed when the server rejects the form, and each message
+ * appears next to the field it is about, also after its criterion has been moved.
  */
-export function RequirementForm({ action, initial, submitLabel, pendingLabel, cancelHref, label }: {
+export function RequirementForm({ action, initial, documents, documentsHref, submitLabel, pendingLabel, cancelHref, label }: {
   action: FormAction;
   initial: RequirementInput;
+  documents: DocumentChoice[];
+  documentsHref: string;
   submitLabel: string;
   pendingLabel: string;
   cancelHref: string;
@@ -27,8 +31,11 @@ export function RequirementForm({ action, initial, submitLabel, pendingLabel, ca
   const [state, formAction, pending] = useActionState(action, { errors: null });
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
-  const [rows, setRows] = useState(() => initial.criteria.map((text, key) => ({ key, text })));
-  const nextKey = useRef(initial.criteria.length);
+  const [rows, setRows] = useState(() => (initial.criteria.length ? initial.criteria : [""]).map((text, key) => ({ key, text })));
+  const nextKey = useRef(Math.max(initial.criteria.length, 1));
+  // The form resets after a server-side rejection. Text fields keep their value because React
+  // keeps their default in step; checkboxes don't, so their default follows this state instead.
+  const [linked, setLinked] = useState(() => new Set(initial.documentIds));
   // Row keys in the order last sent. Messages about a criterion name its position in that order.
   const [sent, setSent] = useState<number[]>([]);
   const [moved, setMoved] = useState("");
@@ -98,6 +105,31 @@ export function RequirementForm({ action, initial, submitLabel, pendingLabel, ca
           onClick={() => setRows(current => [...current, { key: nextKey.current++, text: "" }])}>
           <Plus size={15} aria-hidden="true" /> Add criterion
         </button>
+      </fieldset>
+      <fieldset className="criteria-fieldset" aria-describedby={errors?.documents ? "requirement-documents-error" : undefined}>
+        <legend>Reference documents</legend>
+        <p className="muted">Link the documents this requirement comes from or relies on.</p>
+        {errors?.documents && <p id="requirement-documents-error" role="alert" className="notice notice-error">{errors.documents}</p>}
+        {documents.length === 0
+          ? <p className="muted">This project has no documents yet. <Link href={documentsHref}>Upload one in Documentation</Link>.</p>
+          : (
+            <ul className="document-choices">
+              {documents.map(document => (
+                <li key={document.id}>
+                  <label>
+                    <input type="checkbox" name="documents" value={document.id} defaultChecked={linked.has(document.id)}
+                      onChange={event => setLinked(current => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(document.id); else next.delete(document.id);
+                        return next;
+                      })} />
+                    <span className="document-choice-title">{document.title}</span>
+                    <span className="muted">{documentTypeLabel(document.contentType)}{document.archived ? " · Archived" : ""}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
       </fieldset>
       <div className="form-actions">
         <button className="button" type="submit" disabled={pending}>{pending ? pendingLabel : submitLabel}</button>

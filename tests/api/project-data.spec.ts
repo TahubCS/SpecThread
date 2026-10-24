@@ -3,7 +3,7 @@ import {
   fieldError, formatDate, isUuid, parseMembers, parseProject, parseProjects, parseRequirementSummaries, projectNameError,
 } from "../../app/web/src/lib/projects";
 import {
-  moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
+  documentChoices, moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
 import {
   checkSummary, evidenceChanges, evidenceCountText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
@@ -83,15 +83,35 @@ test("dates are shown as short UTC dates", () => {
 });
 
 test("a requirement response is accepted only in the documented shape, with criteria in order", () => {
+  const document = { id: "d1", title: "Design the Box", fileName: "box.pdf", contentType: "application/pdf", archivedAt: null,
+    linkedBy: "u1", linkedAt: "2026-10-01T10:00:00Z" };
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", description: "", createdBy: "u1", version: 2,
     createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null,
-    acceptanceCriteria: [{ id: "c2", text: "Second", position: 1 }, { id: "c1", text: "First", position: 0 }] };
-  expect(parseRequirement(requirement).acceptanceCriteria.map(criterion => criterion.text)).toEqual(["First", "Second"]);
+    acceptanceCriteria: [{ id: "c2", text: "Second", position: 1 }, { id: "c1", text: "First", position: 0 }],
+    documents: [{ ...document, extra: 1 }] };
+  const parsed = parseRequirement(requirement);
+  expect(parsed.acceptanceCriteria.map(criterion => criterion.text)).toEqual(["First", "Second"]);
+  expect(parsed.createdAt).toBe("2026-10-01T10:00:00Z");
+  expect(parsed.documents).toEqual([document]);
   for (const value of [null, {}, { ...requirement, description: null }, { ...requirement, createdBy: 1 },
-    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }]) {
+    { ...requirement, acceptanceCriteria: null }, { ...requirement, version: "2" }, { ...requirement, documents: undefined }]) {
     expect(() => parseRequirement(value)).toThrow("unexpected requirement");
   }
   expect(() => parseRequirement({ ...requirement, acceptanceCriteria: [{ id: "c", text: 1, position: 0 }] })).toThrow("unexpected acceptance criterion");
+  for (const value of [null, { ...document, title: 1 }, { ...document, archivedAt: "soon" }, { ...document, linkedBy: null }]) {
+    expect(() => parseRequirement({ ...requirement, documents: [value] }), JSON.stringify(value)).toThrow("unexpected linked document");
+  }
+});
+
+test("the form offers active documents, then linked ones archived since", () => {
+  const active = [{ id: "d1", title: "Brief", contentType: "application/pdf" }];
+  const linked = (id: string, archivedAt: string | null) => ({ id, title: id, fileName: `${id}.pdf`, contentType: "application/pdf",
+    archivedAt, linkedBy: "u1", linkedAt: "2026-10-01T10:00:00Z" });
+  expect(documentChoices(active, [linked("d1", null), linked("d2", "2026-10-02T10:00:00Z")])).toEqual([
+    { id: "d1", title: "Brief", contentType: "application/pdf", archived: false },
+    { id: "d2", title: "d2", contentType: "application/pdf", archived: true },
+  ]);
+  expect(documentChoices([], [])).toEqual([]);
 });
 
 test("requirement input is trimmed and checked against the API limits", () => {
@@ -100,23 +120,32 @@ test("requirement input is trimmed and checked against the API limits", () => {
   form.set("description", "  Buy without an account.  ");
   form.append("criteria", " First ");
   form.append("criteria", "   ");
+  form.append("documents", "d1");
+  form.append("documents", "");
   const input = readRequirementInput(form);
-  expect(input).toEqual({ title: "Guest checkout", description: "Buy without an account.", criteria: ["First", ""] });
+  expect(input).toEqual({ title: "Guest checkout", description: "Buy without an account.", criteria: ["First", ""], documentIds: ["d1"] });
   expect(requirementErrors(input)).toEqual({ items: { 1: "Enter the criterion or remove it." } });
-  expect(requirementErrors({ title: "T", description: "", criteria: [] })).toBeNull();
-  expect(requirementErrors({ title: "x".repeat(200), description: "x".repeat(10_000), criteria: Array(50).fill("x".repeat(2_000)) })).toBeNull();
-  expect(requirementErrors({ title: "", description: "x".repeat(10_001), criteria: Array(51).fill("ok").concat("x".repeat(2_001)) })).toEqual({
+  expect(requirementErrors({ title: "T", description: "", criteria: ["Done"], documentIds: [] })).toBeNull();
+  expect(requirementErrors({ title: "T", description: "", criteria: [], documentIds: [] }))
+    .toEqual({ criteria: "Add at least one acceptance criterion.", items: {} });
+  expect(requirementErrors({ title: "x".repeat(200), description: "x".repeat(10_000), criteria: Array(50).fill("x".repeat(2_000)),
+    documentIds: Array.from({ length: 20 }, (_, index) => `d${index}`) })).toBeNull();
+  expect(requirementErrors({ title: "", description: "x".repeat(10_001), criteria: Array(51).fill("ok").concat("x".repeat(2_001)),
+    documentIds: Array.from({ length: 21 }, (_, index) => `d${index}`) })).toEqual({
     title: "Enter a title.", description: "Use 10,000 characters or fewer.", criteria: "Use 50 acceptance criteria or fewer.",
-    items: { 51: "Use 2,000 characters or fewer." },
+    documents: "Link 20 documents or fewer.", items: { 51: "Use 2,000 characters or fewer." },
   });
-  expect(requirementErrors({ title: "x".repeat(201), description: "", criteria: [] })?.title).toBe("Use 200 characters or fewer.");
-  expect(readRequirementInput(new FormData())).toEqual({ title: "", description: "", criteria: [] });
+  expect(requirementErrors({ title: "x".repeat(201), description: "", criteria: ["Done"], documentIds: [] })?.title).toBe("Use 200 characters or fewer.");
+  expect(readRequirementInput(new FormData())).toEqual({ title: "", description: "", criteria: [], documentIds: [] });
 });
 
 test("requirement validation problems are mapped to their fields", () => {
   expect(requirementProblemErrors({ errors: {
     title: ["Enter a value."], description: ["Too long."], acceptanceCriteria: ["Too many."], "acceptanceCriteria[2]": ["Enter a value."],
-  } }, "Failed")).toEqual({ title: "Enter a value.", description: "Too long.", criteria: "Too many.", items: { 2: "Enter a value." } });
+    documentIds: ["Link each document once."],
+  } }, "Failed")).toEqual({
+    title: "Enter a value.", description: "Too long.", criteria: "Too many.", documents: "Link each document once.", items: { 2: "Enter a value." },
+  });
   for (const problem of [null, {}, { errors: {} }, { errors: { version: ["Send the version you loaded."] } }, { errors: { title: "text" } }]) {
     expect(requirementProblemErrors(problem, "Failed")).toEqual({ items: {}, form: "Failed" });
   }

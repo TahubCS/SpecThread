@@ -48,6 +48,22 @@ SpecThread presents the evidence in one chronological thread.
 
 An authorized reviewer accepts, rejects, or requests more evidence.
 
+Story: create a requirement
+
+As a tech lead (Danielle), I want to create a requirement with a title, description,
+and testable acceptance criteria so that my team and the client agree on what "done"
+means before work starts. Source: "Design the Box" F1. Acceptance criteria:
+
+A requirement can't be saved without a title and at least one acceptance criterion.
+
+Each acceptance criterion is stored and displayed as its own item.
+
+The requirement records who created it and when.
+
+Only members of the project's team can create requirements.
+
+The requirement can also link the project documents it comes from or relies on (ADR-049).
+
 MVP scope
 
 The first usable version should support:
@@ -58,7 +74,7 @@ creating, viewing, editing, and archiving requirements;
 
 writing testable acceptance criteria;
 
-uploading project reference documents (PDF, DOC, DOCX) that every member of the project's team can download (ADR-047); citing them from requirements comes later;
+uploading project reference documents (PDF, DOC, DOCX) that every member of the project's team can download (ADR-047), and linking them from requirements (ADR-049);
 
 connecting one GitHub repository;
 

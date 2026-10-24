@@ -26,7 +26,9 @@ export async function createRequirement(projectId: string, _previous: Requiremen
   try {
     const response = await apiFetch(`/projects/${projectId}/requirements`, {
       method: "POST",
-      body: JSON.stringify({ title: input.title, description: input.description, acceptanceCriteria: input.criteria }),
+      body: JSON.stringify({
+        title: input.title, description: input.description, acceptanceCriteria: input.criteria, documentIds: input.documentIds,
+      }),
     });
     if (response.status === 400) return { errors: requirementProblemErrors(await response.json(), failed) };
     if (response.status === 409) return failure(PROJECT_ARCHIVED);
@@ -56,7 +58,9 @@ export async function updateRequirement(
   try {
     const response = await apiFetch(`/requirements/${requirementId}`, {
       method: "PUT",
-      body: JSON.stringify({ title: input.title, description: input.description, acceptanceCriteria: input.criteria, version }),
+      body: JSON.stringify({
+        title: input.title, description: input.description, acceptanceCriteria: input.criteria, documentIds: input.documentIds, version,
+      }),
     });
     if (response.status === 400) return { errors: requirementProblemErrors(await response.json(), failed) };
     if (response.status === 409) return failure(await conflictMessage(requirementId, version));
