@@ -18,6 +18,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<TeamInvitation> TeamInvitations => Set<TeamInvitation>();
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentContent> DocumentContents => Set<DocumentContent>();
+    public DbSet<RequirementDocument> RequirementDocuments => Set<RequirementDocument>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -143,10 +144,12 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         requirement.Property(x => x.CreatedBy).HasColumnName("created_by");
         requirement.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
         requirement.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
+        requirement.Property(x => x.UpdatedBy).HasColumnName("updated_by");
         requirement.Property(x => x.ArchivedAt).HasColumnName("archived_at");
         requirement.Property(x => x.Version).HasColumnName("version").HasDefaultValue(1).IsConcurrencyToken();
         requirement.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         requirement.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
+        requirement.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.UpdatedBy).OnDelete(DeleteBehavior.Restrict);
 
         var criterion = model.Entity<AcceptanceCriterion>();
         criterion.ToTable("acceptance_criteria", table =>
@@ -285,5 +288,17 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         content.Property(x => x.DocumentId).HasColumnName("document_id");
         content.Property(x => x.Content).HasColumnName("content");
         content.HasOne<Document>().WithOne().HasForeignKey<DocumentContent>(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict);
+
+        var citation = model.Entity<RequirementDocument>();
+        citation.ToTable("requirement_documents");
+        citation.HasKey(x => new { x.RequirementId, x.DocumentId });
+        citation.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        citation.Property(x => x.DocumentId).HasColumnName("document_id");
+        citation.Property(x => x.LinkedBy).HasColumnName("linked_by");
+        citation.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+        citation.HasIndex(x => x.DocumentId);
+        citation.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        citation.HasOne<Document>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict);
+        citation.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

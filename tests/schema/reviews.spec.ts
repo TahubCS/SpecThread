@@ -52,7 +52,7 @@ async function setUp(request: APIRequestContext) {
   const project = await (await author.post("/projects", { name: "Checkout", teamId: team.id })).json();
   // Fixture-only membership. In the product a person joins a team by accepting an invitation.
   await database.pool.query("INSERT INTO public.team_members (team_id,user_id) SELECT $1, unnest($2::text[])", [team.id, ["reviewer", "second"]]);
-  const requirement = await (await author.post(`/projects/${project.id}/requirements`, { title: "Guest checkout" })).json();
+  const requirement = await (await author.post(`/projects/${project.id}/requirements`, { title: "Guest checkout", acceptanceCriteria: ["Done"] })).json();
   return { projectId: project.id as string, requirementId: requirement.id as string, path: `/requirements/${requirement.id}/reviews` };
 }
 
@@ -163,7 +163,7 @@ test("a decision on a version the reviewer did not see, or on something archived
   const ahead = await reviewer.post(path, { decision: "accepted", version: 2 });
   expect(ahead.status()).toBe(409);
   expect((await ahead.json()).detail).toBe(stale);
-  expect((await author.put(`/requirements/${requirementId}`, { title: "Guest checkout v2", version: 1 })).status()).toBe(200);
+  expect((await author.put(`/requirements/${requirementId}`, { title: "Guest checkout v2", acceptanceCriteria: ["Done"], version: 1 })).status()).toBe(200);
   const behind = await reviewer.post(path, { decision: "accepted", version: 1 });
   expect(behind.status()).toBe(409);
   expect((await behind.json()).detail).toBe(stale);
@@ -176,11 +176,20 @@ test("a decision on a version the reviewer did not see, or on something archived
   expect(archived.status()).toBe(409);
   expect((await archived.json()).detail).toBe("Archived items cannot be changed.");
   expect(await (await reviewer.get(path)).json()).toHaveLength(1);
+  // Restoring makes it reviewable again, at the same version, with the earlier decision kept.
+  const restored = await reviewer.post(`/requirements/${requirementId}/restore`);
+  expect(restored.status()).toBe(200);
+  expect(await restored.json()).toMatchObject({ archivedAt: null, version: 2 });
+  expect((await reviewer.post(path, { decision: "rejected", note: "Late.", version: 2 })).status()).toBe(201);
+  expect(await (await reviewer.get(path)).json()).toHaveLength(2);
 
-  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts" })).json();
+  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts", acceptanceCriteria: ["Done"] })).json();
   expect((await author.post(`/projects/${projectId}/archive`)).status()).toBe(200);
   expect((await reviewer.post(`/requirements/${other.id}/reviews`, { decision: "accepted", version: 1 })).status()).toBe(409);
   expect(await (await reviewer.get(`/requirements/${other.id}/reviews`)).json()).toEqual([]);
+  // Nothing in an archived project can be restored either.
+  expect((await author.post(`/requirements/${requirementId}/archive`)).status()).toBe(409);
+  expect((await author.post(`/requirements/${other.id}/restore`)).status()).toBe(409);
 });
 
 test("a decision waits for the team lock, then is refused if the project was archived or the requirement edited meanwhile", async ({ request }) => {
@@ -205,7 +214,7 @@ test("a decision waits for the team lock, then is refused if the project was arc
 test("requirement lists carry the latest decision and whether it still describes the requirement", async ({ request }) => {
   const { projectId, requirementId, path } = await setUp(request);
   const [reviewer, author] = [await as(request, "reviewer"), await as(request, "author")];
-  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts" })).json();
+  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts", acceptanceCriteria: ["Done"] })).json();
   const review = async (id = requirementId) =>
     (await (await author.get(`/projects/${projectId}/requirements`)).json()).find((r: { id: string }) => r.id === id).review;
   expect(await review()).toBeNull();
@@ -232,7 +241,7 @@ test("requirement lists carry the latest decision and whether it still describes
 
   expect((await reviewer.post(path, { decision: "rejected", note: "Wrong issue.", version: 1 })).status()).toBe(201);
   expect(await review()).toMatchObject({ decision: "rejected", outdated: false });
-  expect((await author.put(`/requirements/${requirementId}`, { title: "Guest checkout v2", version: 1 })).status()).toBe(200);
+  expect((await author.put(`/requirements/${requirementId}`, { title: "Guest checkout v2", acceptanceCriteria: ["Done"], version: 1 })).status()).toBe(200);
   expect(await review()).toMatchObject({ decision: "rejected", outdated: true });
   expect(await review(other.id)).toBeNull();
 });
@@ -240,7 +249,7 @@ test("requirement lists carry the latest decision and whether it still describes
 test("requirement lists count each requirement's evidence links of every kind", async ({ request }) => {
   const { projectId, requirementId } = await setUp(request);
   const author = await as(request, "author");
-  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts" })).json();
+  const other = await (await author.post(`/projects/${projectId}/requirements`, { title: "Saved carts", acceptanceCriteria: ["Done"] })).json();
   const counts = async () => Object.fromEntries((await (await author.get(`/projects/${projectId}/requirements`)).json())
     .map((r: { id: string; evidenceCount: number }) => [r.id, r.evidenceCount]));
   expect(await counts()).toEqual({ [requirementId]: 0, [other.id]: 0 });
@@ -290,5 +299,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(13); // Every migration through ProjectDocuments.
+  expect(history).toBe(15); // Every migration through RequirementUpdatedBy.
 });

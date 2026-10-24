@@ -31,9 +31,9 @@ export const requireProject = cache(async (projectId: string): Promise<Project> 
   return parseProject(body);
 });
 
-/** Lists a project's active requirements, oldest first. Call after `requireProject`. */
-export const listRequirements = cache(async (projectId: string): Promise<RequirementSummary[]> => {
-  const body = isUuid(projectId) ? await read(`/projects/${projectId}/requirements`) : null;
+/** Lists a project's active requirements, or only its archived ones, oldest first. Call after `requireProject`. */
+export const listRequirements = cache(async (projectId: string, archived = false): Promise<RequirementSummary[]> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/requirements${archived ? "?archived=true" : ""}`) : null;
   if (body === null) notFound();
   return parseRequirementSummaries(body);
 });

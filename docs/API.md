@@ -42,11 +42,12 @@ to the project's team; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/archive` | team Owner/Admin | | 200 `Project` (idempotent) |
 | POST | `/projects/{projectId}/restore` | team Owner/Admin | | 200 `Project` (idempotent) |
 | GET | `/teams/{teamId}/projects` | team member | query `archived=true` for archive; default false | 200 `Project[]`, by name then ID |
-| GET | `/projects/{projectId}/requirements` | member | | 200 `RequirementSummary[]` (active only, oldest first) |
-| POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria? }` | 201 `Requirement` |
+| GET | `/projects/{projectId}/requirements` | member | query `archived=true` for archived only; default active only | 200 `RequirementSummary[]` (oldest first) |
+| POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria, documentIds? }` | 201 `Requirement` |
 | GET | `/requirements/{requirementId}` | member | | 200 `Requirement` |
-| PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria?, version }` | 200 `Requirement` |
+| PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria, documentIds?, version }` | 200 `Requirement` |
 | POST | `/requirements/{requirementId}/archive` | member | | 200 `Requirement` (idempotent) |
+| POST | `/requirements/{requirementId}/restore` | member | | 200 `Requirement` (idempotent; 409 in an archived project) |
 | GET | `/projects/{projectId}/members` | member | | 200 `ProjectMember[]` (owner first, then by name) |
 | POST | `/projects/{projectId}/members` | member | | 410 (retired) |
 | DELETE | `/projects/{projectId}/members/{userId}` | member | | 410 (retired) |
@@ -112,8 +113,20 @@ members. Legacy POST/DELETE membership routes return 410 with
 `code: "team_membership_required"` after membership checking; outsiders still receive
 404. These routes never add or remove a team member. Joins require invitation acceptance.
 
-`PUT` replaces the requirement: send the full criteria list in display order (omitting it
-clears the criteria) and the `version` you loaded. Criteria get new IDs on every save.
+A requirement needs a title and at least one acceptance criterion: an empty or missing
+`acceptanceCriteria` is 400 on that field, on create and on save. `PUT` replaces the
+requirement: send the full criteria list in display order, the full `documentIds` list
+(omitting it unlinks every document), and the `version` you loaded. Criteria get new IDs on
+every save; a document that stays linked keeps its `linkedBy` and `linkedAt` (ADR-049).
+`documentIds` holds at most 20 distinct IDs of documents in the requirement's own project.
+A document can be newly linked only while it is active; one archived after it was linked
+stays linked. Anything else is 400 on `documentIds`.
+
+Create and every save set `updatedBy` to the caller and `updatedAt` to now (ADR-050).
+An archived requirement stays readable but refuses saves, evidence changes, and review
+decisions with 409 until it is restored. Restoring is not an edit: it keeps the
+version, `updatedBy`, `updatedAt`, and the recorded decisions. Neither archive nor
+restore is possible while the project is archived (409).
 
 ## Shapes
 
@@ -139,8 +152,12 @@ type Review = {
   decidedBy: string; decidedAt: string;
 };
 type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
-  description: string; createdBy: string;
+  description: string; createdBy: string; // createdAt and updatedAt come from RequirementSummary
+  updatedBy: string; // who saved the current version; the creator until someone edits it
   acceptanceCriteria: { id: string; text: string; position: number }[];
+  // Linked project documents, by title. archivedAt is the document's own archive time.
+  documents: { id: string; title: string; fileName: string; contentType: string; archivedAt: string | null;
+    linkedBy: string; linkedAt: string }[];
 };
 type Document = {
   id: string; projectId: string; title: string; fileName: string; contentType: string; sizeBytes: number;

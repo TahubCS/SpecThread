@@ -75,7 +75,7 @@ test("Admins remove regular Members, Owner removes Admins, and voluntary leaving
   const created = await owner.post("/projects", { name: "Shared", teamId: path.slice(7) });
   expect(created.status()).toBe(201);
   const project = await created.json();
-  const requirement = await (await member.post(`/projects/${project.id}/requirements`, { title: "Before removal" })).json();
+  const requirement = await (await member.post(`/projects/${project.id}/requirements`, { title: "Before removal", acceptanceCriteria: ["Done"] })).json();
   expect((await admin.delete(path + "/members/member")).status()).toBe(204);
   expect((await member.get(`/requirements/${requirement.id}`)).status()).toBe(404);
   expect((await member.get(`/projects/${project.id}`)).status()).toBe(404);

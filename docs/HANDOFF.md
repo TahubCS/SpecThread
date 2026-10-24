@@ -1,6 +1,97 @@
 # Shared handoff
 
-## Current task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
+## Current task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23)
+
+- Branch: `feature/requirements-documents`, from `main` at `b069093`.
+- Scope: the "create a requirement" story (Danielle, Tech Lead; source "Design the Box"
+  F1, recorded in docs/PROJECT.md), plus linking project documents from requirements
+  (ADR-049). Two of the story's four criteria were already met: each criterion is its
+  own row and list item, and only team members can create (404 otherwise).
+- Completed:
+  - A requirement can't be created or saved without at least one acceptance criterion
+    (API 400 on `acceptanceCriteria`, same message in the form). The form starts with one
+    empty criterion row.
+  - The requirement page shows "Created by <name> on <date>" as well as the update date.
+  - Requirements link up to 20 documents from their own project, ticked in the
+    requirement form and saved with the requirement (the version rises). Kept links keep
+    who linked them and when. Archived documents can't be newly linked; ones linked
+    before archiving stay, marked Archived, until unticked. The page lists linked
+    documents, each opening its document page.
+- Changed files:
+  - API: `Requirements/RequirementEndpoints.cs`, `Projects/ProjectAccess.cs` (minimum
+    criterion, document limit), `Data/ProductModels.cs`, `Data/SpecThreadDbContext.cs`,
+    migration `20261024003629_RequirementDocuments` and the model snapshot.
+  - Schema: `scripts/generate-requirement-documents.mjs` (new), generated
+    `docs/schema/requirement-documents.sql` and `-rollback.sql`, `scripts/test-database.mjs`.
+  - Web: `lib/requirements.ts` (types, parsing, validation, `documentChoices`),
+    `components/requirement-form.tsx`, `app/projects/requirement-actions.ts`, the new,
+    edit, and detail requirement pages, `app-shell.css`.
+  - Tests: new `tests/schema/requirement-documents.spec.ts` (API on 5120); zero-criteria
+    and `createdAt` checks in `tests/schema/product-api.spec.ts`; requirement and document
+    e2e tests in `tests/e2e/requirements.spec.ts`; unit tests in
+    `tests/api/project-data.spec.ts`. Existing tests now send or fill one criterion
+    (schema: product-api, reviews, evidence, team-management; e2e: requirements, reviews,
+    evidence), and migration-history counts rose by one.
+  - Docs: DECISIONS (ADR-049, and an ADR-047 cross-reference), API, DATABASE,
+    ARCHITECTURE (fourteen product tables), PROJECT (the story), TESTING.
+- Decisions and assumptions:
+  - Links are saved with the requirement rather than through separate link endpoints,
+    so a link change is a new version and makes an earlier review outdated.
+  - The criterion minimum is an API rule, not a database constraint. Existing
+    requirements with no criteria stay readable but need one before their next save.
+  - Document checkboxes take their default from React state, so ticks survive the
+    form reset after a server-side rejection (a controlled checkbox did not).
+- Checks (all run on this branch):
+  - Passed: `npm run lint`, `npm run typecheck`, `dotnet format app/api
+    --verify-no-changes`, `dotnet ef migrations has-pending-model-changes` (none),
+    `git diff --check`.
+  - `npm test`: 356 passed, none flaky.
+  - CI's migration path: the EF bundle applied only RequirementDocuments to a Postgres 17
+    at the ProjectDocuments state (RLS on, anon has no SELECT, 14 history rows), and a
+    second run applied nothing.
+- Known issues and risks:
+  - CI applies RequirementDocuments on merge (ADR-044). Don't apply it to Supabase by hand
+    first; a draft applied early broke the ProjectDocuments deploy.
+  - A document's page doesn't list the requirements that link it yet.
+  - The uncommitted `app/api/packages.lock.json` change that was on `main` before this
+    branch was overwritten by `dotnet` restores during the work; the file now matches
+    the committed version.
+- Part 2, same branch at the user's request (ADR-050): the story criteria "edits save the
+  editor's name and a timestamp", "archived requirements are hidden from the default list
+  but can still be opened read-only", and "archived requirements can't be edited or
+  reviewed until restored".
+  - Completed: `requirements.updated_by` records who saved the current version; the page
+    reads "Updated by <name> on <date>". The Requirements tab links to an Archived view
+    (`?archived=true`, API `archived=true`). `POST /requirements/{id}/restore` (any team
+    member, refused in an archived project) restores without raising the version or
+    changing the last editor; the archived page offers Restore, and its edit page links
+    to it. Archived requirements still refuse saves, evidence changes, and reviews (409).
+  - Decision: last editor only, not an edit history (the user's choice). The column is
+    nullable so the API still running during the deploy can create requirements; the
+    migration backfills the creator and the API reports the creator for an empty value.
+  - Changed files: `RequirementEndpoints.cs` (list filter, restore, `UpdatedBy`),
+    `ProductModels.cs`, `SpecThreadDbContext.cs`, migration
+    `20261024010934_RequirementUpdatedBy` and the snapshot,
+    `scripts/generate-requirement-updated-by.mjs` with generated
+    `docs/schema/requirement-updated-by.sql` and `-rollback.sql`, `scripts/test-database.mjs`;
+    web `lib/project-data.ts`, `lib/requirements.ts`, `requirement-actions.ts`,
+    `components/requirement-archive.tsx` (adds `RequirementRestore`),
+    `components/requirement-rows.tsx`, the requirement list, detail, and edit pages;
+    tests in `tests/schema/product-api.spec.ts`, `reviews.spec.ts`, history counts in
+    `evidence.spec.ts` and `github-repository.spec.ts`, `tests/api/project-data.spec.ts`,
+    and `tests/e2e/requirements.spec.ts`; docs DECISIONS (ADR-050, ADR-024 note), API,
+    DATABASE, ARCHITECTURE, PROJECT, TESTING.
+  - Checks: lint, typecheck, `dotnet format --verify-no-changes`,
+    `has-pending-model-changes` (none), `git diff --check` passed; `npm test` 359 passed,
+    none flaky. The EF bundle applied RequirementDocuments then RequirementUpdatedBy to a
+    Postgres at the ProjectDocuments state with one existing requirement, whose
+    `updated_by` became its creator.
+  - Risks: who made earlier edits isn't recorded. Any team member can now undo an archive.
+- Next step: review, then open a PR to `main` (it carries both migrations, which CI
+  applies in order). Follow-ups: an edit history on the Requirement history page, show
+  linking requirements on a document's page, and Tickets.
+
+## Previous task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
 
 - Branch: `fix/evidence-locks-and-timeouts`, from `main` at `dac2bcd`. Fixes only; no new
   features and no schema change.

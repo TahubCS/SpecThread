@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidencePanel } from "@/components/evidence-panel";
-import { RequirementArchive } from "@/components/requirement-archive";
+import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { ReviewPanel } from "@/components/review-panel";
+import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import { listEvidence, listMembers, listReviews, requireProject, requireRequirement, viewerId } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
@@ -18,7 +19,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: (await requireRequirement(projectId, requirementId)).title };
 }
 
-/** Shows a requirement's description, ordered acceptance criteria, evidence, and review decisions, with edit and archive while it can change. */
+/**
+ * Shows who created a requirement and when, its description, ordered acceptance criteria, linked
+ * documents, evidence, and review decisions, with edit and archive while it can change.
+ */
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
@@ -28,7 +32,7 @@ export default async function Page({ params }: Props) {
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
-  const author = members.find(member => member.userId === requirement.createdBy)?.name ?? "a former member";
+  const nameOf = (userId: string) => people[userId] ?? "a former member";
   const editable = !project.archivedAt && !requirement.archivedAt;
   const base = `/projects/${project.id}/requirements`;
 
@@ -41,10 +45,13 @@ export default async function Page({ params }: Props) {
         {editable && <Link className="button secondary" href={`${base}/${requirement.id}/edit`}><Pencil size={14} aria-hidden="true" /> Edit</Link>}
       </header>
       <p className="requirement-meta">
-        Version {requirement.version} · Updated <time dateTime={requirement.updatedAt}>{formatDate(requirement.updatedAt)}</time> · Created by {author}
+        Version {requirement.version} · Created by {nameOf(requirement.createdBy)} on <time dateTime={requirement.createdAt}>{formatDate(requirement.createdAt)}</time>
+        {" "}· Updated by {nameOf(requirement.updatedBy)} on <time dateTime={requirement.updatedAt}>{formatDate(requirement.updatedAt)}</time>
       </p>
       {requirement.archivedAt && (
-        <p className="notice">This requirement was archived on {formatDate(requirement.archivedAt)} and can no longer be changed.</p>
+        <p className="notice">
+          This requirement was archived on {formatDate(requirement.archivedAt)}. It can&apos;t be edited or reviewed until it is restored.
+        </p>
       )}
       <section className="requirement-section" aria-labelledby="description-heading">
         <h2 id="description-heading">Description</h2>
@@ -60,6 +67,25 @@ export default async function Page({ params }: Props) {
             <ol className="criteria-list" aria-label="Acceptance criteria">
               {requirement.acceptanceCriteria.map(criterion => <li key={criterion.id}>{criterion.text}</li>)}
             </ol>
+          )}
+      </section>
+      <section className="requirement-section" aria-labelledby="documents-heading">
+        <h2 id="documents-heading">Reference documents</h2>
+        {requirement.documents.length === 0
+          ? <p className="muted">No documents linked.</p>
+          : (
+            <ul className="row-list" aria-label="Reference documents">
+              {requirement.documents.map(document => (
+                <li key={document.id}>
+                  <Link className="row" href={`/projects/${project.id}/documents/${document.id}`}>
+                    <FileText size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span className="row-title">{document.title}</span>
+                    <span className="row-meta">{documentTypeLabel(document.contentType)}</span>
+                    {document.archivedAt && <span className="badge">Archived</span>}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
       </section>
       <section className="requirement-section" aria-labelledby="evidence-heading">
@@ -89,6 +115,7 @@ export default async function Page({ params }: Props) {
           soloTeam={members.length === 1 ? { name: project.teamName, invitations: `/teams/${project.teamId}/invitations` } : null} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
+      {requirement.archivedAt && !project.archivedAt && <RequirementRestore projectId={project.id} requirementId={requirement.id} />}
     </article>
   );
 }

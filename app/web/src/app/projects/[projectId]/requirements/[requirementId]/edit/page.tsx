@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { updateRequirement } from "@/app/projects/requirement-actions";
 import { RequirementForm } from "@/components/requirement-form";
-import { requireProject, requireRequirement } from "@/lib/project-data";
+import { listDocuments, requireProject, requireRequirement } from "@/lib/project-data";
+import { documentChoices } from "@/lib/requirements";
 
 export const metadata: Metadata = { title: "Edit requirement" };
 
@@ -11,7 +13,9 @@ export const metadata: Metadata = { title: "Edit requirement" };
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements/[requirementId]/edit">) {
   const { projectId, requirementId } = await params;
-  const [project, requirement] = await Promise.all([requireProject(projectId), requireRequirement(projectId, requirementId)]);
+  const [project, requirement, documents] = await Promise.all([
+    requireProject(projectId), requireRequirement(projectId, requirementId), listDocuments(projectId),
+  ]);
   const detail = `/projects/${project.id}/requirements/${requirement.id}`;
 
   return (
@@ -19,11 +23,18 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       <header className="project-page-heading">
         <h1 id="page-title">Edit requirement</h1>
       </header>
-      {project.archivedAt || requirement.archivedAt
+      {project.archivedAt
         ? <p className="notice">This requirement is archived and can no longer be changed.</p>
+        : requirement.archivedAt
+        ? <p className="notice">This requirement is archived. <Link href={detail}>Restore it</Link> to edit it again.</p>
         : <RequirementForm key={requirement.version}
             action={updateRequirement.bind(null, project.id, requirement.id, requirement.version)}
-            initial={{ title: requirement.title, description: requirement.description, criteria: requirement.acceptanceCriteria.map(criterion => criterion.text) }}
+            initial={{
+              title: requirement.title, description: requirement.description,
+              criteria: requirement.acceptanceCriteria.map(criterion => criterion.text),
+              documentIds: requirement.documents.map(document => document.id),
+            }}
+            documents={documentChoices(documents, requirement.documents)} documentsHref={`/projects/${project.id}/documents`}
             label="Edit requirement" submitLabel="Save changes" pendingLabel="Saving..." cancelHref={detail} />}
     </section>
   );

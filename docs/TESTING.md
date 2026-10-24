@@ -68,7 +68,7 @@ which the release evidence test uses to check that stable answers are not asked 
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
-The Teams API tests use 5116, team management 5117, invitations 5118, and documents 5119 (moved from
+The Teams API tests use 5116, team management 5117, invitations 5118, documents 5119, and requirement documents 5120 (moved from
 5107 to 5109 when the branches were merged, because the proxy and GitHub stand-ins
 below already use those).
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
@@ -247,6 +247,28 @@ currently require network access during the web build.
   and server messages, a failed upload, archived projects, and a document opened
   under another project's address. The test API proxy forwards `Content-Disposition`
   so downloads keep their file names.
+- Requirement documents and the create-requirement story (ADR-049): the schema suite
+  (API on 5120) links documents on create and replaces them on save, with kept links
+  keeping who linked them and when; refuses another project's document, an unknown ID,
+  a duplicate, and more than 20; refuses newly linking an archived document while one
+  already linked stays linked; answers 404 to outsiders; and checks the table's keys,
+  RLS, browser-role denial, and a rollback that keeps requirements and documents.
+  tests/schema/product-api.spec.ts refuses a missing title or zero criteria on create
+  and on save and checks `createdBy` and `createdAt`. Browser tests: the starting
+  criterion row, the "at least one" message on a new and an existing requirement, the
+  creation date on the page, the empty documents state linking to Documentation,
+  ticking a document and opening it from the requirement, an archived link marked and
+  then unticked, ticks kept after a refused save with the API's message beside them,
+  and keyboard ticking at 390px. Not exercised: 20 documents through the browser.
+- Last editor, archive view, and restore (ADR-050): tests/schema/product-api.spec.ts
+  checks `updatedBy` after create and after another member's save; default and
+  `archived=true` lists; an archived requirement readable but refusing saves and
+  reviews; restore (member, idempotent, 404 for outsiders) keeping the version and last
+  editor, then editing again; and the migration's backfill, empty-value fallback,
+  foreign key, and rollback. tests/schema/reviews.spec.ts records a decision after a
+  restore and refuses archive and restore in an archived project. Browser tests: the
+  "Updated by" line, the Archived view and its empty state, the read-only page and edit
+  notice, restoring, a failed restore, and a restore refused once the project is archived.
 - Teams: real API-backed creation, search, empty/error/retry and member-only access;
   reference Home, independent saved sidebar groups, personal favorites sorting first,
   keyboard team menu, and desktop/mobile screenshots. Required onboarding resumes

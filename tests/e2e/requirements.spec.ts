@@ -21,14 +21,21 @@ async function createProject(page: Page, name: string) {
   return page.url().split("/").at(-1)!;
 }
 
-/** Fills and submits the requirement form on the current page, then returns the new requirement's ID. */
-async function createRequirement(page: Page, projectId: string, title: string, criteria: string[] = []) {
-  await page.goto(`/projects/${projectId}/requirements/new`);
-  await page.getByLabel("Title").fill(title);
+const pdf = Buffer.from("%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+
+/** Fills criteria into a new requirement form, which starts with one empty row. */
+async function fillCriteria(page: Page, criteria: string[]) {
   for (const [index, text] of criteria.entries()) {
-    await page.getByRole("button", { name: "Add criterion" }).click();
+    if (index > 0) await page.getByRole("button", { name: "Add criterion" }).click();
     await page.getByLabel(`Criterion ${index + 1}`, { exact: true }).fill(text);
   }
+}
+
+/** Fills and submits the requirement form on the current page, then returns the new requirement's ID. */
+async function createRequirement(page: Page, projectId: string, title: string, criteria: string[] = ["Done"]) {
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill(title);
+  await fillCriteria(page, criteria);
   await page.getByRole("button", { name: "Create requirement" }).click();
   await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
   return page.url().split("/").at(-1)!;
@@ -42,10 +49,7 @@ test("a member creates a requirement with ordered criteria and finds it in the p
 
   await page.getByLabel("Title").fill("  Guest checkout  ");
   await page.getByLabel("Description").fill("Let a shopper pay without an account.\nKeep the cart.");
-  for (const [index, text] of ["Pay with a card as a guest", "Receive a receipt by email", "Remove me"].entries()) {
-    await page.getByRole("button", { name: "Add criterion" }).click();
-    await page.getByLabel(`Criterion ${index + 1}`, { exact: true }).fill(text);
-  }
+  await fillCriteria(page, ["Pay with a card as a guest", "Receive a receipt by email", "Remove me"]);
   await page.getByRole("button", { name: "Remove criterion 3" }).click();
   await page.screenshot({ path: testInfo.outputPath("requirement-form.png"), fullPage: true });
   await page.getByRole("button", { name: "Create requirement" }).click();
@@ -53,7 +57,8 @@ test("a member creates a requirement with ordered criteria and finds it in the p
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements/[0-9a-f-]{36}$`));
   await expect(page.getByRole("heading", { name: "Guest checkout", level: 1 })).toBeVisible();
   await expect(page.getByText("Version 1")).toBeVisible();
-  await expect(page.getByText("Created by Requirement tester")).toBeVisible();
+  // Who created it and when.
+  await expect(page.getByText(/Created by Requirement tester on [A-Z][a-z]{2} \d{1,2}, \d{4}/)).toBeVisible();
   await expect(page.getByText("Let a shopper pay without an account.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem"))
     .toHaveText(["Pay with a card as a guest", "Receive a receipt by email"]);
@@ -69,7 +74,6 @@ test("a requirement without a title or with a blank criterion is rejected next t
   const projectId = await createProject(page, "Checkout");
   await page.goto(`/projects/${projectId}/requirements/new`);
   await page.getByLabel("Title").fill("   ");
-  await page.getByRole("button", { name: "Add criterion" }).click();
   await page.getByLabel("Criterion 1", { exact: true }).fill("Kept");
   await page.getByRole("button", { name: "Add criterion" }).click();
   await page.getByRole("button", { name: "Create requirement" }).click();
@@ -83,6 +87,26 @@ test("a requirement without a title or with a blank criterion is rejected next t
 
   await page.getByRole("link", { name: "Cancel" }).click();
   await expect(page.getByText("This project has no requirements yet.")).toBeVisible();
+});
+
+test("a requirement can't be created or saved without an acceptance criterion", async ({ page }) => {
+  const projectId = await createProject(page, "Checkout");
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill("No criteria");
+  await expect(page.getByLabel("Criterion 1", { exact: true })).toHaveValue("");
+  await page.getByRole("button", { name: "Remove criterion 1" }).click();
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Add at least one acceptance criterion." })).toBeVisible();
+  await expect(page).toHaveURL(/\/requirements\/new$/);
+
+  const requirementId = await createRequirement(page, projectId, "One criterion", ["Only one"]);
+  await page.goto(`/projects/${projectId}/requirements/${requirementId}/edit`);
+  await page.getByRole("button", { name: "Remove criterion 1" }).click();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Add at least one acceptance criterion." })).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements/${requirementId}`);
+  await expect(page.getByText("Version 1")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Only one"]);
 });
 
 test("editing replaces the title, description, and criteria and raises the version", async ({ page }) => {
@@ -101,6 +125,8 @@ test("editing replaces the title, description, and criteria and raises the versi
 
   await expect(page.getByRole("heading", { name: "Guest checkout v2", level: 1 })).toBeVisible();
   await expect(page.getByText("Version 2")).toBeVisible();
+  // The save records who made it and when.
+  await expect(page.getByText(/Updated by Requirement tester on [A-Z][a-z]{2} \d{1,2}, \d{4}/)).toBeVisible();
   await expect(page.getByText("Now with a description.")).toBeVisible();
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Second", "Third"]);
 });
@@ -127,7 +153,7 @@ test("a save made after someone else saved is refused and nothing is overwritten
   await expect(page.getByText("Version 2")).toBeVisible();
 });
 
-test("a requirement is archived only after confirming, then is read-only and off the list", async ({ page }) => {
+test("a requirement is archived only after confirming, is read-only under Archived, and is restored", async ({ page }, testInfo) => {
   const projectId = await createProject(page, "Checkout");
   const requirementId = await createRequirement(page, projectId, "Short lived", ["Only one"]);
   await page.getByRole("button", { name: "Archive requirement" }).click();
@@ -139,14 +165,54 @@ test("a requirement is archived only after confirming, then is read-only and off
   await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements$`));
   await expect(page.getByText("This project has no requirements yet.")).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/requirements/${requirementId}`);
-  await expect(page.getByText(/This requirement was archived on/)).toBeVisible();
+  // Hidden from the default list, but listed under Archived and still opens, read-only.
+  await page.getByRole("link", { name: "Archived" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements\\?archived=true$`));
+  await expect(page.getByRole("heading", { name: "Archived requirements", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: "New requirement" })).toHaveCount(0);
+  const archivedRow = page.getByRole("list", { name: "Archived requirements" }).getByRole("link", { name: /Short lived/ });
+  await expect(archivedRow).toContainText(/Archived [A-Z][a-z]{2} \d{1,2}, \d{4}/);
+  await page.screenshot({ path: testInfo.outputPath("requirements-archived.png"), fullPage: true });
+  await archivedRow.click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/requirements/${requirementId}$`));
+  await expect(page.getByText(/This requirement was archived on .*It can't be edited or reviewed until it is restored\./)).toBeVisible();
   await expect(page.getByRole("link", { name: "Edit" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Archive requirement" })).toHaveCount(0);
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Only one"]);
   await page.goto(`/projects/${projectId}/requirements/${requirementId}/edit`);
-  await expect(page.getByText("This requirement is archived and can no longer be changed.")).toBeVisible();
+  await expect(page.getByText("This requirement is archived. Restore it to edit it again.")).toBeVisible();
   await expect(page.getByLabel("Title")).toHaveCount(0);
+
+  // Restoring brings back editing and the list entry, at the same version.
+  await page.getByRole("link", { name: "Restore it" }).click();
+  await expect(page.getByRole("button", { name: "Restore requirement" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("requirement-archived-detail.png"), fullPage: true });
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("link", { name: "Edit" })).toBeVisible();
+  await expect(page.getByText(/This requirement was archived on/)).toHaveCount(0);
+  await expect(page.getByText("Version 1")).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("link", { name: /Short lived/ })).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements?archived=true`);
+  await expect(page.getByText("This project has no archived requirements.")).toBeVisible();
+});
+
+test("restoring is refused with an explanation when the project was archived meanwhile, or the API fails", async ({ page }) => {
+  const projectId = await createProject(page, "Checkout");
+  const requirementId = await createRequirement(page, projectId, "Keep me");
+  await runTestSql(`UPDATE public.requirements SET archived_at = now() WHERE id = '${requirementId}'`);
+  await page.goto(`/projects/${projectId}/requirements/${requirementId}`);
+  await failApi(owner.userId, { method: "POST", path: `^/requirements/${requirementId}/restore$`, status: 500, body: { status: 500 } });
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "The requirement could not be restored. Please try again." })).toBeVisible();
+  await clearApiFaults(owner.userId);
+
+  await runTestSql(`UPDATE public.projects SET archived_at = now() WHERE id = '${projectId}'`);
+  await page.getByRole("button", { name: "Restore requirement" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "This project is archived, so its requirements can't be restored." })).toBeVisible();
+  // In an archived project nothing offers a restore.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Restore requirement" })).toHaveCount(0);
 });
 
 test("an archived project keeps its requirements readable but offers no way to change them", async ({ page }) => {
@@ -172,6 +238,7 @@ test("a project archived while a form is open refuses the save with an explanati
   const requirementId = await createRequirement(page, projectId, "Edit me");
   await page.goto(`/projects/${projectId}/requirements/new`);
   await page.getByLabel("Title").fill("Too late");
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done");
   const edit = await page.context().newPage();
   await edit.goto(`/projects/${projectId}/requirements/${requirementId}/edit`);
   await edit.getByLabel("Title").fill("Also too late");
@@ -216,10 +283,9 @@ test("the requirement form works with the keyboard and fits a narrow screen", as
   await page.keyboard.type("Keyboard only");
   await page.keyboard.press("Tab");
   await page.keyboard.type("Typed without a mouse.");
+  // The form starts with one criterion row, which comes next.
   await page.keyboard.press("Tab");
-  await page.keyboard.press("Enter");
-  await expect(page.getByLabel("Criterion 1", { exact: true })).toBeVisible();
-  await page.getByLabel("Criterion 1", { exact: true }).focus();
+  await expect(page.getByLabel("Criterion 1", { exact: true })).toBeFocused();
   await page.keyboard.type("Reachable by keyboard");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("requirement-form-mobile.png"), fullPage: true });
@@ -242,7 +308,6 @@ for (const [label, failure, message] of [
     await page.goto(`/projects/${projectId}/requirements/new`);
     await page.getByLabel("Title").fill("Guest checkout");
     await page.getByLabel("Description").fill("Kept text");
-    await page.getByRole("button", { name: "Add criterion" }).click();
     await page.getByLabel("Criterion 1", { exact: true }).fill("Kept criterion");
     await failApi(owner.userId, { method: "POST", path: `^/projects/${projectId}/requirements$`, ...failure });
     await page.getByRole("button", { name: "Create requirement" }).click();
@@ -262,10 +327,7 @@ test("the API's own field messages appear next to the title and the right criter
   const projectId = await createProject(page, "Checkout");
   await page.goto(`/projects/${projectId}/requirements/new`);
   await page.getByLabel("Title").fill("Guest checkout");
-  for (const index of [1, 2]) {
-    await page.getByRole("button", { name: "Add criterion" }).click();
-    await page.getByLabel(`Criterion ${index}`, { exact: true }).fill(`Criterion text ${index}`);
-  }
+  await fillCriteria(page, ["Criterion text 1", "Criterion text 2"]);
   await failApi(owner.userId, { method: "POST", path: `^/projects/${projectId}/requirements$`, status: 400, body: { errors: {
     title: ["That title is not allowed."], description: ["That description is not allowed."],
     acceptanceCriteria: ["Too many for this plan."], "acceptanceCriteria[1]": ["That criterion is not allowed."],
@@ -361,10 +423,7 @@ test("criteria are moved up and down before saving, on a new and on an existing 
   const projectId = await createProject(page, "Checkout");
   await page.goto(`/projects/${projectId}/requirements/new`);
   await page.getByLabel("Title").fill("Guest checkout");
-  for (const [index, text] of ["First", "Second", "Third"].entries()) {
-    await page.getByRole("button", { name: "Add criterion" }).click();
-    await criterion(page, index + 1).fill(text);
-  }
+  await fillCriteria(page, ["First", "Second", "Third"]);
   // The ends cannot move further, and pressing them changes nothing.
   await expect(move(page, 1, "up")).toBeDisabled();
   await expect(move(page, 3, "down")).toBeDisabled();
@@ -467,4 +526,84 @@ test("a message about one criterion stays with it when criteria are moved or rem
   await clearApiFaults(owner.userId);
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("list", { name: "Acceptance criteria" }).getByRole("listitem")).toHaveText(["Added", "Second"]);
+});
+
+/** Uploads a PDF to the project's Documentation tab and returns the new document's ID. */
+async function uploadPdf(page: Page, projectId: string, title: string) {
+  await page.goto(`/projects/${projectId}/documents/new`);
+  await page.getByLabel("File", { exact: true }).setInputFiles({ name: `${title}.pdf`, mimeType: "application/pdf", buffer: pdf });
+  await page.getByLabel("Title (optional)").fill(title);
+  await page.getByRole("button", { name: "Upload document" }).click();
+  await expect(page).toHaveURL(/\/documents\/[0-9a-f-]{36}$/);
+  return page.url().split("/").at(-1)!;
+}
+
+test("a requirement links the project's documents, which open from its page", async ({ page }, testInfo) => {
+  const projectId = await createProject(page, "Box");
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  const documents = page.getByRole("group", { name: "Reference documents" });
+  await expect(documents.getByText("This project has no documents yet.")).toBeVisible();
+  await documents.getByRole("link", { name: "Upload one in Documentation" }).click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/documents$`));
+
+  const briefId = await uploadPdf(page, projectId, "Design the Box");
+  await uploadPdf(page, projectId, "Client notes");
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill("Box opens");
+  await fillCriteria(page, ["The lid lifts"]);
+  await documents.getByRole("checkbox", { name: /Design the Box/ }).check();
+  await expect(documents.getByRole("checkbox", { name: /Client notes/ })).not.toBeChecked();
+  await page.screenshot({ path: testInfo.outputPath("requirement-form-documents.png"), fullPage: true });
+  await page.getByRole("button", { name: "Create requirement" }).click();
+
+  const linked = page.getByRole("list", { name: "Reference documents" }).getByRole("link");
+  await expect(linked).toHaveCount(1);
+  await expect(linked).toContainText("Design the Box");
+  await expect(linked).toContainText("PDF");
+  await page.screenshot({ path: testInfo.outputPath("requirement-detail-documents.png"), fullPage: true });
+  const requirementUrl = page.url();
+  await linked.click();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/documents/${briefId}$`));
+  await expect(page.getByRole("heading", { name: "Design the Box", level: 1 })).toBeVisible();
+
+  // An archived document stays linked and is marked; unticking it on save unlinks it.
+  await runTestSql(`UPDATE public.documents SET archived_at = now() WHERE id = '${briefId}'`);
+  await page.goto(requirementUrl);
+  await expect(linked.getByText("Archived")).toBeVisible();
+  await page.getByRole("link", { name: "Edit" }).click();
+  const archived = documents.getByRole("checkbox", { name: /Design the Box.*Archived/ });
+  await expect(archived).toBeChecked();
+  await archived.uncheck();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText("Version 2")).toBeVisible();
+  await expect(page.getByText("No documents linked.")).toBeVisible();
+  await page.getByRole("link", { name: "Edit" }).click();
+  await expect(documents.getByRole("checkbox", { name: /Design the Box/ })).toHaveCount(0);
+});
+
+test("ticked documents survive a refused save, and the API's document message appears next to them", async ({ page }) => {
+  const projectId = await createProject(page, "Box");
+  await uploadPdf(page, projectId, "Design the Box");
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill("Box opens");
+  await fillCriteria(page, ["The lid lifts"]);
+  const documents = page.getByRole("group", { name: "Reference documents" });
+  await documents.getByRole("checkbox", { name: /Design the Box/ }).check();
+  await failApi(owner.userId, { method: "POST", path: `^/projects/${projectId}/requirements$`, status: 400, body: { errors: {
+    documentIds: ["An archived document can't be newly linked."],
+  } } });
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  await expect(documents.getByRole("alert").filter({ hasText: "An archived document can't be newly linked." })).toBeVisible();
+  await expect(documents.getByRole("checkbox", { name: /Design the Box/ })).toBeChecked();
+
+  // The documents can be ticked with the keyboard on a narrow screen.
+  await clearApiFaults(owner.userId);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await documents.getByRole("checkbox", { name: /Design the Box/ }).focus();
+  await page.keyboard.press("Space");
+  await expect(documents.getByRole("checkbox", { name: /Design the Box/ })).not.toBeChecked();
+  await page.keyboard.press("Space");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  await expect(page.getByRole("list", { name: "Reference documents" }).getByRole("link")).toContainText("Design the Box");
 });
