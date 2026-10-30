@@ -137,6 +137,22 @@ public sealed class RequirementFollowUpEvent
     public DateTime OccurredAt { get; set; }
 }
 
+// An evidence link added to or removed from a requirement, with who did it and when (ADR-054).
+// Kind, Label, and Title are copied from the link, which a removal deletes. EvidenceId is the
+// link's ID, kept without a foreign key for the same reason. Rows are only ever added.
+public sealed class RequirementEvidenceEvent
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public Guid EvidenceId { get; set; }
+    public required string Action { get; set; }
+    public required string Kind { get; set; }
+    public required string Label { get; set; }
+    public required string Title { get; set; }
+    public required string Actor { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
 // A person's decision on a requirement (ADR-038). Evidence is a JSON array of the evidence links
 // as they were when the decision was made. Rows are only ever added.
 public sealed class RequirementReview

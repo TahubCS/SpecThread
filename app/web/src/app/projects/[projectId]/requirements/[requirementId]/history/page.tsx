@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { EvidenceHistory } from "@/components/evidence-panel";
 import { FollowUpHistory } from "@/components/requirement-follow-ups";
-import { listCriteriaVersions, listFollowUps, listMembers, listReviews, requireProject, requireRequirement } from "@/lib/project-data";
+import {
+  listCriteriaVersions, listEvidenceHistory, listFollowUps, listMembers, listReviews, requireProject, requireRequirement,
+} from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 import { decisionText } from "@/lib/reviews";
 
@@ -10,14 +13,14 @@ export const metadata: Metadata = { title: "Requirement history" };
 
 /**
  * Shows how a requirement changed: every version of its acceptance criteria with who saved it,
- * when, and the decisions made against it (ADR-051), and every follow-up link added or removed
- * (ADR-052). Earlier versions open read-only.
+ * when, and the decisions made against it (ADR-051), every follow-up link added or removed
+ * (ADR-052), and every evidence link added or removed (ADR-054). Earlier versions open read-only.
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements/[requirementId]/history">) {
   const { projectId, requirementId } = await params;
-  const [project, requirement, versions, followUps, reviews, members] = await Promise.all([
+  const [project, requirement, versions, followUps, reviews, members, evidenceHistory] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listCriteriaVersions(requirementId),
-    listFollowUps(requirementId), listReviews(requirementId), listMembers(projectId),
+    listFollowUps(requirementId), listReviews(requirementId), listMembers(projectId), listEvidenceHistory(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -64,6 +67,14 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
               })}
             </ol>
           )}
+      </section>
+      <section className="requirement-section" aria-labelledby="evidence-history-heading">
+        <h2 id="evidence-history-heading">Evidence links</h2>
+        {evidenceHistory === null
+          ? <p className="notice" role="status">Evidence link changes can&apos;t be shown right now. Try again in a few minutes.</p>
+          : evidenceHistory.length === 0
+          ? <p className="muted">No evidence links have been added or removed.</p>
+          : <div className="review-history"><EvidenceHistory history={evidenceHistory} people={people} /></div>}
       </section>
       <section className="requirement-section" aria-labelledby="follow-up-history-heading">
         <h2 id="follow-up-history-heading">Follow-up links</h2>

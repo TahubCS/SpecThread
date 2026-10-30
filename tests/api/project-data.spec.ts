@@ -9,7 +9,8 @@ import {
 import { criteriaVersionText, parseCriteriaVersion, parseCriteriaVersions } from "../../app/web/src/lib/criteria-versions";
 import { followUpEventText, parseFollowUps } from "../../app/web/src/lib/follow-ups";
 import {
-  checkSummary, evidenceChanges, evidenceCountText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
+  checkSummary, evidenceChanges, evidenceCountText, evidenceEventText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceHistory,
+  parseEvidenceList, parseEvidenceSearch, problemDetail,
   releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
@@ -442,4 +443,26 @@ test("criteria versions and follow-ups are accepted only in the documented shape
   }
   expect(followUpEventText(parseFollowUps(followUps).history[0], "r1")).toBe("Marked as a follow-up of “Box opens”");
   expect(followUpEventText(parseFollowUps(followUps).history[1], "r2")).toBe("“Box opens faster” was unmarked as a follow-up of this requirement");
+});
+
+test("title search results and the evidence history are accepted only in the documented shape", () => {
+  const result = { number: 15, kind: "pull_request", title: "Add guest checkout", state: "merged", author: "grace",
+    url: "https://github.com/acme/web/pull/15", linked: false };
+  expect(parseEvidenceSearch({ items: [{ ...result, extra: 1 }, { ...result, number: 3, author: null }] })).toEqual([result, { ...result, number: 3, author: null }]);
+  expect(parseEvidenceSearch({ items: [] })).toEqual([]);
+  for (const value of [null, [], { items: null }, { items: [{ ...result, number: 0 }] }, { items: [{ ...result, kind: "commit" }] },
+    { items: [{ ...result, state: "draft" }] }, { items: [{ ...result, url: "https://evil.example/acme/web/pull/15" }] },
+    { items: [{ ...result, linked: "no" }] }, { items: [{ ...result, author: 1 }] }]) {
+    expect(() => parseEvidenceSearch(value), JSON.stringify(value)).toThrow("unexpected search results");
+  }
+
+  const event = { id: "v1", evidenceId: "e1", action: "removed" as const, kind: "commit", label: "4f2a9c1", title: "Fix totals", actor: "u1",
+    occurredAt: "2026-10-30T10:00:00Z" };
+  expect(parseEvidenceHistory([{ ...event, extra: 1 }])).toEqual([event]);
+  for (const value of [null, {}, [{ ...event, action: "renamed" }], [{ ...event, kind: "deployment" }], [{ ...event, label: 1 }],
+    [{ ...event, actor: null }], [{ ...event, occurredAt: "soon" }]]) {
+    expect(() => parseEvidenceHistory(value), JSON.stringify(value)).toThrow("unexpected evidence history");
+  }
+  expect(evidenceEventText(event)).toBe("Removed 4f2a9c1 “Fix totals”");
+  expect(evidenceEventText({ ...event, action: "added" as const, label: "#15", title: "Add guest checkout" })).toBe("Linked #15 “Add guest checkout”");
 });

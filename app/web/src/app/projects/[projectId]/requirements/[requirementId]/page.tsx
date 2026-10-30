@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
-import { EvidencePanel } from "@/components/evidence-panel";
+import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
@@ -9,7 +9,7 @@ import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listEvidence, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
+  listEvidence, listEvidenceHistory, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
 } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
@@ -32,10 +32,10 @@ export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones, evidenceHistory] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
-    listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId),
+    listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -113,14 +113,23 @@ export default async function Page({ params }: Props) {
       <section className="requirement-section" aria-labelledby="evidence-heading">
         <h2 id="evidence-heading">Evidence</h2>
         {repository || evidence.length > 0 ? (
-          <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence}
+          <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence} history={evidenceHistory}
             repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
             people={people} />
         ) : (
-          <p className="muted">
-            Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
-            link issues, pull requests, commits, and releases.
-          </p>
+          <>
+            <p className="muted">
+              Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
+              link issues, pull requests, commits, and releases.
+            </p>
+            {/* Links removed before the repository was disconnected stay in the record (ADR-054). */}
+            {evidenceHistory && evidenceHistory.length > 0 && (
+              <details className="review-history">
+                <summary>{evidenceHistory.length === 1 ? "1 link change" : `${evidenceHistory.length} link changes`}</summary>
+                <EvidenceHistory history={evidenceHistory} people={people} />
+              </details>
+            )}
+          </>
         )}
         {repository === null && evidence.length > 0 && (
           <p className="notice">

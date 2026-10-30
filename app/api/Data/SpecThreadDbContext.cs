@@ -13,6 +13,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
     public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
     public DbSet<RequirementReview> RequirementReviews => Set<RequirementReview>();
+    public DbSet<RequirementEvidenceEvent> RequirementEvidenceEvents => Set<RequirementEvidenceEvent>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<UserOnboarding> UserOnboardings => Set<UserOnboarding>();
@@ -261,6 +262,27 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidence.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Tag }).IsUnique().HasFilter("kind = 'release'");
         evidence.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         evidence.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var evidenceEvent = model.Entity<RequirementEvidenceEvent>();
+        evidenceEvent.ToTable("requirement_evidence_events", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_evidence_events_action", "action IN ('added', 'removed')");
+            table.HasCheckConstraint("ck_requirement_evidence_events_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
+            table.HasCheckConstraint("ck_requirement_evidence_events_label", "length(btrim(label)) > 0");
+        });
+        evidenceEvent.HasKey(x => x.Id);
+        evidenceEvent.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        evidenceEvent.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        evidenceEvent.Property(x => x.EvidenceId).HasColumnName("evidence_id");
+        evidenceEvent.Property(x => x.Action).HasColumnName("action");
+        evidenceEvent.Property(x => x.Kind).HasColumnName("kind");
+        evidenceEvent.Property(x => x.Label).HasColumnName("label");
+        evidenceEvent.Property(x => x.Title).HasColumnName("title");
+        evidenceEvent.Property(x => x.Actor).HasColumnName("actor");
+        evidenceEvent.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasDefaultValueSql("now()");
+        evidenceEvent.HasIndex(x => new { x.RequirementId, x.OccurredAt });
+        evidenceEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        evidenceEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
 
         var review = model.Entity<RequirementReview>();
         review.ToTable("requirement_reviews", table =>

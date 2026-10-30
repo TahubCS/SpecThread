@@ -40,13 +40,16 @@ async function createRequirement(page: Page) {
   return { projectId, requirementId: page.url().split("/").at(-1)!, url: page.url() };
 }
 
-/** Connects a repository to the project directly in the database, and makes GitHub know its installation. */
-async function connect(projectId: string, items: FakeItem[], appInstalled = true) {
+/**
+ * Connects a repository to the project directly in the database, and makes GitHub know its
+ * installation. Searching finds a repository by name, so a test that searches passes its own.
+ */
+async function connect(projectId: string, items: FakeItem[], appInstalled = true, name = "web") {
   const [installationId, repositoryId] = [githubId(), githubId()];
-  await setGitHubUser(`seed-${installationId}`, [{ id: installationId, appInstalled, repositories: [{ id: repositoryId, owner: "acme", name: "web" }] }]);
+  await setGitHubUser(`seed-${installationId}`, [{ id: installationId, appInstalled, repositories: [{ id: repositoryId, owner: "acme", name }] }]);
   await setGitHubItems(repositoryId, items);
   await runTestSql(`INSERT INTO public.project_repositories (project_id,installation_id,repository_id,owner,name,is_private,connected_by)
-    VALUES ('${projectId}',${installationId},${repositoryId},'acme','web',false,'${owner.userId}')`);
+    VALUES ('${projectId}',${installationId},${repositoryId},'acme','${name}',false,'${owner.userId}')`);
   return { installationId, repositoryId };
 }
 
@@ -608,4 +611,83 @@ test("requirement lists say how many evidence links each requirement has", async
     await expect(page.getByRole("heading", { name: "Page unavailable" }), String(evidenceCount)).toBeVisible();
     await clearApiFaults(owner.userId);
   }
+});
+
+test("a member finds issues and pull requests by title, links one from the results, and adding and removing are recorded", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const name = `search-${githubId()}`;
+  await connect(projectId, [
+    issue(12, "Guests cannot pay"),
+    issue(15, "Add guest checkout", { pull: true, user: "grace" }),
+    issue(3, "Guest spike", { pull: true, merged: true, state: "closed", closed_at: "2026-09-04T10:00:00Z", user: null }),
+  ], true, name);
+  await page.reload();
+  const search = page.getByLabel(`Find an issue or pull request in acme/${name} by title`);
+  const results = page.getByRole("list", { name: "Search results" }).getByRole("listitem");
+
+  await search.fill("guest");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(results).toHaveCount(3);
+  await expect(results.filter({ hasText: "#15" })).toContainText("Open");
+  await expect(results.filter({ hasText: "#15" })).toContainText("grace");
+  await expect(results.filter({ hasText: "#3" })).toContainText("Merged");
+  await expect(search).toHaveValue("guest");
+  await page.screenshot({ path: testInfo.outputPath("evidence-search.png"), fullPage: true });
+
+  await page.getByRole("button", { name: "Link #15" }).click();
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page)).toContainText("Add guest checkout");
+  await expect(rows(page)).toContainText("Linked by Evidence tester on");
+  // The result now says it is linked instead of offering to link it again.
+  await expect(results.filter({ hasText: "#15" })).toContainText("Linked");
+  await expect(page.getByRole("button", { name: "Link #15" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remove link to #15" }).click();
+  await expect(rows(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Link #15" })).toBeVisible();
+  await page.getByText("2 link changes").click();
+  const changes = page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem");
+  await expect(changes.nth(0)).toContainText("Removed #15 “Add guest checkout” by Evidence tester");
+  await expect(changes.nth(1)).toContainText("Linked #15 “Add guest checkout” by Evidence tester");
+
+  await search.fill("refund");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page.getByText(`No issue or pull request in acme/${name} has those words in its title.`)).toBeVisible();
+
+  await page.goto(`${url}/history`);
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem")).toHaveCount(2);
+
+  // With no links left and the repository disconnected, the changes are still on the requirement.
+  await runTestSql(`DELETE FROM public.project_repositories WHERE project_id = '${projectId}'`);
+  await page.goto(url);
+  await expect(page.getByText("to link issues, pull requests, commits, and releases.")).toBeVisible();
+  await page.getByText("2 link changes").click();
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem").nth(0))
+    .toContainText("Removed #15 “Add guest checkout” by Evidence tester");
+});
+
+test("a search GitHub can't answer, or the API refuses, is explained and links nothing", async ({ page }) => {
+  const { projectId, requirementId } = await createRequirement(page);
+  await connect(projectId, [issue(12, "Guests cannot pay")], true, `search-${githubId()}`);
+  await page.reload();
+  const search = page.getByLabel(/Find an issue or pull request in .* by title/);
+  const alert = page.getByRole("form", { name: "Find by title" }).getByRole("alert");
+  const path = `^/requirements/${requirementId}/evidence/search$`;
+
+  await failApi(owner.userId, { method: "GET", path, status: 502, body: { status: 502 } });
+  await search.fill("guest");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(alert).toHaveText("GitHub could not be reached. Try again in a moment.");
+  await clearApiFaults(owner.userId);
+
+  await failApi(owner.userId, { method: "GET", path, status: 400, body: { errors: { q: ["Enter words from the title."] } } });
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(alert).toHaveText("Enter words from the title.");
+  await clearApiFaults(owner.userId);
+
+  await failApi(owner.userId, { method: "GET", path, status: 200, body: { items: "nope" } });
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(alert).toHaveText("GitHub could not be searched. Please try again.");
+  await expect(page.getByRole("list", { name: "Search results" })).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(0);
 });

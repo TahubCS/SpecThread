@@ -23,6 +23,7 @@ test.beforeAll(async () => {
   database = await startTestDatabase();
   await database.pool.query(`INSERT INTO public."user" (id,name,email,"emailVerified","createdAt","updatedAt") VALUES
     ('owner','Owner','owner@example.invalid',true,now(),now()),
+    ('admin','Admin','admin@example.invalid',true,now(),now()),
     ('member','Member','member@example.invalid',true,now(),now()),
     ('outsider','Outsider','outsider@example.invalid',true,now(),now())`);
   await database.pool.query(`INSERT INTO public.user_onboarding (user_id,completed_at) SELECT id,now() FROM public."user"`);
@@ -64,7 +65,7 @@ async function createProject(request: APIRequestContext) {
   const team = await (await owner.post("/teams", { name: "Product team" })).json();
   const project = await (await owner.post("/projects", { name: "Checkout", teamId: team.id })).json();
   // Fixture-only membership. In the product a person joins a team by accepting an invitation.
-  await database.pool.query("INSERT INTO public.team_members (team_id,user_id) SELECT $1, unnest($2::text[])", [team.id, ["member"]]);
+  await database.pool.query("INSERT INTO public.team_members (team_id,user_id,role) VALUES ($1,'admin','admin'), ($1,'member','member')", [team.id]);
   return project.id as string;
 }
 
@@ -96,9 +97,9 @@ test("the owner connects, replaces, and disconnects a repository GitHub shows th
   expect(await (await owner.get(`/projects/${projectId}/repository`)).json()).toEqual({ repository: null });
 });
 
-test("only the owner changes the connection; members read it; others cannot tell the project exists", async ({ request }) => {
+test("only the team Owner or an Admin changes the connection; members read it; others cannot tell the project exists", async ({ request }) => {
   const projectId = await createProject(request);
-  const [owner, member, outsider] = [await as(request, "owner"), await as(request, "member"), await as(request, "outsider")];
+  const [owner, admin, member, outsider] = [await as(request, "owner"), await as(request, "admin"), await as(request, "member"), await as(request, "outsider")];
   await gitHubShows(request, "shared-token", [{ id: 21, repositories: [{ id: 201, owner: "acme", name: "web" }] }]);
   const body = { installationId: 21, repositoryId: 201, githubToken: "shared-token" };
 
@@ -111,6 +112,13 @@ test("only the owner changes the connection; members read it; others cannot tell
   expect((await owner.put(`/projects/${projectId}/repository`, body)).status()).toBe(200);
   expect((await (await member.get(`/projects/${projectId}/repository`)).json()).repository.fullName).toBe("acme/web");
   expect((await member.delete(`/projects/${projectId}/repository`)).status()).toBe(403);
+
+  // An Admin who is not the Owner disconnects and connects, as the Owner does (ADR-041).
+  expect((await admin.delete(`/projects/${projectId}/repository`)).status()).toBe(204);
+  expect(await (await member.get(`/projects/${projectId}/repository`)).json()).toEqual({ repository: null });
+  const connected = await admin.put(`/projects/${projectId}/repository`, body);
+  expect(connected.status()).toBe(200);
+  expect((await connected.json()).repository).toMatchObject({ fullName: "acme/web", connectedBy: "admin" });
 
   expect((await owner.post(`/projects/${projectId}/archive`)).status()).toBe(200);
   expect((await owner.put(`/projects/${projectId}/repository`, body)).status()).toBe(409);
@@ -285,5 +293,5 @@ test("the migration protects the new table and its rollback removes only that ta
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='project_repositories'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('projects','requirements','rateLimit')")).toBe(3);
   // Everything else remains: the two initial migrations, four for teams, four later ones for evidence, RequirementReviews, ProjectDocuments, RequirementDocuments, and RequirementUpdatedBy.
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(18);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(19);
 });

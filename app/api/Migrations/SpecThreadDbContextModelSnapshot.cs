@@ -839,6 +839,69 @@ namespace SpecThread.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidenceEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Actor");
+
+                    b.HasIndex("RequirementId", "OccurredAt");
+
+                    b.ToTable("requirement_evidence_events", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_evidence_events_action", "action IN ('added', 'removed')");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_events_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_events_label", "length(btrim(label)) > 0");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.RequirementFollowUp", b =>
                 {
                     b.Property<Guid>("RequirementId")
@@ -1327,6 +1390,21 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.AuthUser", null)
                         .WithMany()
                         .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidenceEvent", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("Actor")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

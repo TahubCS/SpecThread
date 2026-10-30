@@ -108,7 +108,7 @@ test("with no installation the owner is told to install the app, and the list fi
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("members who are not the owner, and archived projects, see the connection but cannot change it", async ({ page, browser }) => {
+test("members who are not the team Owner or an Admin, and archived projects, see the connection but cannot change it", async ({ page, browser }) => {
   const projectId = await createProject(page, "Shared");
   await gitHubWith([repo("web-shop")]);
   await page.goto(`/projects/${projectId}/settings/repository`);
@@ -264,4 +264,32 @@ test("other users cannot see a project's repository page", async ({ page, browse
   await otherPage.goto(`/projects/${projectId}/settings/repository`);
   await expect(otherPage.getByRole("heading", { name: "Page not found" })).toBeVisible();
   await other.close();
+});
+
+test("a team Admin who is not the Owner connects and disconnects, and the project shows the repository's name", async ({ page, browser }) => {
+  const projectId = await createProject(page, "Box");
+  const admin = await createTestSession("Danielle Admin");
+  await addTestTeamMember(projectId, admin.userId, "admin");
+  await setGitHubUser(await linkGitHubAccount(admin.userId), [{ id: githubId(), repositories: [repo("box")] }]);
+  const context = await browser.newContext();
+  await context.addCookies([admin.cookie]);
+  const adminPage = await context.newPage();
+
+  await adminPage.goto(`/projects/${projectId}/settings/repository`);
+  await adminPage.getByRole("radio", { name: /acme\/box/ }).check();
+  await adminPage.getByRole("button", { name: "Connect repository" }).click();
+  await expect(adminPage.getByText("Connected by Danielle Admin on")).toBeVisible();
+  // One repository per project: the picker is gone until it is disconnected.
+  await expect(adminPage.getByRole("radio")).toHaveCount(0);
+
+  // Everyone in the project sees its name, including the Owner who did not connect it.
+  await page.goto(`/projects/${projectId}`);
+  await expect(page.getByRole("complementary", { name: "Project details" }).getByRole("link", { name: "acme/box" })).toBeVisible();
+
+  await adminPage.getByRole("button", { name: "Disconnect repository" }).click();
+  await adminPage.getByRole("button", { name: "Yes, disconnect" }).click();
+  await expect(adminPage.getByRole("radio")).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByRole("complementary", { name: "Project details" }).getByRole("link", { name: "Not connected" })).toBeVisible();
+  await context.close();
 });

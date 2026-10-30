@@ -19,6 +19,8 @@ internal static partial class EvidenceEndpoints
     public const int MaxEvidence = 50;
     private const int MaxReferenceLength = 300;
     private const int MaxTagLength = 100;
+    private const int MaxSearchLength = 200;
+    private const int MaxSearchWords = 10;
     private static readonly JsonSerializerOptions CommitJson = new(JsonSerializerDefaults.Web);
 
     public static void MapEvidenceEndpoints(this IEndpointRouteBuilder app)
@@ -26,6 +28,10 @@ internal static partial class EvidenceEndpoints
         var evidence = app.MapGroup("/requirements/{requirementId:guid}/evidence").WithTags("Evidence")
             .WithMetadata(ProjectEndpoints.Unauthorized);
         evidence.MapGet("/", List).WithName("ListEvidence");
+        evidence.MapGet("/search", Search).WithName("SearchEvidence")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+        evidence.MapGet("/history", History).WithName("ListEvidenceHistory");
         evidence.MapPost("/", Link).WithName("LinkEvidence")
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
@@ -41,6 +47,47 @@ internal static partial class EvidenceEndpoints
     {
         if (await FindAsync(db, user.CallerId(), requirementId, cancel) is null) return TypedResults.NotFound();
         return TypedResults.Ok(await ReadAsync(db, requirementId, cancel));
+    }
+
+    // Finds issues and pull requests of the connected repository by words in their titles
+    // (ADR-054), saying which are linked already. Nothing is linked or stored.
+    private static async Task<Results<Ok<EvidenceSearchResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Search(
+        Guid requirementId, string? q, ClaimsPrincipal user, SpecThreadDbContext db, IGitHubClient github, CancellationToken cancel)
+    {
+        var errors = new InputErrors();
+        var text = errors.Required("q", q, MaxSearchLength);
+        var words = (text ?? "").Replace("\"", " ", StringComparison.Ordinal)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (text is not null && words.Count == 0) errors.Add("q", "Enter words from the title.");
+        // Refused rather than cut short: a shorter search would find titles without every word.
+        else if (words.Count > MaxSearchWords) errors.Add("q", $"Use at most {MaxSearchWords} words.");
+        if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
+
+        var scope = await FindAsync(db, user.CallerId(), requirementId, cancel);
+        if (scope is null) return TypedResults.NotFound();
+        var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
+        if (repository is null) return NoRepository();
+
+        var found = await github.SearchItemsAsync(repository.InstallationId, repository.Owner, repository.Name, words, cancel);
+        if (found.Failure != GitHubFailure.None) return Failed(found.Failure, $"{repository.Owner}/{repository.Name}");
+        var linked = (await db.RequirementEvidence.AsNoTracking()
+                .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId && e.Number != null)
+                .Select(e => e.Number!.Value).ToListAsync(cancel))
+            .ToHashSet();
+        return TypedResults.Ok(new EvidenceSearchResponse(found.Value!.ConvertAll(item =>
+            new EvidenceSearchItem(item.Number, item.Kind, item.Title, item.State, item.Author, item.Url, linked.Contains(item.Number)))));
+    }
+
+    // Every link added to or removed from the requirement, newest first (ADR-054).
+    private static async Task<Results<Ok<List<EvidenceEventResponse>>, NotFound>> History(
+        Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
+    {
+        if (await FindAsync(db, user.CallerId(), requirementId, cancel) is null) return TypedResults.NotFound();
+        var events = await db.RequirementEvidenceEvents.AsNoTracking().Where(e => e.RequirementId == requirementId)
+            .OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
+            .Select(e => new EvidenceEventResponse(e.Id, e.EvidenceId, e.Action, e.Kind, e.Label, e.Title, e.Actor, e.OccurredAt))
+            .ToListAsync(cancel);
+        return TypedResults.Ok(events);
     }
 
     private static async Task<Results<Created<EvidenceResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Link(
@@ -136,6 +183,7 @@ internal static partial class EvidenceEndpoints
         if (await db.RequirementEvidence.CountAsync(e => e.RequirementId == requirementId, cancel) >= MaxEvidence) return LimitReached();
 
         db.RequirementEvidence.Add(evidence);
+        Record(db, evidence, "added", userId, now);
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -229,13 +277,33 @@ internal static partial class EvidenceEndpoints
     {
         // Serialize with archiving and membership changes in this project's team.
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
-        var found = await RequirementEndpoints.LockForMember(db, user.CallerId(), requirementId, cancel);
+        var userId = user.CallerId();
+        var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
         if (found.Archived) return ProjectEndpoints.Archived();
-        var deleted = await db.RequirementEvidence.Where(e => e.Id == evidenceId && e.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
+        var evidence = await db.RequirementEvidence.SingleOrDefaultAsync(e => e.Id == evidenceId && e.RequirementId == requirementId, cancel);
+        if (evidence is null) return TypedResults.NotFound();
+        // The link goes; who removed it, and what it was, stay in the history (ADR-054).
+        db.RequirementEvidence.Remove(evidence);
+        Record(db, evidence, "removed", userId, Clock.UtcNow());
+        await db.SaveChangesAsync(cancel);
         await transaction.CommitAsync(cancel);
-        return deleted == 0 ? TypedResults.NotFound() : TypedResults.NoContent();
+        return TypedResults.NoContent();
     }
+
+    private static void Record(SpecThreadDbContext db, RequirementEvidence evidence, string action, string userId, DateTime at) =>
+        db.RequirementEvidenceEvents.Add(new RequirementEvidenceEvent
+        {
+            Id = Guid.NewGuid(),
+            RequirementId = evidence.RequirementId,
+            EvidenceId = evidence.Id,
+            Action = action,
+            Kind = evidence.Kind,
+            Label = ReviewEndpoints.Label(evidence),
+            Title = evidence.Title,
+            Actor = userId,
+            OccurredAt = at,
+        });
 
     // Null when the requirement does not exist or the caller is not a member of its project.
     private static Task<Scope?> FindAsync(SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel) =>
@@ -493,6 +561,14 @@ internal static partial class EvidenceEndpoints
 internal sealed record EvidenceReference(int? Number, string? Sha, string? Tag, string? Repository);
 
 internal sealed record LinkEvidenceRequest(string? Reference);
+
+internal sealed record EvidenceSearchItem(int Number, string Kind, string Title, string State, string? Author, string Url, bool Linked);
+
+internal sealed record EvidenceSearchResponse(List<EvidenceSearchItem> Items);
+
+// Action is "added" or "removed"; Kind, Label, and Title are the link's as it was then.
+internal sealed record EvidenceEventResponse(
+    Guid Id, Guid EvidenceId, string Action, string Kind, string Label, string Title, string Actor, DateTime OccurredAt);
 
 internal sealed record EvidenceCommit(string Sha, string Message, string? Author, DateTime Date, string Url);
 

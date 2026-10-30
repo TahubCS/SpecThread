@@ -69,7 +69,8 @@ web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
 The Teams API tests use 5116, team management 5117, invitations 5118, documents 5119, requirement documents 5120, criteria
-versions 5121, follow-ups 5122, and milestones 5123 (requirement documents moved from
+versions 5121, follow-ups 5122, milestones 5123, and evidence search and history 5124 (fake GitHub) and 5125
+(requirement documents moved from
 5107 to 5109 when the branches were merged, because the proxy and GitHub stand-ins
 below already use those).
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
@@ -152,15 +153,29 @@ currently require network access during the web build.
 - GitHub repository connection (ADR-032). Browser: connecting, seeing the repository
   across the project, and disconnecting after confirmation; no linked GitHub account;
   a rejected GitHub sign-in; no installation; the choice kept after a refused attempt;
-  a repository or installation that disappeared; non-owners and archived projects
-  seeing it read-only; GitHub down, rate limiting, dropping connections, or answering
+  a repository or installation that disappeared; a team Admin who is not the Owner
+  connecting and disconnecting while the Owner sees the name on the project; Members
+  and archived projects seeing it read-only; GitHub down, rate limiting, dropping connections, or answering
   wrongly while listing and while connecting; API failures while connecting and
   disconnecting; and the error page inside the project frame. API (schema suite):
-  owner-only changes, 404 for non-members, refusing other users' installations and
+  changes by the team Owner or an Admin only (a Member gets 403), 404 for non-members, refusing other users' installations and
   repositories and mismatched pairs, input validation, paging past 100 repositories
   and the 500 limit, 502 and 503 mapping, missing app credentials, anonymous 401, the
   user's token never being stored, and the migration's RLS, constraints, and rollback.
   Not exercised: the real GitHub, and an expired GitHub token being refreshed.
+- Evidence search and history (ADR-054). tests/schema/evidence-history.spec.ts (fake
+  GitHub on 5124, API on 5125): additions and removals recorded newest first with who,
+  when, and what the link was, outliving it; nothing recorded for a refused removal;
+  title search by every word, case-insensitive, with state (merged too), author, and
+  whether linked; a `repo:` qualifier in the words finding nothing; results from
+  another repository dropped; validation of `q`; 409 without a repository; 404, 401;
+  GitHub failures and rate limiting as 502; and the table's constraints, RLS, backfill
+  from existing links, and rollback. Each test repository has its own name, because the
+  fake GitHub finds a repository for search by name, as GitHub does. Browser
+  (tests/e2e/evidence.spec.ts): searching, the results' state and author, linking from
+  a result, "Linked by" on the link, the result marked Linked and offered again after
+  removal, the change list on the page and the history page, no matches, and a search
+  failing, refused, or answered wrongly.
 - Evidence (ADR-033). Browser: the hint when no repository is connected; linking by
   number, `#number`, and address; timeline order, state, and author; refused
   references with what was typed kept; refresh picking up closed and merged items and

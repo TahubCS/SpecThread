@@ -99,7 +99,8 @@ internal static class ReviewEndpoints
     private static List<ReviewedEvidence> ReadSnapshot(RequirementReview review) =>
         JsonSerializer.Deserialize<List<ReviewedEvidence>>(review.Evidence, SnapshotJson) ?? [];
 
-    private static string Label(RequirementEvidence evidence) => evidence switch
+    // How a link is named in snapshots and history: "#9", a release tag, or a short SHA.
+    internal static string Label(RequirementEvidence evidence) => evidence switch
     {
         { Number: { } number } => $"#{number}",
         { Tag: { } tag } => tag,

@@ -2,9 +2,10 @@
 
 import { useActionState, useState } from "react";
 import { CircleDot, GitCommitHorizontal, GitPullRequest, RefreshCw, Tag, X } from "lucide-react";
-import { linkEvidence, refreshEvidence, unlinkEvidence } from "@/app/projects/evidence-actions";
+import { linkEvidence, refreshEvidence, searchEvidence, unlinkEvidence } from "@/app/projects/evidence-actions";
 import {
-  checkSummary, EVIDENCE_REFERENCE_MAX, evidenceChanges, evidenceLabel, releaseContents, releasesContaining, type Evidence,
+  checkSummary, EVIDENCE_REFERENCE_MAX, EVIDENCE_SEARCH_MAX, evidenceChanges, evidenceEventText, evidenceLabel, releaseContents, releasesContaining,
+  type Evidence, type EvidenceEvent,
 } from "@/lib/evidence";
 import { formatDate } from "@/lib/projects";
 
@@ -19,16 +20,18 @@ const external = { target: "_blank", rel: "noreferrer" } as const;
  * Renders a requirement's linked issues, pull requests, commits, and releases as a timeline,
  * oldest first, with what GitHub reported when they were last read. Pull requests and commits
  * show what changed, the results of their automated checks, and the linked releases that
- * include them; a pull request lists its commits; a release lists which linked changes it contains. A
- * link that began as a suggestion names the person who confirmed it. While the requirement can
- * change, members add a link, remove one, and read everything from GitHub again.
+ * include them; a pull request lists its commits; a release lists which linked changes it contains. Each
+ * link names who added it and when (for a suggestion, who confirmed it). While the requirement can
+ * change, members add a link by reference or by searching titles, remove one, and read everything
+ * from GitHub again. `history` lists every link added or removed (ADR-054); null when it can't be read.
  */
-export function EvidencePanel({ projectId, requirementId, evidence, repository, people, editable }: {
+export function EvidencePanel({ projectId, requirementId, evidence, history = null, repository, people, editable }: {
   projectId: string;
   requirementId: string;
   evidence: Evidence[];
+  history?: EvidenceEvent[] | null;
   repository: string;
-  /** Names of the project's members by user ID, for naming who confirmed a suggested link. */
+  /** Names of the project's members by user ID, for naming who added each link. */
   people: Record<string, string>;
   editable: boolean;
 }) {
@@ -78,9 +81,10 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
                 <Checks item={item} />
                 {item.kind === "release" && <ReleaseContents release={item} evidence={evidence} />}
                 {inReleases.length > 0 && <p className="evidence-changes">In {inReleases.length === 1 ? "release" : "releases"} {inReleases.join(", ")}</p>}
-                {item.source === "suggested" && (
-                  <p className="evidence-changes">Suggested, confirmed by {people[item.linkedBy] ?? "a former member"}</p>
-                )}
+                <p className="evidence-changes">
+                  {item.source === "suggested" ? "Suggested, confirmed" : "Linked"} by {people[item.linkedBy] ?? "a former member"} on{" "}
+                  <time dateTime={item.linkedAt}>{formatDate(item.linkedAt)}</time>
+                </p>
               </li>
             );
           })}
@@ -101,6 +105,99 @@ export function EvidencePanel({ projectId, requirementId, evidence, repository, 
       )}
       {refreshed.error && <p role="alert" className="notice notice-error">{refreshed.error}</p>}
       {editable && <LinkForm key={link.linked} action={linkAction} pending={linking} state={link} repository={repository} />}
+      {editable && (
+        <SearchForm projectId={projectId} requirementId={requirementId} repository={repository} evidence={evidence}
+          linkAction={linkAction} linking={linking} />
+      )}
+      {history && history.length > 0 && (
+        <details className="review-history">
+          <summary>{history.length === 1 ? "1 link change" : `${history.length} link changes`}</summary>
+          <EvidenceHistory history={history} people={people} />
+        </details>
+      )}
+    </>
+  );
+}
+
+/** Lists evidence links added and removed, newest first, with who made each change and when. */
+export function EvidenceHistory({ history, people }: { history: EvidenceEvent[]; people: Record<string, string> }) {
+  return (
+    <ol className="follow-up-history" aria-label="Evidence link changes">
+      {history.map(event => (
+        <li key={event.id}>
+          <span>{evidenceEventText(event)}</span>{" "}
+          <span className="muted">
+            by {people[event.actor] ?? "a former member"} on <time dateTime={event.occurredAt}>{formatDate(event.occurredAt)}</time>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Renders the search for issues and pull requests by words in their titles, and its results with
+ * each one's state and author. A result is linked by its number through the same action as the
+ * link field, so its messages appear there; one linked already says so.
+ */
+function SearchForm({ projectId, requirementId, repository, evidence, linkAction, linking }: {
+  projectId: string;
+  requirementId: string;
+  repository: string;
+  evidence: Evidence[];
+  linkAction: (formData: FormData) => void;
+  linking: boolean;
+}) {
+  const [search, searchAction, searching] = useActionState(searchEvidence.bind(null, projectId, requirementId), { query: "", items: null, error: null });
+  // What is linked now, so results stay right after a link is added or removed without searching again.
+  const linked = new Set(evidence.map(item => item.number).filter(number => number !== null));
+  return (
+    <>
+      <form className="evidence-link" action={searchAction} aria-label="Find by title">
+        <div className="field">
+          <label htmlFor="evidence-search">Find an issue or pull request in {repository} by title</label>
+          <div className="evidence-link-row">
+            <input id="evidence-search" name="q" type="search" autoComplete="off" required maxLength={EVIDENCE_SEARCH_MAX}
+              defaultValue={search.query} placeholder="Words from the title"
+              aria-invalid={search.error ? true : undefined} aria-describedby={search.error ? "evidence-search-error" : undefined} />
+            <button className="button secondary" type="submit" disabled={searching}>{searching ? "Searching..." : "Search"}</button>
+          </div>
+          {search.error && <p id="evidence-search-error" role="alert" className="notice notice-error">{search.error}</p>}
+        </div>
+      </form>
+      {search.items && (search.items.length === 0 ? (
+        <p className="muted" role="status">No issue or pull request in {repository} has those words in its title.</p>
+      ) : (
+        <ul className="row-list evidence-rows" aria-label="Search results">
+          {search.items.map(item => {
+            const Icon = icons[item.kind];
+            const label = `#${item.number}`;
+            return (
+              <li key={item.number}>
+                <div className="row">
+                  <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <span className="evidence-number">{label}</span>
+                  <a className="row-title" href={item.url} {...external}>
+                    {item.title}<span className="sr-only"> (opens GitHub in a new tab)</span>
+                  </a>
+                  <span className={`badge evidence-state is-${item.state}`}>
+                    <span aria-hidden="true" />{stateText[item.state]}<span className="sr-only"> {kindText[item.kind]}</span>
+                  </span>
+                  {item.author && <span className="row-meta">{item.author}</span>}
+                  {linked.has(item.number) ? (
+                    <span className="badge">Linked</span>
+                  ) : (
+                    <form action={linkAction}>
+                      <input type="hidden" name="reference" value={label} />
+                      <button className="button secondary" type="submit" disabled={linking} aria-label={`Link ${label}`}>Link</button>
+                    </form>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ))}
     </>
   );
 }
