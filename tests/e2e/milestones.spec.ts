@@ -92,8 +92,16 @@ test("a milestone that cannot be saved is explained and the requirement keeps it
   await page.reload();
   await expect(page.getByLabel("Milestone or sprint")).toHaveValue("Sprint 1");
 
+  // A failed clear keeps the label in the field, as it is still saved.
+  await failApi(owner.userId, { method: "PUT", path: `^/requirements/${requirementId}/milestone$`, status: 500, body: { status: 500 } });
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByRole("form", { name: "Milestone" }).getByRole("alert")).toHaveText("The milestone could not be saved. Please try again.");
+  await expect(page.getByLabel("Milestone or sprint")).toHaveValue("Sprint 1");
+  await clearApiFaults(owner.userId);
+
   await page.getByRole("button", { name: "Clear" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Milestone saved." })).toBeVisible();
+  await expect(page.getByLabel("Milestone or sprint")).toHaveValue("");
   await page.reload();
   await expect(page.getByLabel("Milestone or sprint")).toHaveValue("");
   await expect(page.getByRole("button", { name: "Clear" })).toHaveCount(0);

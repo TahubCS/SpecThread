@@ -18,6 +18,12 @@ export function RequirementMilestone({ projectId, requirementId, milestone, mile
 }) {
   const [state, action, pending] = useActionState(setMilestone.bind(null, projectId, requirementId), { error: null, saved: 0 });
   const [value, setValue] = useState(milestone ?? "");
+  // The field follows the saved label once a save or clear succeeds; a failed one leaves both as they were.
+  const [shown, setShown] = useState(milestone);
+  if (milestone !== shown) {
+    setShown(milestone);
+    setValue(milestone ?? "");
+  }
 
   if (!editable) return <p className={milestone ? undefined : "muted"}>{milestone ?? "No milestone."}</p>;
   return (
@@ -33,7 +39,7 @@ export function RequirementMilestone({ projectId, requirementId, milestone, mile
           </datalist>
           <button className="button secondary" type="submit" name="intent" value="save" disabled={pending}>{pending ? "Saving..." : "Save"}</button>
           {milestone && (
-            <button className="button secondary" type="submit" name="intent" value="clear" disabled={pending} onClick={() => setValue("")}>Clear</button>
+            <button className="button secondary" type="submit" name="intent" value="clear" disabled={pending}>Clear</button>
           )}
         </div>
         {state.error && <p id="requirement-milestone-error" role="alert" className="notice notice-error">{state.error}</p>}
