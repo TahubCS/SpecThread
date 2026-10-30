@@ -320,3 +320,96 @@ test("when decisions cannot be loaded the page says so and loads on another try"
   await review.goto(url.replace(/\/[0-9a-f-]{36}$/, ""));
   await expect(review.getByRole("heading", { name: "Page unavailable" })).toBeVisible();
 });
+
+test("changing accepted criteria warns first; cancelling changes nothing, and confirming asks for a new review", async ({ page, browser }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const review = await asReviewer(browser, url);
+  await record(review, "Accept");
+  await expect(current(review)).toContainText("Against criteria version 1");
+
+  await page.goto(`${url}/edit`);
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done in one step");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const warning = page.getByRole("group", { name: "These acceptance criteria were accepted" });
+  await expect(warning).toBeVisible();
+  await expect(warning).toBeFocused();
+  await expect(warning).toContainText("accepted on criteria version 1 by Grace Hopper");
+  await expect(warning).toContainText("That acceptance applies to the previous criteria");
+  await page.screenshot({ path: testInfo.outputPath("criteria-warning.png"), fullPage: true });
+  // Enter in a field does not confirm while the warning is open.
+  await page.getByLabel("Criterion 1", { exact: true }).press("Enter");
+  await expect(page).toHaveURL(`${url}/edit`);
+  await expect(warning).toBeVisible();
+
+  // Cancelling sends nothing: the edit stays in the form, and the requirement stays accepted.
+  await warning.getByRole("button", { name: "Keep editing" }).click();
+  await expect(warning).toHaveCount(0);
+  // With the warning closed, Enter submits as usual and so asks again.
+  await page.getByLabel("Criterion 1", { exact: true }).press("Enter");
+  await expect(warning).toBeVisible();
+  // Put back as accepted, there is nothing to warn about; changed again, the warning waits for the next save.
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done");
+  await expect(warning).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done in one step");
+  await expect(warning).toHaveCount(0);
+  await expect(page.getByLabel("Criterion 1", { exact: true })).toHaveValue("Done in one step");
+  await page.goto(url);
+  await expect(page.getByRole("list", { name: "Acceptance criteria" })).toHaveText("Done");
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).toContainText("Accepted");
+
+  // A title change is not a criteria change, so it saves without asking.
+  await page.goto(`${url}/edit`);
+  await page.getByLabel("Title").fill("Guest checkout for everyone");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page).toHaveURL(url);
+
+  await page.goto(`${url}/edit`);
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done in one step");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await warning.getByRole("button", { name: "Save and request a new review" }).click();
+  await expect(page).toHaveURL(url);
+  await expect(page.getByRole("list", { name: "Acceptance criteria" })).toHaveText("Done in one step");
+  const notice = page.getByText("The acceptance criteria changed after this decision (version 1 → 2).");
+  await expect(notice).toBeVisible();
+  await expect(current(page)).toContainText("Accepted");
+  await page.screenshot({ path: testInfo.outputPath("criteria-needs-review.png"), fullPage: true });
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).toContainText("Needs review");
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).not.toContainText("Accepted");
+
+  // The decision still opens the criteria it was made against, read-only.
+  await page.goto(url);
+  await current(page).getByRole("link", { name: "Against criteria version 1" }).click();
+  await expect(page.getByRole("heading", { name: "Acceptance criteria, version 1", level: 1 })).toBeVisible();
+  await expect(page.getByText("This is an earlier version, shown read-only. The current criteria are version 2.")).toBeVisible();
+  await expect(page.getByRole("list", { name: "Acceptance criteria, version 1" })).toHaveText("Done");
+  await expect(page.getByRole("list", { name: "Decisions on this version" })).toContainText("Accepted by Grace Hopper");
+  await expect(page.getByRole("textbox")).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("criteria-version.png"), fullPage: true });
+
+  await page.getByRole("link", { name: "Requirement history" }).click();
+  const versions = page.getByRole("list", { name: "Acceptance criteria versions" }).locator(":scope > li");
+  await expect(versions).toHaveCount(2);
+  await expect(versions.nth(0)).toContainText("Version 2");
+  await expect(versions.nth(0)).toContainText("Current");
+  await expect(versions.nth(0)).toContainText("saved by Ada Lovelace");
+  await expect(versions.nth(1)).toContainText("Accepted by Grace Hopper");
+});
+
+test("criteria accepted while the form was open are caught when saving", async ({ page, browser }) => {
+  const { url } = await createRequirement(page);
+  const review = await asReviewer(browser, url);
+  await page.goto(`${url}/edit`);
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done twice");
+  await record(review, "Accept");
+
+  await page.getByRole("button", { name: "Save changes" }).click();
+  const warning = page.getByRole("group", { name: "These acceptance criteria were accepted" });
+  await expect(warning).toContainText("The current acceptance criteria of this requirement have been accepted.");
+  await warning.getByRole("button", { name: "Save and request a new review" }).click();
+  await expect(page).toHaveURL(url);
+  await expect(page.getByRole("list", { name: "Acceptance criteria" })).toHaveText("Done twice");
+  await expect(page.getByText("The acceptance criteria changed after this decision (version 1 → 2).")).toBeVisible();
+});

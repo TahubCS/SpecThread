@@ -1,16 +1,21 @@
 import { expect, test } from "@playwright/test";
 import {
-  fieldError, formatDate, isUuid, parseMembers, parseProject, parseProjects, parseRequirementSummaries, projectNameError,
+  fieldError, formatDate, isUuid, parseMembers, parseMilestones, parseProject, parseProjects, parseRequirementSummaries, projectNameError,
+  requirementCounts,
 } from "../../app/web/src/lib/projects";
 import {
-  documentChoices, moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
+  criteriaChanged, documentChoices, milestoneError, moveItem, parseRequirement, readMilestoneInput, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
+import { criteriaVersionText, parseCriteriaVersion, parseCriteriaVersions } from "../../app/web/src/lib/criteria-versions";
+import { followUpEventText, parseFollowUps } from "../../app/web/src/lib/follow-ups";
 import {
   checkSummary, evidenceChanges, evidenceCountText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail,
   releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
-import { parseReview, parseReviews, parseReviewSummary, reviewedText, reviewError, reviewOutdated } from "../../app/web/src/lib/reviews";
+import {
+  isAccepted, parseReview, parseReviews, parseReviewSummary, reviewedText, reviewError, reviewOutdated, reviewStatus,
+} from "../../app/web/src/lib/reviews";
 
 const project = { id: "p1", name: "Billing", ownerUserId: "u1", createdAt: "2026-10-01T10:00:00.123456Z", archivedAt: null,
   teamId: "t1", teamName: "Payments", teamRole: "admin" };
@@ -52,8 +57,16 @@ test("only UUID-shaped project IDs are sent to the API", () => {
 
 test("requirement and member lists are accepted only in the documented shape", () => {
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", version: 2,
-    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, evidenceCount: 3, review: null };
+    createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, evidenceCount: 3, review: null,
+    milestone: "Sprint 3", criteriaVersion: 2, evidenceComplete: true };
   expect(parseRequirementSummaries([{ ...requirement, description: "ignored" }])).toEqual([requirement]);
+  // The previous API (ADR-044) sends none of the milestone, criteria version, or evidence rule fields.
+  const previous: Record<string, unknown> = { ...requirement };
+  for (const field of ["milestone", "criteriaVersion", "evidenceComplete"]) delete previous[field];
+  expect(parseRequirementSummaries([previous])).toEqual([{ ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false }]);
+  for (const value of [{ milestone: "" }, { milestone: 3 }, { criteriaVersion: 0 }, { criteriaVersion: "2" }, { evidenceComplete: "yes" }, { evidenceComplete: null }]) {
+    expect(() => parseRequirementSummaries([{ ...requirement, ...value }]), JSON.stringify(value)).toThrow("unexpected requirement");
+  }
   expect(parseRequirementSummaries([{ ...requirement, evidenceCount: 0 }])[0].evidenceCount).toBe(0);
   for (const evidenceCount of [undefined, null, "3", -1, 1.5]) {
     expect(() => parseRequirementSummaries([{ ...requirement, evidenceCount }]), String(evidenceCount)).toThrow("unexpected requirement");
@@ -61,14 +74,22 @@ test("requirement and member lists are accepted only in the documented shape", (
   expect(evidenceCountText(0)).toBe("No evidence");
   expect(evidenceCountText(1)).toBe("1 evidence link");
   expect(evidenceCountText(12)).toBe("12 evidence links");
-  const review = { decision: "more_evidence", decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z", outdated: true };
+  const review = { decision: "more_evidence", decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z", outdated: true, criteriaChanged: false, criteriaVersion: 2 };
   expect(parseRequirementSummaries([{ ...requirement, review: { ...review, note: "ignored" } }])).toEqual([{ ...requirement, review }]);
-  for (const value of [undefined, "accepted", {}, { ...review, decision: "verified" }, { ...review, outdated: "no" }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 1 }]) {
+  const previousReview: Record<string, unknown> = { ...review };
+  delete previousReview.criteriaChanged;
+  delete previousReview.criteriaVersion;
+  expect(parseReviewSummary(previousReview)).toEqual({ ...previousReview, criteriaChanged: false, criteriaVersion: null });
+  for (const value of [undefined, "accepted", {}, { ...review, decision: "verified" }, { ...review, outdated: "no" }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 1 },
+    { ...review, criteriaChanged: "yes" }, { ...review, criteriaVersion: 0 }]) {
     expect(() => parseRequirementSummaries([{ ...requirement, review: value }]), JSON.stringify(value)).toThrow("unexpected review");
   }
   for (const value of [null, {}, [null], [{ ...requirement, version: "2" }], [{ ...requirement, updatedAt: "soon" }], [{ ...requirement, title: 1 }]]) {
     expect(() => parseRequirementSummaries(value)).toThrow("unexpected requirement");
   }
+
+  expect(parseMilestones(["Sprint 1", "Sprint 2"])).toEqual(["Sprint 1", "Sprint 2"]);
+  for (const value of [null, {}, [""], [1]]) expect(() => parseMilestones(value)).toThrow("unexpected milestone list");
 
   const member = { userId: "u1", name: "Ada", email: "ada@example.invalid", joinedAt: "2026-10-01T10:00:00Z", isOwner: true };
   expect(parseMembers([{ ...member, extra: 1 }])).toEqual([member]);
@@ -90,6 +111,11 @@ test("a requirement response is accepted only in the documented shape, with crit
     acceptanceCriteria: [{ id: "c2", text: "Second", position: 1 }, { id: "c1", text: "First", position: 0 }],
     documents: [{ ...document, extra: 1 }] };
   const parsed = parseRequirement(requirement);
+  expect(parsed).toMatchObject({ criteriaVersion: null, milestone: null });
+  expect(parseRequirement({ ...requirement, criteriaVersion: 4, milestone: "Sprint 3" })).toMatchObject({ criteriaVersion: 4, milestone: "Sprint 3" });
+  for (const value of [{ criteriaVersion: 0 }, { criteriaVersion: "4" }, { milestone: "" }, { milestone: 5 }]) {
+    expect(() => parseRequirement({ ...requirement, ...value }), JSON.stringify(value)).toThrow("unexpected requirement");
+  }
   expect(parsed.acceptanceCriteria.map(criterion => criterion.text)).toEqual(["First", "Second"]);
   expect(parsed.createdAt).toBe("2026-10-01T10:00:00Z");
   expect(parsed.updatedBy).toBe("u2");
@@ -273,14 +299,20 @@ test("evidence is accepted only in the documented shape", () => {
 
 test("review responses are accepted only in the documented shape", () => {
   const link = { id: "e1", kind: "issue", label: "#9", title: "Guests cannot pay", state: "open" };
-  const review = { id: "v1", requirementId: "r1", decision: "rejected", note: "Cart is emptied.", requirementVersion: 3,
+  const review = { id: "v1", requirementId: "r1", decision: "rejected", note: "Cart is emptied.", requirementVersion: 3, criteriaVersion: 2,
     evidence: [link, { ...link, id: "e2", kind: "commit", label: "abc1234", state: null }], decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z" };
   expect(parseReview({ ...review, extra: 1, evidence: review.evidence.map(entry => ({ ...entry, extra: 1 })) })).toEqual(review);
+  // Not recorded: decided before criteria versions were kept, or by the previous API, which sends no field.
+  expect(parseReview({ ...review, criteriaVersion: null }).criteriaVersion).toBeNull();
+  const previous: Record<string, unknown> = { ...review };
+  delete previous.criteriaVersion;
+  expect(parseReview(previous).criteriaVersion).toBeNull();
   expect(parseReviews([review, { ...review, decision: "accepted", note: "", evidence: [] }])).toHaveLength(2);
   expect(parseReviewSummary(null)).toBeNull();
   for (const value of [null, "text", {}, { ...review, decision: "verified" }, { ...review, note: null }, { ...review, requirementVersion: 0 },
     { ...review, requirementVersion: 1.5 }, { ...review, requirementVersion: "3" }, { ...review, evidence: null }, { ...review, evidence: [null] },
-    { ...review, evidence: [{ ...link, state: 1 }] }, { ...review, evidence: [{ ...link, label: undefined }] }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 2 }]) {
+    { ...review, evidence: [{ ...link, state: 1 }] }, { ...review, evidence: [{ ...link, label: undefined }] }, { ...review, decidedAt: "soon" }, { ...review, decidedBy: 2 },
+    { ...review, criteriaVersion: 0 }, { ...review, criteriaVersion: "2" }]) {
     expect(() => parseReview(value), JSON.stringify(value)).toThrow("unexpected review");
   }
   expect(() => parseReviews({ items: [] })).toThrow("unexpected review list");
@@ -328,4 +360,86 @@ test("an item is moved within a list, and an impossible move changes nothing", (
     expect(moveItem(list, from, to), `${from} to ${to}`).toBe(list);
   }
   expect(moveItem([], 0, 0)).toEqual([]);
+});
+
+test("a listed requirement needs review when its criteria changed after the decision, and counts as Accepted only when current", () => {
+  const review = { decision: "accepted" as const, decidedBy: "u2", decidedAt: "2026-10-03T10:00:00Z", outdated: false, criteriaChanged: false, criteriaVersion: 1 };
+  expect(reviewStatus(null)).toEqual({ text: "Not reviewed", tone: null, outdated: false });
+  expect(reviewStatus(review)).toEqual({ text: "Accepted", tone: "accepted", outdated: false });
+  expect(reviewStatus({ ...review, outdated: true })).toEqual({ text: "Accepted, outdated", tone: "accepted", outdated: true });
+  expect(reviewStatus({ ...review, outdated: true, criteriaChanged: true })).toEqual({ text: "Needs review", tone: "needs-review", outdated: false });
+  expect(isAccepted(review)).toBe(true);
+  for (const value of [null, { ...review, outdated: true }, { ...review, criteriaChanged: true }, { ...review, decision: "rejected" as const }]) {
+    expect(isAccepted(value), JSON.stringify(value)).toBe(false);
+  }
+
+  const requirements = [
+    { evidenceComplete: true, review },
+    { evidenceComplete: true, review: { ...review, criteriaChanged: true, outdated: true } },
+    { evidenceComplete: false, review },
+    { evidenceComplete: false, review: null },
+  ];
+  expect(requirementCounts(requirements)).toEqual({ total: 4, evidenceComplete: 2, accepted: 2 });
+  expect(requirementCounts([])).toEqual({ total: 0, evidenceComplete: 0, accepted: 0 });
+});
+
+test("changed criteria are detected as the API compares them, and milestones are optional and limited", () => {
+  expect(criteriaChanged(["First", "Second"], [" First ", "Second"])).toBe(false);
+  expect(criteriaChanged(["First", "Second"], ["Second", "First"])).toBe(true);
+  expect(criteriaChanged(["First", "Second"], ["First"])).toBe(true);
+  expect(criteriaChanged(["First"], ["First", "Third"])).toBe(true);
+  expect(criteriaChanged(["First"], ["first"])).toBe(true);
+
+  expect(milestoneError("")).toBeNull();
+  expect(milestoneError("x".repeat(100))).toBeNull();
+  expect(milestoneError("x".repeat(101))).toBe("Use 100 characters or fewer.");
+  const milestoneForm = (entries: [string, string | Blob][]) => {
+    const data = new FormData();
+    for (const [name, value] of entries) data.append(name, value);
+    return data;
+  };
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", "  Sprint 2 "]]))).toBe("Sprint 2");
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", "   "]]))).toBe("");
+  // Clear ignores the field, whatever it holds.
+  for (const value of ["Sprint 2", new Blob(["x"])]) {
+    expect(readMilestoneInput(milestoneForm([["intent", "clear"], ["milestone", value]]))).toBe("");
+  }
+  // A missing field or a file is refused rather than read as text.
+  expect(readMilestoneInput(milestoneForm([["intent", "save"]]))).toBeNull();
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", new Blob(["Sprint 2"])]]))).toBeNull();
+  const form = new FormData();
+  form.set("title", "Guest checkout");
+  form.append("criteria", "Done");
+  expect(readRequirementInput(form)).not.toHaveProperty("milestone");
+  form.set("milestone", "  Sprint 3  ");
+  expect(readRequirementInput(form).milestone).toBe("Sprint 3");
+  form.set("milestone", "x".repeat(101));
+  expect(requirementErrors(readRequirementInput(form))).toEqual({ items: {}, milestone: "Use 100 characters or fewer." });
+  expect(requirementProblemErrors({ errors: { milestone: ["Use at most 100 characters."] } }, "Failed"))
+    .toEqual({ items: {}, milestone: "Use at most 100 characters." });
+});
+
+test("criteria versions and follow-ups are accepted only in the documented shape", () => {
+  const version = { number: 2, criteria: ["First", "Second"], createdBy: "u1", createdAt: "2026-10-01T10:00:00Z" };
+  expect(parseCriteriaVersion({ ...version, extra: 1 })).toEqual(version);
+  expect(parseCriteriaVersions([version, { ...version, number: 1, criteria: [] }])).toHaveLength(2);
+  for (const value of [null, {}, { ...version, number: 0 }, { ...version, criteria: [1] }, { ...version, criteria: null },
+    { ...version, createdBy: 1 }, { ...version, createdAt: "soon" }]) {
+    expect(() => parseCriteriaVersion(value), JSON.stringify(value)).toThrow("unexpected criteria version");
+  }
+  expect(() => parseCriteriaVersions({})).toThrow("unexpected criteria version list");
+  expect(criteriaVersionText(3)).toBe("Criteria version 3");
+  expect(criteriaVersionText(null)).toBe("Criteria version not recorded");
+
+  const link = { requirementId: "r2", title: "Box opens", archivedAt: null, linkedBy: "u1", linkedAt: "2026-10-01T10:00:00Z" };
+  const event = { id: "e1", requirementId: "r1", requirementTitle: "Box opens faster", originalRequirementId: "r2", originalTitle: "Box opens",
+    action: "added", actor: "u1", occurredAt: "2026-10-01T10:00:00Z" };
+  const followUps = { followUpOf: [link], followedUpBy: [], history: [event, { ...event, id: "e2", action: "removed" }] };
+  expect(parseFollowUps({ ...followUps, extra: 1 })).toEqual(followUps);
+  for (const value of [null, {}, { ...followUps, history: null }, { ...followUps, followUpOf: [{ ...link, linkedAt: "soon" }] },
+    { ...followUps, followedUpBy: [{ ...link, title: null }] }, { ...followUps, history: [{ ...event, action: "renamed" }] }]) {
+    expect(() => parseFollowUps(value), JSON.stringify(value)).toThrow(/unexpected follow-up/);
+  }
+  expect(followUpEventText(parseFollowUps(followUps).history[0], "r1")).toBe("Marked as a follow-up of “Box opens”");
+  expect(followUpEventText(parseFollowUps(followUps).history[1], "r2")).toBe("“Box opens faster” was unmarked as a follow-up of this requirement");
 });

@@ -221,7 +221,9 @@ test("requirement lists carry the latest decision and whether it still describes
 
   const first = await linkIssue(requirementId, "Guests cannot pay", "2026-09-01T10:00:00Z");
   const decided = await (await reviewer.post(path, { decision: "accepted", version: 1 })).json();
-  expect(await review()).toEqual({ decision: "accepted", decidedBy: "reviewer", decidedAt: decided.decidedAt, outdated: false });
+  expect(await review()).toEqual({
+    decision: "accepted", decidedBy: "reviewer", decidedAt: decided.decidedAt, outdated: false, criteriaChanged: false, criteriaVersion: 1,
+  });
   expect(await review(other.id)).toBeNull();
 
   // The same link read again from GitHub is still the link that was reviewed.
@@ -299,5 +301,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(15); // Every migration through RequirementUpdatedBy.
+  expect(history).toBe(19); // Every migration through RequirementCriteriaVersionTexts.
 });

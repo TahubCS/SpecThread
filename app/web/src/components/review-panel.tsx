@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { startTransition, useActionState, useState } from "react";
 import { recordReview, type ReviewFormState } from "@/app/projects/review-actions";
+import { criteriaVersionText } from "@/lib/criteria-versions";
 import { formatDate } from "@/lib/projects";
 import { DECISIONS, decisionText, REVIEW_NOTE_MAX, reviewedText, reviewOutdated, type Review } from "@/lib/reviews";
 
@@ -14,11 +15,15 @@ const choiceText = { accepted: "Accept", rejected: "Reject", more_evidence: "Req
  * earlier decisions on demand. `canReview` is "yes" for a member who may decide, "author" for the
  * person who wrote the requirement, and "read-only" when nothing can change. `soloTeam` is set when the
  * project's team has one member, so the author learns that a review needs a teammate first (ADR-038).
+ * Each decision names the acceptance-criteria version it was made against and links to it, and a
+ * decision on earlier criteria than `criteriaVersion` says that the requirement needs review (ADR-051).
  */
-export function ReviewPanel({ projectId, requirementId, version, reviews, evidenceIds, people, canReview, soloTeam = null }: {
+export function ReviewPanel({ projectId, requirementId, version, criteriaVersion, reviews, evidenceIds, people, canReview, soloTeam = null }: {
   projectId: string;
   requirementId: string;
   version: number;
+  /** The current acceptance-criteria version, or null when it was not recorded. */
+  criteriaVersion: number | null;
   reviews: Review[];
   evidenceIds: string[];
   /** Names of the project's members by user ID. */
@@ -29,12 +34,15 @@ export function ReviewPanel({ projectId, requirementId, version, reviews, eviden
   const [state, action, pending] = useActionState(recordReview.bind(null, projectId, requirementId, version), { errors: null, recorded: 0 });
   const [current, ...earlier] = reviews;
   const outdated = current ? reviewOutdated(current, version, evidenceIds) : null;
+  const criteriaHref = `/projects/${projectId}/requirements/${requirementId}/criteria`;
+  const earlierCriteria = current?.criteriaVersion != null && criteriaVersion !== null && current.criteriaVersion !== criteriaVersion
+    ? current.criteriaVersion : null;
 
   return (
     <>
       {current ? (
         <div className="side-card review-current">
-          <Decision review={current} people={people} />
+          <Decision review={current} people={people} criteriaHref={criteriaHref} />
           <details className="evidence-commits">
             <summary>{reviewedText(current)}</summary>
             {current.evidence.length > 0 && (
@@ -54,7 +62,13 @@ export function ReviewPanel({ projectId, requirementId, version, reviews, eviden
       ) : (
         <p className="muted">No decision has been recorded yet.</p>
       )}
-      {outdated && (outdated.version || outdated.evidence) && (
+      {earlierCriteria !== null ? (
+        <p className="notice notice-warning" role="status">
+          <strong>Needs review.</strong> The acceptance criteria changed after this decision (version {earlierCriteria} → {criteriaVersion}).
+          The decision applies to <Link href={`${criteriaHref}/${earlierCriteria}`}>criteria version {earlierCriteria}</Link>, not to the current criteria.
+          {outdated?.evidence && " The evidence has changed since too."}
+        </p>
+      ) : outdated && (outdated.version || outdated.evidence) && (
         <p className="notice" role="status">
           {outdated.version && "This decision was made on an earlier version of the requirement. "}
           {outdated.evidence && "The evidence has changed since this decision. "}
@@ -65,7 +79,12 @@ export function ReviewPanel({ projectId, requirementId, version, reviews, eviden
         <details className="review-history">
           <summary>{earlier.length === 1 ? "1 earlier decision" : `${earlier.length} earlier decisions`}</summary>
           <ol aria-label="Earlier decisions">
-            {earlier.map(review => <li key={review.id}><Decision review={review} people={people} /><p className="muted">{reviewedText(review)}</p></li>)}
+            {earlier.map(review => (
+              <li key={review.id}>
+                <Decision review={review} people={people} criteriaHref={criteriaHref} />
+                <p className="muted">{reviewedText(review)}</p>
+              </li>
+            ))}
           </ol>
         </details>
       )}
@@ -80,8 +99,8 @@ export function ReviewPanel({ projectId, requirementId, version, reviews, eviden
   );
 }
 
-/** Renders one decision: what was decided, by whom, when, and their note. */
-function Decision({ review, people }: { review: Review; people: Record<string, string> }) {
+/** Renders one decision: what was decided, by whom, when, against which criteria version, and their note. */
+function Decision({ review, people, criteriaHref }: { review: Review; people: Record<string, string>; criteriaHref: string }) {
   return (
     <>
       <p className="review-decision">
@@ -89,6 +108,9 @@ function Decision({ review, people }: { review: Review; people: Record<string, s
         <span className="muted">
           by {people[review.decidedBy] ?? "a former member"} on <time dateTime={review.decidedAt}>{formatDate(review.decidedAt)}</time>
         </span>
+        {review.criteriaVersion === null
+          ? <span className="muted">{criteriaVersionText(null)}</span>
+          : <Link className="review-criteria" href={`${criteriaHref}/${review.criteriaVersion}`}>Against criteria version {review.criteriaVersion}</Link>}
       </p>
       {review.note && <p className="review-note">{review.note}</p>}
     </>

@@ -56,6 +56,10 @@ export async function startTestDatabase() {
     await pool.query(await readSql("docs/schema/project-documents.sql"));
     await pool.query(await readSql("docs/schema/requirement-documents.sql"));
     await pool.query(await readSql("docs/schema/requirement-updated-by.sql"));
+    await pool.query(await readSql("docs/schema/requirement-criteria-versions.sql"));
+    await pool.query(await readSql("docs/schema/requirement-milestone.sql"));
+    await pool.query(await readSql("docs/schema/requirement-follow-ups.sql"));
+    await pool.query(await readSql("docs/schema/requirement-criteria-version-texts.sql"));
     return { name, connectionString, pool, stop };
   } catch (error) {
     await stop();

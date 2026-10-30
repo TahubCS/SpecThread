@@ -62,7 +62,7 @@ test("every reserved page participates in navigation", async () => {
   const connected = ["dashboard", "settings/account", "projects", "projects/new", "projects/[projectId]",
     "projects/[projectId]/requirements", "projects/[projectId]/settings", "projects/[projectId]/settings/repository",
     "projects/[projectId]/requirements/new", "projects/[projectId]/requirements/[requirementId]",
-    "projects/[projectId]/requirements/[requirementId]/edit",
+    "projects/[projectId]/requirements/[requirementId]/edit", "projects/[projectId]/requirements/[requirementId]/history",
   ].map(route => path.join(root, route, "page.tsx"));
   async function pagesIn(directory: string): Promise<string[]> {
     const entries = await readdir(directory, { withFileTypes: true });

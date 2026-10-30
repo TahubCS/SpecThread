@@ -3,13 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { isUuid } from "@/lib/projects";
+import { problemDetail } from "@/lib/evidence";
+import { fieldError, isUuid } from "@/lib/projects";
 import {
-  parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors, type RequirementErrors,
+  milestoneError, parseRequirement, readMilestoneInput, readRequirementInput, requirementErrors, requirementProblemErrors, type RequirementErrors,
 } from "@/lib/requirements";
 
-export type RequirementFormState = { errors: RequirementErrors | null };
+/**
+ * `needsConfirmation` is set when the API refused new criteria because the latest decision
+ * accepted the current ones (ADR-051), so the form asks the user to confirm before saving again.
+ */
+export type RequirementFormState = { errors: RequirementErrors | null; needsConfirmation?: boolean };
 export type RequirementArchiveState = { error: string | null };
+export type MilestoneState = { error: string | null; saved: number };
 
 const failure = (form: string): RequirementFormState => ({ errors: { items: {}, form } });
 const PROJECT_ARCHIVED = "This project is archived, so its requirements can't be changed.";
@@ -28,6 +34,7 @@ export async function createRequirement(projectId: string, _previous: Requiremen
       method: "POST",
       body: JSON.stringify({
         title: input.title, description: input.description, acceptanceCriteria: input.criteria, documentIds: input.documentIds,
+        milestone: input.milestone || null,
       }),
     });
     if (response.status === 400) return { errors: requirementProblemErrors(await response.json(), failed) };
@@ -45,6 +52,8 @@ export async function createRequirement(projectId: string, _previous: Requiremen
 /**
  * Saves a requirement, replacing its criteria, then opens it. `version` is the version the form
  * was loaded with; if someone else saved first the API refuses and the user is told to reload.
+ * New criteria on a requirement whose current criteria were accepted are sent only with the
+ * form's `confirmCriteriaChange` field, which the user sets by confirming the warning (ADR-051).
  */
 export async function updateRequirement(
   projectId: string, requirementId: string, version: number, _previous: RequirementFormState, formData: FormData,
@@ -54,16 +63,22 @@ export async function updateRequirement(
   const invalid = requirementErrors(input);
   if (invalid) return { errors: invalid };
   if (!isUuid(projectId) || !isUuid(requirementId) || !Number.isInteger(version)) return failure(failed);
+  const confirmCriteriaChange = formData.get("confirmCriteriaChange") === "true";
 
   try {
     const response = await apiFetch(`/requirements/${requirementId}`, {
       method: "PUT",
       body: JSON.stringify({
         title: input.title, description: input.description, acceptanceCriteria: input.criteria, documentIds: input.documentIds, version,
+        confirmCriteriaChange,
       }),
     });
     if (response.status === 400) return { errors: requirementProblemErrors(await response.json(), failed) };
-    if (response.status === 409) return failure(await conflictMessage(requirementId, version));
+    if (response.status === 409) {
+      const problem: unknown = await response.json().catch(() => null);
+      if ((problem as { code?: unknown } | null)?.code === "accepted_criteria_change") return { errors: null, needsConfirmation: true };
+      return failure(await conflictMessage(requirementId, version));
+    }
     if (!response.ok) throw new Error(`Update requirement returned ${response.status}.`);
     parseRequirement(await response.json());
   } catch (error) {
@@ -104,6 +119,35 @@ export async function restoreRequirement(projectId: string, requirementId: strin
   }
   revalidatePath(`/projects/${projectId}`, "layout");
   redirect(`/projects/${projectId}/requirements/${requirementId}`);
+}
+
+/**
+ * Sets or clears a requirement's milestone or sprint label (ADR-053). It is not an edit: the
+ * version stays, so a decision on the requirement does not become outdated.
+ */
+export async function setMilestone(
+  projectId: string, requirementId: string, previous: MilestoneState, formData: FormData,
+): Promise<MilestoneState> {
+  const failed = "The milestone could not be saved. Please try again.";
+  const fail = (error: string): MilestoneState => ({ error, saved: previous.saved });
+  const milestone = readMilestoneInput(formData);
+  if (milestone === null) return fail(failed);
+  const invalid = milestoneError(milestone);
+  if (invalid) return fail(invalid);
+  if (!isUuid(projectId) || !isUuid(requirementId)) return fail(failed);
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/milestone`, {
+      method: "PUT", body: JSON.stringify({ milestone: milestone || null }),
+    });
+    if (response.status === 400) return fail(fieldError(await response.json(), "milestone") ?? failed);
+    if (response.status === 409) return fail(problemDetail(await response.json()) ?? failed);
+    if (!response.ok) throw new Error(`Set milestone returned ${response.status}.`);
+  } catch (error) {
+    console.error("Set milestone failed", error);
+    return fail(failed);
+  }
+  revalidatePath(`/projects/${projectId}`, "layout");
+  return { error: null, saved: previous.saved + 1 };
 }
 
 /** Explains a refused save by looking at the requirement as it is now: archived, or changed by someone else. */

@@ -28,17 +28,18 @@ internal static class RequirementEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict);
     }
 
-    // Active requirements by default; `archived=true` lists only the archived ones (ADR-050).
+    // Active requirements by default; `archived=true` lists only the archived ones (ADR-050), and
+    // `milestone` only those with exactly that label (ADR-053).
     private static async Task<Results<Ok<List<RequirementSummary>>, NotFound>> List(
-        Guid projectId, bool? archived, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
+        Guid projectId, bool? archived, string? milestone, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         if (!await db.ProjectsFor(user.CallerId()).AnyAsync(p => p.Id == projectId, cancel)) return TypedResults.NotFound();
 
         var wantArchived = archived == true;
-        var requirements = await db.Requirements.AsNoTracking()
-            .Where(r => r.ProjectId == projectId && (r.ArchivedAt != null) == wantArchived)
-            .OrderBy(r => r.CreatedAt).ThenBy(r => r.Id)
-            .ToListAsync(cancel);
+        var query = db.Requirements.AsNoTracking().Where(r => r.ProjectId == projectId && (r.ArchivedAt != null) == wantArchived);
+        var label = milestone?.Trim();
+        if (!string.IsNullOrEmpty(label)) query = query.Where(r => r.Milestone == label);
+        var requirements = await query.OrderBy(r => r.CreatedAt).ThenBy(r => r.Id).ToListAsync(cancel);
 
         // The latest decision on each requirement, and whether it still describes what is there (ADR-038).
         var ids = requirements.ConvertAll(r => r.Id);
@@ -46,21 +47,29 @@ internal static class RequirementEndpoints
             .GroupBy(v => v.RequirementId)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(v => v.DecidedAt).ThenByDescending(v => v.Id).First());
         var evidence = (await db.RequirementEvidence.AsNoTracking().Where(e => ids.Contains(e.RequirementId))
-                .Select(e => new { e.RequirementId, e.Id }).ToListAsync(cancel))
-            .ToLookup(e => e.RequirementId, e => e.Id);
+                .Select(e => new { e.RequirementId, e.Id, e.Kind, e.Checks }).ToListAsync(cancel))
+            .ToLookup(e => e.RequirementId);
+        var criteriaVersions = await CriteriaVersionEndpoints.LatestNumbersAsync(db, ids, cancel);
 
-        return TypedResults.Ok(requirements.ConvertAll(r => new RequirementSummary(
-            r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, evidence[r.Id].Count(),
-            reviews.TryGetValue(r.Id, out var review)
-                ? new ReviewSummary(review.Decision, review.DecidedBy, review.DecidedAt, ReviewEndpoints.IsOutdated(review, r.Version, evidence[r.Id]))
-                : null)));
+        return TypedResults.Ok(requirements.ConvertAll(r =>
+        {
+            var links = evidence[r.Id].ToList();
+            int? criteriaVersion = criteriaVersions.TryGetValue(r.Id, out var number) ? number : null;
+            return new RequirementSummary(
+                r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, links.Count,
+                reviews.TryGetValue(r.Id, out var review)
+                    ? ReviewEndpoints.Summarize(review, r.Version, links.Select(e => e.Id), criteriaVersion)
+                    : null,
+                r.Milestone, criteriaVersion, EvidencePolicy.IsComplete(links.Select(e => new EvidenceChecks(e.Kind, e.Checks))));
+        }));
     }
 
     private static async Task<Results<Created<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Create(
         Guid projectId, RequirementRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         var input = Validate(request.Title, request.Description, request.AcceptanceCriteria, request.DocumentIds, out var errors);
-        if (input is null) return TypedResults.ValidationProblem(errors.ToDictionary());
+        var milestone = errors.Milestone("milestone", request.Milestone);
+        if (input is null || errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var userId = user.CallerId();
         // Serialize with archiving, membership changes, and other writes in this project's team.
@@ -83,15 +92,17 @@ internal static class RequirementEndpoints
             UpdatedAt = now,
             UpdatedBy = userId,
             Version = 1,
+            Milestone = milestone,
         };
         db.Requirements.Add(requirement);
         var criteria = AddCriteria(db, requirement.Id, input.Criteria);
+        CriteriaVersionEndpoints.Add(db, requirement.Id, 1, input.Criteria, userId, now);
         LinkDocuments(db, requirement.Id, input.DocumentIds, userId, now);
         await db.SaveChangesAsync(cancel);
         var documents = await LoadDocuments(db, requirement.Id, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria, documents));
+        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria, documents, 1));
     }
 
     private static async Task<Results<Ok<RequirementResponse>, NotFound>> Get(
@@ -104,10 +115,14 @@ internal static class RequirementEndpoints
             .Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
-        return TypedResults.Ok(ToResponse(requirement.Requirement, criteria, await LoadDocuments(db, requirementId, cancel)));
+        return TypedResults.Ok(ToResponse(requirement.Requirement, criteria, await LoadDocuments(db, requirementId, cancel),
+            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel)));
     }
 
     // Replaces the whole criteria and document lists; a stale version means someone else saved first.
+    // Changed criteria become a new criteria version. When the latest decision accepted the
+    // current criteria, changing them needs `confirmCriteriaChange`, because that acceptance
+    // applies to the previous criteria and the requirement will need a new review (ADR-051).
     private static async Task<Results<Ok<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Update(
         Guid requirementId, UpdateRequirementRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
@@ -122,6 +137,15 @@ internal static class RequirementEndpoints
         var requirement = found.Requirement;
         if (found.ProjectArchived || requirement.ArchivedAt is not null) return ProjectEndpoints.Archived();
         if (requirement.Version != request.Version) return Stale();
+
+        var (criteriaVersion, currentCriteria) = await CriteriaVersionEndpoints.EnsureCurrentAsync(db, requirement, cancel);
+        var criteriaChanged = !input.Criteria.SequenceEqual(currentCriteria);
+        if (criteriaChanged && request.ConfirmCriteriaChange != true)
+        {
+            var latest = await db.RequirementReviews.AsNoTracking().Where(v => v.RequirementId == requirementId)
+                .OrderByDescending(v => v.DecidedAt).ThenByDescending(v => v.Id).FirstOrDefaultAsync(cancel);
+            if (latest is { Decision: "accepted" } && latest.CriteriaVersion == criteriaVersion) return AcceptedCriteriaChange(criteriaVersion);
+        }
 
         // Kept links keep who linked them and when; only removed ones go and only new ones are added.
         var links = await db.RequirementDocuments.Where(l => l.RequirementId == requirementId).ToListAsync(cancel);
@@ -139,6 +163,7 @@ internal static class RequirementEndpoints
         requirement.UpdatedBy = userId;
         requirement.Version++;
         var criteria = AddCriteria(db, requirementId, input.Criteria);
+        if (criteriaChanged) CriteriaVersionEndpoints.Add(db, requirementId, ++criteriaVersion, input.Criteria, userId, now);
         LinkDocuments(db, requirementId, input.DocumentIds.Where(id => !linked.Contains(id)), userId, now);
         try
         {
@@ -151,7 +176,7 @@ internal static class RequirementEndpoints
         var documents = await LoadDocuments(db, requirementId, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Ok(ToResponse(requirement, criteria, documents));
+        return TypedResults.Ok(ToResponse(requirement, criteria, documents, criteriaVersion));
     }
 
     private static Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
@@ -188,7 +213,8 @@ internal static class RequirementEndpoints
             .Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
-        return TypedResults.Ok(ToResponse(found.Requirement, criteria, await LoadDocuments(db, requirementId, cancel)));
+        return TypedResults.Ok(ToResponse(found.Requirement, criteria, await LoadDocuments(db, requirementId, cancel),
+            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel)));
     }
 
     // Like FindForMember, but locks the project's team first and then reads the requirement, so
@@ -276,13 +302,20 @@ internal static class RequirementEndpoints
         return criteria;
     }
 
-    private static ProblemHttpResult Stale() => TypedResults.Problem(
+    internal static ProblemHttpResult Stale() => TypedResults.Problem(
         "This requirement changed since it was loaded. Reload it and try again.", statusCode: StatusCodes.Status409Conflict);
 
+    private static ProblemHttpResult AcceptedCriteriaChange(int criteriaVersion) => TypedResults.Problem(
+        $"This requirement was accepted against criteria version {criteriaVersion}. That acceptance applies to the previous criteria, " +
+        "so saving new criteria means it needs a new review. Confirm the change to save it.",
+        statusCode: StatusCodes.Status409Conflict,
+        extensions: new Dictionary<string, object?> { ["code"] = "accepted_criteria_change", ["acceptedCriteriaVersion"] = criteriaVersion });
+
+    // `criteriaVersion` is null only for a requirement the previous API created during a deploy (ADR-044).
     private static RequirementResponse ToResponse(
-        Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents) => new(
+        Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents, int? criteriaVersion) => new(
         r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.UpdatedBy ?? r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
-        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents);
+        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents, criteriaVersion, r.Milestone);
 
     internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
     {
@@ -292,18 +325,21 @@ internal static class RequirementEndpoints
     private sealed record ValidInput(string Title, string Description, List<string> Criteria, List<Guid> DocumentIds);
 }
 
-internal sealed record RequirementRequest(string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds);
+internal sealed record RequirementRequest(
+    string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds, string? Milestone = null);
 
 internal sealed record UpdateRequirementRequest(
-    string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds, int? Version);
+    string? Title, string? Description, List<string?>? AcceptanceCriteria, List<Guid>? DocumentIds, int? Version,
+    bool? ConfirmCriteriaChange = null);
 
 internal sealed record RequirementSummary(
-    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review);
+    Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review,
+    string? Milestone, int? CriteriaVersion, bool EvidenceComplete);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, string UpdatedBy, int Version,
     DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, List<CriterionResponse> AcceptanceCriteria,
-    List<LinkedDocumentResponse> Documents);
+    List<LinkedDocumentResponse> Documents, int? CriteriaVersion, string? Milestone);
 
 internal sealed record CriterionResponse(Guid Id, string Text, int Position);
 
