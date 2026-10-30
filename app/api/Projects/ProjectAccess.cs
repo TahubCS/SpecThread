@@ -31,6 +31,7 @@ internal sealed class InputErrors
     public const int MaxCriterionLength = 2_000;
     public const int MaxRequirementDocuments = 20; // ADR-049
     public const int MaxEmailLength = 254;
+    public const int MaxMilestoneLength = 100; // ADR-053
 
     private readonly Dictionary<string, string[]> errors = [];
 
@@ -51,6 +52,13 @@ internal sealed class InputErrors
     {
         var trimmed = value?.Trim() ?? "";
         return trimmed.Length > maxLength ? Add(field, $"Use at most {maxLength} characters.") : trimmed;
+    }
+
+    // A milestone or sprint label: trimmed, and null when empty.
+    public string? Milestone(string field, string? value)
+    {
+        var trimmed = Optional(field, value, MaxMilestoneLength);
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
     public List<string>? Criteria(string field, IReadOnlyList<string?>? values)

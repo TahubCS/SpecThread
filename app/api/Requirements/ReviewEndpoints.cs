@@ -74,6 +74,7 @@ internal static class ReviewEndpoints
             Decision = decision!,
             Note = note!,
             RequirementVersion = requirement.Version,
+            CriteriaVersion = (await CriteriaVersionEndpoints.EnsureCurrentAsync(db, requirement, cancel)).Number,
             Evidence = JsonSerializer.Serialize(evidence.ConvertAll(e => new ReviewedEvidence(e.Id, e.Kind, Label(e), e.Title, e.State)), SnapshotJson),
             DecidedBy = userId,
             DecidedAt = Clock.UtcNow(),
@@ -88,6 +89,12 @@ internal static class ReviewEndpoints
     // longer the ones reviewed. Reading the same links again from GitHub does not make it outdated.
     public static bool IsOutdated(RequirementReview review, int currentVersion, IEnumerable<Guid> currentEvidence) =>
         review.RequirementVersion != currentVersion || !ReadSnapshot(review).Select(e => e.Id).ToHashSet().SetEquals(currentEvidence);
+
+    // The latest decision as lists show it. `CriteriaChanged` says the criteria have been changed
+    // since the decision, so it applies to an earlier criteria version and needs a new review (ADR-051).
+    public static ReviewSummary Summarize(RequirementReview review, int currentVersion, IEnumerable<Guid> currentEvidence, int? currentCriteriaVersion) =>
+        new(review.Decision, review.DecidedBy, review.DecidedAt, IsOutdated(review, currentVersion, currentEvidence),
+            review.CriteriaVersion is { } reviewed && currentCriteriaVersion is { } current && reviewed != current, review.CriteriaVersion);
 
     private static List<ReviewedEvidence> ReadSnapshot(RequirementReview review) =>
         JsonSerializer.Deserialize<List<ReviewedEvidence>>(review.Evidence, SnapshotJson) ?? [];
@@ -106,7 +113,7 @@ internal static class ReviewEndpoints
             .AnyAsync(cancel);
 
     private static ReviewResponse ToResponse(RequirementReview r) =>
-        new(r.Id, r.RequirementId, r.Decision, r.Note, r.RequirementVersion, ReadSnapshot(r), r.DecidedBy, r.DecidedAt);
+        new(r.Id, r.RequirementId, r.Decision, r.Note, r.RequirementVersion, ReadSnapshot(r), r.DecidedBy, r.DecidedAt, r.CriteriaVersion);
 }
 
 internal sealed record RecordReviewRequest(string? Decision, string? Note, int? Version);
@@ -115,7 +122,8 @@ internal sealed record RecordReviewRequest(string? Decision, string? Note, int? 
 internal sealed record ReviewedEvidence(Guid Id, string Kind, string Label, string Title, string? State);
 
 internal sealed record ReviewResponse(
-    Guid Id, Guid RequirementId, string Decision, string Note, int RequirementVersion, List<ReviewedEvidence> Evidence, string DecidedBy, DateTime DecidedAt);
+    Guid Id, Guid RequirementId, string Decision, string Note, int RequirementVersion, List<ReviewedEvidence> Evidence, string DecidedBy, DateTime DecidedAt,
+    int? CriteriaVersion);
 
 // The latest decision on a requirement, as shown on lists.
-internal sealed record ReviewSummary(string Decision, string DecidedBy, DateTime DecidedAt, bool Outdated);
+internal sealed record ReviewSummary(string Decision, string DecidedBy, DateTime DecidedAt, bool Outdated, bool CriteriaChanged, int? CriteriaVersion);

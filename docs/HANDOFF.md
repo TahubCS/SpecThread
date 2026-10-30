@@ -1,6 +1,101 @@
 # Shared handoff
 
-## Current task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23)
+## Current task: Criteria versions, accepted-criteria warning, follow-ups, and milestones (2026-10-29)
+
+- Branch: `feature/requirement-change-tracking`, from `main` at `8555d75` (PR #22 merged).
+- Scope: four stories from the scenarios "Changing a requirement after its code was
+  merged", "Signing off a contract milestone", and "Checking student team progress":
+  1. Danielle (Tech Lead): warn before editing the criteria of an Accepted requirement;
+     confirming returns it to needing review with the earlier decision kept; cancelling
+     changes nothing (ADR-051).
+  2. Robert (Client Reviewer): every saved criteria change is a timestamped version, each
+     decision shows its criteria version, and earlier versions open read-only (ADR-051).
+  3. Danielle: mark a requirement as a follow-up of others in the project, shown on both
+     with links, and adding and removing recorded with name and time (ADR-052).
+  4. Danielle and Angela (Instructor): one milestone/sprint label per requirement, a
+     list filter, and counts of Evidence complete and Accepted in the set (ADR-053).
+- User decisions taken when planning: one branch for all four; a directional
+  "follow-up of" link; a free-text milestone label; and a fixed built-in Evidence
+  complete rule (no evidence policy existed).
+- Completed:
+  - API: `requirement_criteria_versions` and `requirement_reviews.criteria_version`;
+    versions on create and on criteria changes only; catch-up versions for criteria the
+    previous API saved during a deploy; 409 `accepted_criteria_change` unless
+    `confirmCriteriaChange`; `criteriaChanged`/`criteriaVersion` on list review
+    summaries; criteria-version GET endpoints; follow-up GET/POST/DELETE with an
+    add/remove event log under the team lock; `requirements.milestone`, `PUT
+    /requirements/{id}/milestone` (no version change), `?milestone=` on the list,
+    `GET /projects/{id}/milestones`; `evidenceComplete` from `EvidencePolicy`.
+  - Web: the warning panel in the edit form ("Keep editing" sends nothing; "Save and
+    request a new review" confirms; also opened by the API's 409); "Needs review" badge
+    and notice; "Against criteria version N" on each decision; a read-only criteria
+    version page; the Requirement history page (was a placeholder) listing versions with
+    their decisions and the follow-up log; a Follow-ups section with add/remove and its
+    log; a Milestone control on the requirement page and an optional field on the create
+    form; the list's milestone filter, counts line, milestone chip, and Evidence complete
+    badge. Parsers read fields missing from the previous API as empty (ADR-044).
+- Changed files:
+  - API: `Requirements/RequirementEndpoints.cs`, `ReviewEndpoints.cs`, new
+    `CriteriaVersionEndpoints.cs`, `FollowUpEndpoints.cs`, `MilestoneEndpoints.cs`,
+    `EvidencePolicy.cs`; `Projects/ProjectAccess.cs` (milestone validation);
+    `Data/ProductModels.cs`, `Data/SpecThreadDbContext.cs`, `Program.cs`; migrations
+    `20261030001133_RequirementCriteriaVersions`, `20261030001226_RequirementMilestone`,
+    `20261030001248_RequirementFollowUps` and the snapshot.
+  - Schema: `scripts/generate-requirement-criteria-versions.mjs`,
+    `generate-requirement-milestone.mjs`, `generate-requirement-follow-ups.mjs` (new),
+    their generated `docs/schema/*.sql` and `*-rollback.sql`, `scripts/test-database.mjs`.
+  - Web: `lib/requirements.ts`, `lib/projects.ts`, `lib/reviews.ts`, `lib/project-data.ts`,
+    new `lib/criteria-versions.ts` and `lib/follow-ups.ts`; `app/projects/requirement-actions.ts`,
+    new `app/projects/follow-up-actions.ts`; `components/requirement-form.tsx`,
+    `requirement-rows.tsx`, `review-panel.tsx`, new `requirement-follow-ups.tsx` and
+    `requirement-milestone.tsx`; the requirement list, detail, new, edit, and history
+    pages, new `requirements/[requirementId]/criteria/[version]/page.tsx`; `app-shell.css`.
+  - Tests: new `tests/schema/criteria-versions.spec.ts` (5121), `follow-ups.spec.ts`
+    (5122), `milestones.spec.ts` (5123); new `tests/e2e/follow-ups.spec.ts` and
+    `milestones.spec.ts`; two warning tests in `tests/e2e/reviews.spec.ts`; parser and
+    helper tests in `tests/api/project-data.spec.ts`; the review summary shape in
+    `tests/schema/reviews.spec.ts`; migration-history counts up by three in
+    `reviews.spec.ts`, `evidence.spec.ts`, and `github-repository.spec.ts`; the history
+    page listed as connected in `tests/e2e/scaffold.spec.ts`.
+  - Docs: DECISIONS (ADR-051, 052, 053; notes on ADR-024, 038, 050), API, DATABASE,
+    ARCHITECTURE (seventeen product tables), PROJECT (Evidence complete), TESTING.
+- Decisions and assumptions:
+  - "Needs review" is derived, like "outdated": no decision row is written when
+    accepted criteria change, so the acceptance stays in the history as made.
+  - Criteria compare as ordered, trimmed texts, so reordering is a new version and
+    needs a new review. Title, description, and document edits are not criteria versions.
+  - The warning applies only while the latest decision is an acceptance on the current
+    criteria version; after a newer rejection, criteria change without it.
+  - Setting a milestone and linking follow-ups are not edits: no version change, so no
+    decision becomes outdated.
+  - Accepted in the counts means a latest acceptance that is neither outdated nor on
+    earlier criteria.
+- Checks (all run on this branch, 2026-10-29):
+  - Passed: `npm run lint`, `npm run typecheck`, `dotnet format app/api
+    --verify-no-changes --no-restore`, `dotnet ef migrations has-pending-model-changes`
+    (none), `npm run build`, `npm run build:api` (0 errors), `git diff --check`.
+  - `npm test`: 380 passed, none flaky or failed.
+  - Not run: applying the three migrations with the EF bundle to a Postgres at the
+    RequirementUpdatedBy state, as CI will. The generated SQL scripts were applied by
+    the schema tests, including the backfill and each rollback.
+- Known issues and risks:
+  - CI applies the three migrations on merge, in order (ADR-044). Don't apply them to
+    Supabase by hand first.
+  - Criteria saved or decisions recorded by the previous API during the deploy have no
+    version until the next save or decision (catch-up), and such a decision shows
+    "Criteria version not recorded", as do decisions made before versioning on an older
+    requirement version.
+  - Milestone labels match exactly; there is no milestone record, rename, or date, and
+    the Milestones page is still a placeholder.
+  - Evidence complete is a fixed rule using check results from the last GitHub refresh.
+  - Playwright prints a pg "terminating connection due to administrator command" stack
+    from the shared web test database when the run ends; it happens on `main` too and
+    does not fail tests.
+- Next step: review the diff, then commit (with the user's approval) and open a PR to
+  `main`. Possible follow-ups: a Milestones page built on the labels, an edit history
+  for titles and descriptions, and a configurable evidence policy.
+
+## Previous task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23, merged as PR #22)
 
 - Branch: `feature/requirements-documents`, from `main` at `b069093`.
 - Scope: the "create a requirement" story (Danielle, Tech Lead; source "Design the Box"
@@ -87,9 +182,9 @@
     Postgres at the ProjectDocuments state with one existing requirement, whose
     `updated_by` became its creator.
   - Risks: who made earlier edits isn't recorded. Any team member can now undo an archive.
-- Next step: review, then open a PR to `main` (it carries both migrations, which CI
-  applies in order). Follow-ups: an edit history on the Requirement history page, show
-  linking requirements on a document's page, and Tickets.
+- Outcome: merged to `main` as PR #22 (`8555d75`). Remaining follow-ups: show linking
+  requirements on a document's page, and Tickets. The edit history is partly covered by
+  criteria versions (ADR-051).
 
 ## Previous task: Evidence locks, refresh timeout, and doc corrections (2026-10-20)
 

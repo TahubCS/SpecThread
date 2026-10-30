@@ -31,7 +31,23 @@ public sealed class Requirement
     // migration RequirementUpdatedBy after that migration ran; read it as the creator (ADR-050).
     public string? UpdatedBy { get; set; }
     public DateTime? ArchivedAt { get; set; }
+    // One milestone or sprint label, or null (ADR-053). Setting it is not an edit: it does not
+    // change Version, so a decision never becomes outdated because of it.
+    public string? Milestone { get; set; }
     public int Version { get; set; } = 1;
+}
+
+// A requirement's acceptance criteria as they were saved at one point (ADR-051). Criteria is a
+// JSON array of the criterion texts in order. A new version is written only when that list
+// changes, numbered from 1 per requirement. Rows are only ever added.
+public sealed class RequirementCriteriaVersion
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public int Number { get; set; }
+    public required string Criteria { get; set; }
+    public required string CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public sealed class AcceptanceCriterion
@@ -99,6 +115,28 @@ public sealed class RequirementEvidence
     public DateTime RefreshedAt { get; set; }
 }
 
+// One requirement marked as a follow-up of another in the same project (ADR-052). Linking does
+// not change either requirement's version.
+public sealed class RequirementFollowUp
+{
+    public Guid RequirementId { get; set; }
+    public Guid OriginalRequirementId { get; set; }
+    public required string LinkedBy { get; set; }
+    public DateTime LinkedAt { get; set; }
+}
+
+// Who added or removed a follow-up link, and when (ADR-052). Action is "added" or "removed".
+// Rows are only ever added.
+public sealed class RequirementFollowUpEvent
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public Guid OriginalRequirementId { get; set; }
+    public required string Action { get; set; }
+    public required string Actor { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
 // A person's decision on a requirement (ADR-038). Evidence is a JSON array of the evidence links
 // as they were when the decision was made. Rows are only ever added.
 public sealed class RequirementReview
@@ -108,6 +146,9 @@ public sealed class RequirementReview
     public required string Decision { get; set; }
     public required string Note { get; set; }
     public int RequirementVersion { get; set; }
+    // The criteria version the decision was made against (ADR-051). Null for a decision recorded
+    // before criteria versions were kept on an earlier requirement version, or by an older API.
+    public int? CriteriaVersion { get; set; }
     public required string Evidence { get; set; }
     public required string DecidedBy { get; set; }
     public DateTime DecidedAt { get; set; }

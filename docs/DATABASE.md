@@ -13,9 +13,10 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and fourteen product tables in
+`SpecThreadDbContext` maps six Better Auth tables and seventeen product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
-with ProjectDocuments, RequirementDocuments, and RequirementUpdatedBy. Startup never calls `EnsureCreated`, `Migrate`, or a database
+with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
+RequirementMilestone, and RequirementFollowUps. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -326,7 +327,8 @@ Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 `dotnet ef database update <Name>` would also undo the other branch's migrations
 that come later in time. scripts/test-database.mjs applies the teams scripts first
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
-then RequirementDocuments and RequirementUpdatedBy.
+then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
+RequirementMilestone, and RequirementFollowUps.
 
 ## Project documents migration
 
@@ -394,6 +396,69 @@ and requirement-updated-by-rollback.sql. CI applies it after the merge (ADR-044)
 apply it by hand first. Rollback: `dotnet ef database update RequirementDocuments
 --project app/api`, or the rollback script; it drops only the column, losing who made
 each requirement's latest edit.
+
+## Criteria versions migration
+
+RequirementCriteriaVersions (ADR-051) adds `requirement_criteria_versions`: one row per
+saved version of a requirement's acceptance criteria, with `number` (from 1, unique per
+requirement), `criteria` (a JSON array of texts in order), `created_by`, and
+`created_at`. It references requirements and users with restrict deletes, has RLS
+enabled with no allow policies, and revokes PUBLIC, anon, and authenticated grants. It
+also adds `requirement_reviews.criteria_version` (integer, nullable, positive), so the
+API still running during the deploy keeps recording decisions. The migration writes
+version 1 for every existing requirement from its current criteria, credited to
+`coalesce(updated_by, created_by)` at `updated_at`, and sets `criteria_version = 1` on
+decisions whose `requirement_version` is the requirement's current version.
+
+```sh
+dotnet ef migrations add RequirementCriteriaVersions --project app/api --configuration Release
+node scripts/generate-requirement-criteria-versions.mjs
+```
+
+The second command adds the RLS, grant, and backfill statements and generates
+docs/schema/requirement-criteria-versions.sql and -rollback.sql. CI applies it after the
+merge (ADR-044); don't apply it by hand first. Rollback: `dotnet ef database update
+RequirementUpdatedBy --project app/api`, or the rollback script (after rolling back the
+two migrations below, or one script at a time, newest first). It drops the table and the
+column, losing every earlier criteria version and which version each decision was made
+against; requirements, current criteria, and decisions stay.
+
+## Requirement milestone migration
+
+RequirementMilestone (ADR-053) adds `requirements.milestone` (varchar(100), nullable)
+with a check that a value is trimmed and 1 to 100 characters. Nullable, so the running
+API is unaffected.
+
+```sh
+dotnet ef migrations add RequirementMilestone --project app/api --configuration Release
+node scripts/generate-requirement-milestone.mjs
+```
+
+The second command generates docs/schema/requirement-milestone.sql and -rollback.sql
+from EF's output unchanged. CI applies it after the merge. Rollback: `dotnet ef database
+update RequirementCriteriaVersions --project app/api`, or the rollback script; it drops
+only the column, losing every label.
+
+## Requirement follow-ups migration
+
+RequirementFollowUps (ADR-052) adds `requirement_follow_ups` (keyed by
+`requirement_id`, the follow-up, and `original_requirement_id`, with `linked_by` and
+`linked_at`, and a check that the two differ) and `requirement_follow_up_events` (`id`,
+both requirement IDs, `action` of `added` or `removed`, `actor`, `occurred_at`). Both
+reference requirements and users with restrict deletes, are indexed by each requirement,
+have RLS enabled with no allow policies, and revoke PUBLIC, anon, and authenticated
+grants. That both requirements are in one project, active, and not linked the other way
+is checked by the API under the team lock.
+
+```sh
+dotnet ef migrations add RequirementFollowUps --project app/api --configuration Release
+node scripts/generate-requirement-follow-ups.mjs
+```
+
+The second command adds the RLS and grant statements and generates
+docs/schema/requirement-follow-ups.sql and -rollback.sql. CI applies it after the merge;
+it only adds tables. Rollback: `dotnet ef database update RequirementMilestone --project
+app/api`, or the rollback script; it drops both tables, losing every link and its history.
 
 ## Supabase tooling
 

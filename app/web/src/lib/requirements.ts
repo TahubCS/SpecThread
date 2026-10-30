@@ -1,5 +1,6 @@
 import type { ProjectDocument } from "./documents";
-import type { RequirementSummary } from "./projects";
+import { isLabel, optionalField, type RequirementSummary } from "./projects";
+import { isVersion } from "./reviews";
 
 /** A project document a requirement links to. It stays linked after it is archived (ADR-049). */
 export type LinkedDocument = {
@@ -7,7 +8,7 @@ export type LinkedDocument = {
 };
 
 /** A requirement with its description, ordered acceptance criteria, and linked documents (docs/API.md). */
-export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
+export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount" | "evidenceComplete"> & {
   description: string;
   createdBy: string;
   /** Who saved the current version (the creator until someone edits it). */
@@ -21,6 +22,7 @@ export const REQUIREMENT_DESCRIPTION_MAX = 10_000;
 export const CRITERIA_MAX = 50;
 export const CRITERION_MAX = 2_000;
 export const REQUIREMENT_DOCUMENTS_MAX = 20;
+export const MILESTONE_MAX = 100;
 
 /** Returns the list with the item at `from` moved to `to`, or the same list when either position does not exist. */
 export function moveItem<T>(list: T[], from: number, to: number): T[] {
@@ -49,8 +51,8 @@ export function documentChoices(active: Pick<ProjectDocument, "id" | "title" | "
   return choices;
 }
 
-/** What a user enters for a requirement. `criteria` is in display order. */
-export type RequirementInput = { title: string; description: string; criteria: string[]; documentIds: string[] };
+/** What a user enters for a requirement. `criteria` is in display order; `milestone` is only entered when creating one. */
+export type RequirementInput = { title: string; description: string; criteria: string[]; documentIds: string[]; milestone?: string };
 
 /** Messages for a rejected requirement. `items` maps a criterion's position to its message. */
 export type RequirementErrors = {
@@ -58,6 +60,7 @@ export type RequirementErrors = {
   description?: string;
   criteria?: string;
   documents?: string;
+  milestone?: string;
   items: Record<number, string>;
   form?: string;
 };
@@ -65,7 +68,8 @@ export type RequirementErrors = {
 /**
  * Validates one requirement from an API response. Throws when the shape is not the documented one.
  * Vercel deploys the web before CI deploys the API (ADR-044), so a response from the previous
- * API may lack `updatedBy` and `documents`: they read as the creator and no documents.
+ * API may lack `updatedBy`, `documents`, `criteriaVersion`, and `milestone`: they read as the
+ * creator, no documents, no recorded criteria version, and no milestone.
  */
 export function parseRequirement(value: unknown): Requirement {
   const item = value as Record<string, unknown> | null;
@@ -73,15 +77,18 @@ export function parseRequirement(value: unknown): Requirement {
   const criteria = item?.acceptanceCriteria;
   const documents = item?.documents === undefined ? [] : item.documents;
   const updatedBy = item?.updatedBy === undefined ? item?.createdBy : item.updatedBy;
+  const criteriaVersion = optionalField(item?.criteriaVersion, isVersion);
+  const milestone = optionalField(item?.milestone, isLabel);
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
       typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" || typeof updatedBy !== "string" ||
       typeof item.version !== "number" || !isDate(item.createdAt) || !isDate(item.updatedAt) ||
-      (item.archivedAt !== null && typeof item.archivedAt !== "string") || !Array.isArray(criteria) || !Array.isArray(documents)) {
+      (item.archivedAt !== null && typeof item.archivedAt !== "string") || !Array.isArray(criteria) || !Array.isArray(documents) ||
+      criteriaVersion === undefined || milestone === undefined) {
     throw new Error("The API returned an unexpected requirement.");
   }
   return {
     id: item.id, projectId: item.projectId, title: item.title, description: item.description, createdBy: item.createdBy,
-    updatedBy,
+    updatedBy, criteriaVersion, milestone,
     version: item.version, createdAt: item.createdAt as string, updatedAt: item.updatedAt as string, archivedAt: item.archivedAt,
     acceptanceCriteria: criteria.map((entry: unknown) => {
       const criterion = entry as Record<string, unknown> | null;
@@ -118,6 +125,7 @@ export function readRequirementInput(formData: FormData): RequirementInput {
     description: text(formData.get("description")),
     criteria: formData.getAll("criteria").map(text),
     documentIds: formData.getAll("documents").map(text).filter(Boolean),
+    ...(formData.has("milestone") ? { milestone: text(formData.get("milestone")) } : {}),
   };
 }
 
@@ -132,11 +140,25 @@ export function requirementErrors(input: RequirementInput): RequirementErrors | 
   if (input.criteria.length === 0) errors.criteria = "Add at least one acceptance criterion.";
   else if (input.criteria.length > CRITERIA_MAX) errors.criteria = `Use ${CRITERIA_MAX} acceptance criteria or fewer.`;
   if (input.documentIds.length > REQUIREMENT_DOCUMENTS_MAX) errors.documents = `Link ${REQUIREMENT_DOCUMENTS_MAX} documents or fewer.`;
+  const milestone = milestoneError(input.milestone ?? "");
+  if (milestone) errors.milestone = milestone;
   input.criteria.forEach((criterion, index) => {
     if (!criterion) errors.items[index] = "Enter the criterion or remove it.";
     else if (criterion.length > CRITERION_MAX) errors.items[index] = `Use ${CRITERION_MAX.toLocaleString("en")} characters or fewer.`;
   });
-  return errors.title || errors.description || errors.criteria || errors.documents || Object.keys(errors.items).length ? errors : null;
+  return errors.title || errors.description || errors.criteria || errors.documents || errors.milestone || Object.keys(errors.items).length
+    ? errors : null;
+}
+
+/** Returns the message for a trimmed milestone label, or null when it is acceptable. Empty means no milestone. */
+export function milestoneError(milestone: string): string | null {
+  return milestone.length > MILESTONE_MAX ? `Use ${MILESTONE_MAX} characters or fewer.` : null;
+}
+
+/** Reports whether the criteria on a form differ from the saved ones, as the API compares them: trimmed, in order. */
+export function criteriaChanged(saved: string[], entered: string[]): boolean {
+  const trimmed = entered.map(text => text.trim());
+  return trimmed.length !== saved.length || trimmed.some((text, index) => text !== saved[index]);
 }
 
 /** Maps a 400 problem-details body to requirement messages. Fields it does not recognize become a form message. */
@@ -153,6 +175,7 @@ export function requirementProblemErrors(problem: unknown, fallback: string): Re
       else if (field === "description") errors.description = message;
       else if (field === "acceptanceCriteria") errors.criteria = message;
       else if (field === "documentIds") errors.documents = message;
+      else if (field === "milestone") errors.milestone = message;
       else if (item) errors.items[Number(item[1])] = message;
       else continue;
       recognized = true;

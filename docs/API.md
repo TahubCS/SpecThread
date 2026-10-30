@@ -42,10 +42,17 @@ to the project's team; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/archive` | team Owner/Admin | | 200 `Project` (idempotent) |
 | POST | `/projects/{projectId}/restore` | team Owner/Admin | | 200 `Project` (idempotent) |
 | GET | `/teams/{teamId}/projects` | team member | query `archived=true` for archive; default false | 200 `Project[]`, by name then ID |
-| GET | `/projects/{projectId}/requirements` | member | query `archived=true` for archived only; default active only | 200 `RequirementSummary[]` (oldest first) |
-| POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria, documentIds? }` | 201 `Requirement` |
+| GET | `/projects/{projectId}/requirements` | member | query `archived=true` for archived only; default active only; `milestone=` for one label | 200 `RequirementSummary[]` (oldest first) |
+| POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria, documentIds?, milestone? }` | 201 `Requirement` |
 | GET | `/requirements/{requirementId}` | member | | 200 `Requirement` |
-| PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria, documentIds?, version }` | 200 `Requirement` |
+| PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria, documentIds?, version, confirmCriteriaChange? }` | 200 `Requirement` (409 `accepted_criteria_change`) |
+| GET | `/requirements/{requirementId}/criteria-versions` | member | | 200 `CriteriaVersion[]` (newest first) |
+| GET | `/requirements/{requirementId}/criteria-versions/{number}` | member | | 200 `CriteriaVersion` |
+| PUT | `/requirements/{requirementId}/milestone` | member | `{ milestone }` (null or empty clears) | 200 `{ milestone }` |
+| GET | `/projects/{projectId}/milestones` | member | | 200 `string[]` (labels on active requirements, in order) |
+| GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
+| POST | `/requirements/{requirementId}/follow-ups` | member | `{ originalRequirementId }` | 201 `FollowUpLink` |
+| DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | member | | 204 |
 | POST | `/requirements/{requirementId}/archive` | member | | 200 `Requirement` (idempotent) |
 | POST | `/requirements/{requirementId}/restore` | member | | 200 `Requirement` (idempotent; 409 in an archived project) |
 | GET | `/projects/{projectId}/members` | member | | 200 `ProjectMember[]` (owner first, then by name) |
@@ -122,6 +129,21 @@ every save; a document that stays linked keeps its `linkedBy` and `linkedAt` (AD
 A document can be newly linked only while it is active; one archived after it was linked
 stays linked. Anything else is 400 on `documentIds`.
 
+Every saved change to the ordered, trimmed criteria texts adds a criteria version;
+creating writes version 1 (ADR-051). When the latest decision accepted the current
+criteria version, a `PUT` that changes the criteria is 409 with
+`code: "accepted_criteria_change"` and `acceptedCriteriaVersion`, and changes nothing,
+unless it sends `confirmCriteriaChange: true`. The decision then stays as it was, and the
+list reports `review.criteriaChanged`.
+
+A requirement has at most one `milestone` label of up to 100 characters (ADR-053);
+longer is 400 on `milestone`. Setting it through `/milestone` does not change the version
+or `updatedBy`. `?milestone=` matches the trimmed label exactly. A follow-up link
+(ADR-052) needs an active requirement of the same project, other than itself and not
+already following it up; it is 400 on `originalRequirementId` otherwise, and at most 20
+per requirement. A link that exists already, or an archived requirement or project, is
+409. Links do not change the version.
+
 Create and every save set `updatedBy` to the caller and `updatedAt` to now (ADR-050).
 An archived requirement stays readable but refuses saves, evidence changes, and review
 decisions with 409 until it is restored. Restoring is not an edit: it keeps the
@@ -141,17 +163,33 @@ type RequirementSummary = {
   // How many evidence links of any kind the requirement has. Only on the list.
   evidenceCount: number;
   // The latest decision, or null. Only on the list; a requirement's page reads /reviews.
-  review: { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean } | null;
+  // criteriaChanged: the criteria changed after it, so it needs review (ADR-051).
+  review: { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean;
+    criteriaChanged: boolean; criteriaVersion: number | null } | null;
+  milestone: string | null; // ADR-053
+  criteriaVersion: number | null; // the current criteria version; null only for one created during a deploy
+  // Whether the linked code meets the built-in evidence rule (ADR-053). Only on the list.
+  evidenceComplete: boolean;
+};
+type CriteriaVersion = { number: number; criteria: string[]; createdBy: string; createdAt: string };
+type FollowUpLink = { requirementId: string; title: string; archivedAt: string | null; linkedBy: string; linkedAt: string };
+type FollowUps = {
+  followUpOf: FollowUpLink[]; // requirements this one follows up, by title
+  followedUpBy: FollowUpLink[]; // requirements that follow this one up, by title
+  // Every link added or removed that touches this requirement, newest first. requirementId is the follow-up.
+  history: { id: string; requirementId: string; requirementTitle: string; originalRequirementId: string;
+    originalTitle: string; action: "added" | "removed"; actor: string; occurredAt: string }[];
 };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {
   id: string; requirementId: string; decision: Decision; note: string;
   requirementVersion: number; // the version the reviewer saw
+  criteriaVersion: number | null; // the criteria version it was made against; null when not recorded (ADR-051)
   // The evidence links as they were when the decision was made. label is "#9", a short SHA, or a tag.
   evidence: { id: string; kind: string; label: string; title: string; state: string | null }[];
   decidedBy: string; decidedAt: string;
 };
-type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
+type Requirement = Omit<RequirementSummary, "review" | "evidenceCount" | "evidenceComplete"> & {
   description: string; createdBy: string; // createdAt and updatedAt come from RequirementSummary
   updatedBy: string; // who saved the current version; the creator until someone edits it
   acceptanceCriteria: { id: string; text: string; position: number }[];
@@ -287,7 +325,8 @@ from protected pages to /onboarding, and POST /projects returns 409 with
 `code: "onboarding_required"` for an incomplete existing account. Anonymous requests
 remain 401, and an account without a user row remains 403. Project access follows the containing team as described above.
 
-Not yet available: activity and audit history.
+Not yet available: activity and audit history. The only change histories kept are
+criteria versions (ADR-051) and follow-up link changes (ADR-052).
 
 
 Team management uses authenticated server actions. Role changes require explicit

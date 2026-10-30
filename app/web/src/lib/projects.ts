@@ -1,4 +1,4 @@
-import { parseReviewSummary, type ReviewSummary } from "./reviews";
+import { isAccepted, isVersion, parseReviewSummary, type ReviewSummary } from "./reviews";
 
 /**
  * A project as returned by the SpecThread API (docs/API.md). It belongs to a team; `teamRole`
@@ -52,10 +52,16 @@ export function fieldError(problem: unknown, field: string): string | null {
   return Array.isArray(messages) && typeof messages[0] === "string" ? messages[0] : null;
 }
 
-/** A requirement as listed for a project (docs/API.md). `evidenceCount` is how many evidence links it has; `review` is its latest decision, or null. */
+/**
+ * A requirement as listed for a project (docs/API.md). `evidenceCount` is how many evidence links
+ * it has; `review` is its latest decision, or null. `milestone` is its milestone or sprint label
+ * (ADR-053), `criteriaVersion` its current acceptance-criteria version (ADR-051), and
+ * `evidenceComplete` whether its evidence meets the built-in evidence rule (ADR-053).
+ */
 export type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null; evidenceCount: number; review: ReviewSummary | null;
+  milestone: string | null; criteriaVersion: number | null; evidenceComplete: boolean;
 };
 
 /** A project member with the name and email other members may see (docs/API.md). */
@@ -68,23 +74,56 @@ export function isUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
-/** Validates a requirement list from an API response. Throws when the shape is not the documented one. */
+/**
+ * Reads a field that may be null, such as a milestone label or criteria version. A missing field,
+ * as from the previous API (ADR-044), reads as null; a value of the wrong shape as undefined.
+ */
+export function optionalField<T>(value: unknown, valid: (value: unknown) => value is T): T | null | undefined {
+  if (value === undefined || value === null) return null;
+  return valid(value) ? value : undefined;
+}
+
+export const isLabel = (value: unknown): value is string => typeof value === "string" && value.length > 0;
+
+/**
+ * Validates a requirement list from an API response. Throws when the shape is not the documented one.
+ * The previous API (ADR-044) sends no `milestone`, `criteriaVersion`, or `evidenceComplete`.
+ */
 export function parseRequirementSummaries(value: unknown): RequirementSummary[] {
   if (!Array.isArray(value)) throw new Error("The API returned an unexpected requirement list.");
   return value.map((entry: unknown) => {
     const item = entry as Record<string, unknown> | null;
+    const milestone = optionalField(item?.milestone, isLabel);
+    const criteriaVersion = optionalField(item?.criteriaVersion, isVersion);
+    const evidenceComplete = item?.evidenceComplete === undefined ? false : item.evidenceComplete;
     if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
         typeof item.title !== "string" || typeof item.version !== "number" || !isDate(item.createdAt) ||
         !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string") ||
-        typeof item.evidenceCount !== "number" || !Number.isInteger(item.evidenceCount) || item.evidenceCount < 0) {
+        typeof item.evidenceCount !== "number" || !Number.isInteger(item.evidenceCount) || item.evidenceCount < 0 ||
+        milestone === undefined || criteriaVersion === undefined || typeof evidenceComplete !== "boolean") {
       throw new Error("The API returned an unexpected requirement.");
     }
     return {
       id: item.id, projectId: item.projectId, title: item.title, version: item.version,
       createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt, evidenceCount: item.evidenceCount,
-      review: parseReviewSummary(item.review),
+      review: parseReviewSummary(item.review), milestone, criteriaVersion, evidenceComplete,
     };
   });
+}
+
+/** Counts a set of listed requirements, such as one milestone, by Evidence complete and by Accepted. */
+export function requirementCounts(requirements: Pick<RequirementSummary, "evidenceComplete" | "review">[]) {
+  return {
+    total: requirements.length,
+    evidenceComplete: requirements.filter(requirement => requirement.evidenceComplete).length,
+    accepted: requirements.filter(requirement => isAccepted(requirement.review)).length,
+  };
+}
+
+/** Validates the milestone labels in use in a project. Throws when the shape is not the documented one. */
+export function parseMilestones(value: unknown): string[] {
+  if (!Array.isArray(value) || !value.every(isLabel)) throw new Error("The API returned an unexpected milestone list.");
+  return value;
 }
 
 /** Validates a member list from an API response. Throws when the shape is not the documented one. */

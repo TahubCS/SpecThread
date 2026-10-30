@@ -539,6 +539,11 @@ namespace SpecThread.Api.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("Milestone")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("milestone");
+
                     b.Property<Guid>("ProjectId")
                         .HasColumnType("uuid")
                         .HasColumnName("project_id");
@@ -575,9 +580,58 @@ namespace SpecThread.Api.Migrations
 
                     b.ToTable("requirements", "public", t =>
                         {
+                            t.HasCheckConstraint("ck_requirements_milestone", "milestone IS NULL OR (btrim(milestone) = milestone AND length(milestone) BETWEEN 1 AND 100)");
+
                             t.HasCheckConstraint("ck_requirements_title", "length(btrim(title)) > 0");
 
                             t.HasCheckConstraint("ck_requirements_version", "version > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementCriteriaVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Criteria")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("criteria");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("RequirementId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("requirement_criteria_versions", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_criteria_versions_criteria", "jsonb_typeof(criteria) = 'array'");
+
+                            t.HasCheckConstraint("ck_requirement_criteria_versions_number", "number > 0");
                         });
                 });
 
@@ -785,6 +839,87 @@ namespace SpecThread.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementFollowUp", b =>
+                {
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<Guid>("OriginalRequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_requirement_id");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("linked_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("LinkedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("linked_by");
+
+                    b.HasKey("RequirementId", "OriginalRequirementId");
+
+                    b.HasIndex("LinkedBy");
+
+                    b.HasIndex("OriginalRequirementId");
+
+                    b.ToTable("requirement_follow_ups", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_follow_ups_distinct", "requirement_id <> original_requirement_id");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementFollowUpEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("OriginalRequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("original_requirement_id");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Actor");
+
+                    b.HasIndex("OriginalRequirementId");
+
+                    b.HasIndex("RequirementId");
+
+                    b.ToTable("requirement_follow_up_events", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_follow_up_events_action", "action IN ('added', 'removed')");
+
+                            t.HasCheckConstraint("ck_requirement_follow_up_events_distinct", "requirement_id <> original_requirement_id");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.RequirementReview", b =>
                 {
                     b.Property<Guid>("Id")
@@ -792,6 +927,10 @@ namespace SpecThread.Api.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<int?>("CriteriaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("criteria_version");
 
                     b.Property<DateTime>("DecidedAt")
                         .ValueGeneratedOnAdd()
@@ -837,6 +976,8 @@ namespace SpecThread.Api.Migrations
 
                     b.ToTable("requirement_reviews", "public", t =>
                         {
+                            t.HasCheckConstraint("ck_requirement_reviews_criteria_version", "criteria_version IS NULL OR criteria_version > 0");
+
                             t.HasCheckConstraint("ck_requirement_reviews_decision", "decision IN ('accepted', 'rejected', 'more_evidence')");
 
                             t.HasCheckConstraint("ck_requirement_reviews_evidence", "jsonb_typeof(evidence) = 'array'");
@@ -1145,6 +1286,21 @@ namespace SpecThread.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementCriteriaVersion", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.RequirementDocument", b =>
                 {
                     b.HasOne("SpecThread.Api.Data.Document", null)
@@ -1171,6 +1327,48 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.AuthUser", null)
                         .WithMany()
                         .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementFollowUp", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalRequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementFollowUpEvent", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("Actor")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("OriginalRequirementId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

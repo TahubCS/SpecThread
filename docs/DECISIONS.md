@@ -423,7 +423,8 @@ Consequences: No schema change or migration was needed. Member management is
 covered by ADR-025. Invitations, ownership transfer, teams, unarchiving, and audit
 events are not yet implemented. Each
 API call from Next.js performs a token exchange. Criteria IDs change on every update,
-so later evidence links must not reference criterion IDs without revisiting this.
+so later evidence links must not reference criterion IDs without revisiting this
+(ADR-051 later keeps each saved criteria list as a numbered version, still not by ID).
 
 ADR-025: Owners add existing accounts to projects by email
 
@@ -814,9 +815,10 @@ looks only at who created the requirement, not at who edited it last. A decision
 can be made with no evidence linked. Nothing is locked after acceptance: an edit or
 a changed link marks the decision outdated and waits for a new one. There is no
 assignment of reviewers, no notification, and no evidence policy; "My reviews" and
-Inbox stay previews. The snapshot does not record check results or release
+Inbox stay previews (ADR-053 later adds a fixed Evidence complete rule). The snapshot does not record check results or release
 contents, and a refresh that changes a link's state does not mark the decision
-outdated. The list endpoint reads every decision of the listed requirements to find
+outdated. ADR-051 later records the criteria version each decision was made against and
+asks for confirmation before accepted criteria change. The list endpoint reads every decision of the listed requirements to find
 the latest. Rolling the migration back deletes every recorded decision.
 
 ADR-039: Teams foundation with member-only reads and one owner
@@ -1224,9 +1226,130 @@ that was current before archiving still is. While archived, saves, evidence chan
 and review decisions keep answering 409.
 
 Consequences: Who made earlier edits, and what they changed, is not recorded; a
-history table would extend this. Archiving is no longer final, so anyone in the team can
+history table would extend this (ADR-051 later keeps every version of the criteria, though
+not of the title or description). Archiving is no longer final, so anyone in the team can
 undo it. Migration RequirementUpdatedBy adds the column, its index, and a foreign key to
 `user`; its rollback drops only the column.
+
+ADR-051: Acceptance criteria are versioned, and changing accepted criteria needs confirmation
+
+Status: Accepted
+
+Context: Two stories from the scenario "Changing a requirement after its code was
+merged". Danielle (Tech Lead) wants a warning before editing the criteria of an Accepted
+requirement, so a client's approval is not silently changed: the warning explains that
+the acceptance applies to the previous criteria; confirming returns the requirement to
+needing review with the earlier decision kept in its history; cancelling changes
+nothing. Robert (Client Reviewer) wants every saved change to the criteria kept as a
+timestamped version, each decision to show the version it was made against, and earlier
+versions to open read-only. Criteria rows were replaced on every save, so earlier text
+was lost (ADR-024), and decisions stored only the requirement version (ADR-038).
+
+Decision: `requirement_criteria_versions` keeps each requirement's criteria as an
+ordered JSON array of texts, numbered from 1, with who saved it and when. Creating a
+requirement writes version 1; a save writes the next version only when the ordered,
+trimmed texts differ from the latest, so title, description, and document changes do
+not. Rows are only added. `requirement_reviews.criteria_version` records the version a
+decision was made against. Members read the versions through
+`GET /requirements/{id}/criteria-versions` and `/criteria-versions/{number}`; archived
+requirements stay readable.
+
+When the latest decision is `accepted` and was made against the current criteria
+version, a save that changes the criteria is refused with 409 and
+`code: "accepted_criteria_change"` unless it sends `confirmCriteriaChange: true`. The
+form shows the warning before sending anything: who accepted which version and when,
+that the acceptance applies to the previous criteria, and that saving will need a new
+review. "Keep editing" closes it and sends nothing; "Save and request a new review"
+saves with the confirmation. The 409 also catches an acceptance recorded after the form
+was loaded. No decision row is written on confirmation: "needs review" is derived, like
+"outdated". The list's `review.criteriaChanged` is true when the latest decision's
+criteria version differs from the current one, and the list then shows "Needs review"
+(amber, ADR-027) instead of the decision; the requirement page explains it and links
+the decision to the version it was made on. The earlier decision stays in the history
+unchanged. Only the latest decision counts: after a newer rejection, criteria change
+without confirmation.
+
+The migration is additive so the API still running during a deploy keeps working
+(ADR-044): the review column is nullable. It writes version 1 for every existing
+requirement from its current criteria, credited to the last editor at `updated_at`, and
+stamps version 1 on decisions made on the current requirement version, which saw those
+criteria; other decisions stay unstamped and read "Criteria version not recorded".
+
+Consequences: A requirement the previous API saved during a deploy has criteria that no
+version holds; the next save or decision first adds a catch-up version credited to its
+last editor, and a decision the previous API recorded has no criteria version. Only
+criteria are versioned; earlier titles and descriptions are still not kept. Reordering
+criteria makes a new version and so needs a new review. The Requirement history page
+now lists the versions with the decisions made on each. Migration
+RequirementCriteriaVersions adds the table (RLS on, browser grants revoked) and the
+column; its rollback drops both, losing every version and every decision's stamp.
+
+ADR-052: Requirements can be marked as follow-ups of other requirements
+
+Status: Accepted
+
+Context: From the same scenario, Danielle wants to mark a requirement as a follow-up of
+another so later changes are traceable without rewriting what was accepted: a
+requirement can reference one or more related requirements in the same project, both
+show the relationship with a link to the other, and adding or removing it is recorded
+with a name and a timestamp. The user chose a directional "follow-up of" link over a
+symmetric "related" one.
+
+Decision: `requirement_follow_ups` holds one row per link, from the follow-up to the
+requirement it follows up, with who linked it and when. `requirement_follow_up_events`
+records every add and remove with the person and time; its rows are only added. Any team
+member links (`POST /requirements/{id}/follow-ups { originalRequirementId }`) and unlinks
+(`DELETE /requirements/{id}/follow-ups/{originalId}`) under the team lock (ADR-048). The
+other requirement must be in the same project and active; a requirement can't follow up
+itself, a link can't be added in both directions, and a requirement follows up at most
+20 others (400). An existing link, or an archived requirement or project, is 409. The
+GET returns the links both ways and every change touching the requirement, newest
+first. The requirement page shows "Follow-up of" with Remove and an add control, and
+"Followed up by", each linking to the other requirement; the history is on the page and
+on the Requirement history page. Links do not change either requirement's version, so
+they never make a decision outdated.
+
+Consequences: Only direct links are shown; chains are followed one page at a time. An
+archived original stays linked and is marked Archived. The history shows current titles,
+not the titles at the time. Migration RequirementFollowUps adds both tables (RLS on,
+browser grants revoked); its rollback drops them, losing the links and their history.
+
+ADR-053: One milestone label per requirement, and a fixed Evidence complete rule
+
+Status: Accepted
+
+Context: Danielle (Tech Lead) and Angela (Instructor), in the scenarios "Signing off a
+contract milestone" and "Checking student team progress", want to review one set of
+requirements at a time: a requirement can be assigned to one milestone or sprint label,
+the list can be filtered by it, and the filtered list shows how many are Evidence
+complete and Accepted. No evidence policy existed, so "Evidence complete" was only
+product language (docs/PROJECT.md). The user chose a free-text label over a managed
+milestone list, and a fixed built-in rule over a configurable policy.
+
+Decision: `requirements.milestone` holds an optional label of up to 100 characters,
+trimmed, empty meaning none. It is set when creating a requirement or through
+`PUT /requirements/{id}/milestone`, which any member can call. Setting it is not an
+edit: the version and last editor stay, so no decision becomes outdated.
+`GET /projects/{id}/requirements?milestone=` filters by exact label and combines with
+`archived=true`; `GET /projects/{id}/milestones` lists the labels on active requirements
+for the filter and for suggestions. Each listed requirement carries `milestone` and
+`evidenceComplete`.
+
+A requirement is Evidence complete when at least one pull request or commit is linked,
+the checks of every linked pull request and commit could be read, none of them failed,
+is still running, or was cancelled (passed, skipped, and neutral are fine), and at least
+one passed. Issues and releases neither count nor block. The rule lives in the API
+(`EvidencePolicy`), not the web, and stays separate from Accepted (ADR-004). The list
+shows counts above the rows ("Sprint 1 · 2 requirements · 1 Evidence complete · 1
+Accepted"); Accepted counts a latest decision of accepted that is neither outdated nor on
+earlier criteria.
+
+Consequences: Labels match exactly, so "Sprint 1" and "sprint 1" are two milestones;
+the suggestions reduce that. There is no milestone record, date, or rename; the
+Milestones page stays a placeholder. The rule is a fixed stand-in until a configurable
+evidence policy exists, and check results are as fresh as the last GitHub refresh.
+Migration RequirementMilestone adds the column and its check; its rollback drops it,
+losing every label.
 
 ADR-NNN: Title
 

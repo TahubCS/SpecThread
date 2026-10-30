@@ -126,7 +126,7 @@ Use precise product language:
 
 “Check passed” means a recorded automated check reported success.
 
-“Evidence complete” means the configured evidence policy is satisfied.
+“Evidence complete” means the configured evidence policy is satisfied. Until a configurable policy exists, a fixed rule applies: linked pull requests or commits whose recorded checks all passed or were skipped (ADR-053).
 
 “Accepted” means an authorized human approved the requirement.
 

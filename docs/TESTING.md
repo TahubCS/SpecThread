@@ -68,7 +68,8 @@ which the release evidence test uses to check that stable answers are not asked 
 web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
-The Teams API tests use 5116, team management 5117, invitations 5118, documents 5119, and requirement documents 5120 (moved from
+The Teams API tests use 5116, team management 5117, invitations 5118, documents 5119, requirement documents 5120, criteria
+versions 5121, follow-ups 5122, and milestones 5123 (requirement documents moved from
 5107 to 5109 when the branches were merged, because the proxy and GitHub stand-ins
 below already use those).
 scripts/start-test-web.mjs also starts the API on 5106 for browser tests. That instance uses
@@ -260,6 +261,35 @@ currently require network access during the web build.
   ticking a document and opening it from the requirement, an archived link marked and
   then unticked, ticks kept after a refused save with the API's message beside them,
   and keyboard ticking at 390px. Not exercised: 20 documents through the browser.
+- Criteria versions and the accepted-criteria warning (ADR-051). tests/schema/criteria-versions.spec.ts
+  (API on 5121): version 1 on create, a new version only when the ordered, trimmed
+  criteria change, who and when, single versions and 404 for an unknown number, archived
+  requirements still readable, 404 for outsiders and 401 anonymous; the 409
+  `accepted_criteria_change` without confirmation that changes nothing, the confirmed
+  save, the accepted decision kept on version 1 with `criteriaChanged` on the list, no
+  confirmation after a newer rejection; a catch-up version for criteria saved by the
+  previous API; and the migration's RLS, constraints, backfill of version 1 and of
+  decisions on the current requirement version, and rollback. tests/e2e/reviews.spec.ts:
+  the warning after an acceptance, its focus and text, Keep editing sending nothing, a
+  title change saving without it, confirming to "Needs review" on the page and the list,
+  the read-only version page with its decision, the Requirement history page, and an
+  acceptance recorded while the form was open caught on save.
+- Follow-ups (ADR-052). tests/schema/follow-ups.spec.ts (API on 5122): links shown both
+  ways with their history, no version change, removal recorded; refusals for no
+  requirement, itself, another project, an unknown ID, a duplicate, the reverse link,
+  and more than 20; archived requirements and projects (also while waiting for the team
+  lock); 404 for outsiders, 401 anonymous; table constraints, RLS, and rollback.
+  tests/e2e/follow-ups.spec.ts: adding, following the link both ways, removing, the
+  change list on the page and the history page, and a failed and a refused add.
+- Milestones and Evidence complete (ADR-053). tests/schema/milestones.spec.ts (API on
+  5123): a label set on create, set and cleared later without a version change, the
+  length limit, archived and outsider refusals; the exact-label filter alone and with
+  `archived=true`, the labels endpoint; every case of the Evidence complete rule with
+  evidence rows and checks inserted in the database; the column's check and rollback.
+  tests/e2e/milestones.spec.ts: a label on create and on the page, filtering, the counts
+  with seeded evidence and an acceptance, the empty state, 390px without horizontal
+  scrolling, and a failed save keeping the label. Not exercised: 20 follow-ups through
+  the browser, and an Evidence complete requirement fed by the fake GitHub.
 - Last editor, archive view, and restore (ADR-050): tests/schema/product-api.spec.ts
   checks `updatedBy` after create and after another member's save; default and
   `archived=true` lists; an archived requirement readable but refusing saves and

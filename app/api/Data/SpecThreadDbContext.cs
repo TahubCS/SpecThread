@@ -9,6 +9,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Requirement> Requirements => Set<Requirement>();
     public DbSet<AcceptanceCriterion> AcceptanceCriteria => Set<AcceptanceCriterion>();
+    public DbSet<RequirementCriteriaVersion> RequirementCriteriaVersions => Set<RequirementCriteriaVersion>();
     public DbSet<ProjectRepository> ProjectRepositories => Set<ProjectRepository>();
     public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
     public DbSet<RequirementReview> RequirementReviews => Set<RequirementReview>();
@@ -19,6 +20,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<Document> Documents => Set<Document>();
     public DbSet<DocumentContent> DocumentContents => Set<DocumentContent>();
     public DbSet<RequirementDocument> RequirementDocuments => Set<RequirementDocument>();
+    public DbSet<RequirementFollowUp> RequirementFollowUps => Set<RequirementFollowUp>();
+    public DbSet<RequirementFollowUpEvent> RequirementFollowUpEvents => Set<RequirementFollowUpEvent>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -135,6 +138,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         {
             table.HasCheckConstraint("ck_requirements_title", "length(btrim(title)) > 0");
             table.HasCheckConstraint("ck_requirements_version", "version > 0");
+            table.HasCheckConstraint("ck_requirements_milestone", "milestone IS NULL OR (btrim(milestone) = milestone AND length(milestone) BETWEEN 1 AND 100)");
         });
         requirement.HasKey(x => x.Id);
         requirement.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
@@ -146,6 +150,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         requirement.Property(x => x.UpdatedAt).HasColumnName("updated_at").HasDefaultValueSql("now()");
         requirement.Property(x => x.UpdatedBy).HasColumnName("updated_by");
         requirement.Property(x => x.ArchivedAt).HasColumnName("archived_at");
+        requirement.Property(x => x.Milestone).HasColumnName("milestone").HasMaxLength(100);
         requirement.Property(x => x.Version).HasColumnName("version").HasDefaultValue(1).IsConcurrencyToken();
         requirement.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
         requirement.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
@@ -164,6 +169,23 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         criterion.Property(x => x.Position).HasColumnName("position");
         criterion.HasIndex(x => new { x.RequirementId, x.Position }).IsUnique();
         criterion.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+
+        var criteriaVersion = model.Entity<RequirementCriteriaVersion>();
+        criteriaVersion.ToTable("requirement_criteria_versions", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_criteria_versions_number", "number > 0");
+            table.HasCheckConstraint("ck_requirement_criteria_versions_criteria", "jsonb_typeof(criteria) = 'array'");
+        });
+        criteriaVersion.HasKey(x => x.Id);
+        criteriaVersion.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        criteriaVersion.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        criteriaVersion.Property(x => x.Number).HasColumnName("number");
+        criteriaVersion.Property(x => x.Criteria).HasColumnName("criteria").HasColumnType("jsonb");
+        criteriaVersion.Property(x => x.CreatedBy).HasColumnName("created_by");
+        criteriaVersion.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+        criteriaVersion.HasIndex(x => new { x.RequirementId, x.Number }).IsUnique();
+        criteriaVersion.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        criteriaVersion.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.Restrict);
 
         var repository = model.Entity<ProjectRepository>();
         repository.ToTable("project_repositories", table =>
@@ -243,6 +265,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         {
             table.HasCheckConstraint("ck_requirement_reviews_decision", "decision IN ('accepted', 'rejected', 'more_evidence')");
             table.HasCheckConstraint("ck_requirement_reviews_version", "requirement_version > 0");
+            table.HasCheckConstraint("ck_requirement_reviews_criteria_version", "criteria_version IS NULL OR criteria_version > 0");
             // Rejecting or asking for more has to say why.
             table.HasCheckConstraint("ck_requirement_reviews_note", "decision = 'accepted' OR length(btrim(note)) > 0");
             table.HasCheckConstraint("ck_requirement_reviews_evidence", "jsonb_typeof(evidence) = 'array'");
@@ -253,6 +276,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         review.Property(x => x.Decision).HasColumnName("decision");
         review.Property(x => x.Note).HasColumnName("note").HasDefaultValue("");
         review.Property(x => x.RequirementVersion).HasColumnName("requirement_version");
+        review.Property(x => x.CriteriaVersion).HasColumnName("criteria_version");
         review.Property(x => x.Evidence).HasColumnName("evidence").HasColumnType("jsonb");
         review.Property(x => x.DecidedBy).HasColumnName("decided_by");
         review.Property(x => x.DecidedAt).HasColumnName("decided_at").HasDefaultValueSql("now()");
@@ -300,5 +324,37 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         citation.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         citation.HasOne<Document>().WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Restrict);
         citation.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var followUp = model.Entity<RequirementFollowUp>();
+        followUp.ToTable("requirement_follow_ups", table =>
+            table.HasCheckConstraint("ck_requirement_follow_ups_distinct", "requirement_id <> original_requirement_id"));
+        followUp.HasKey(x => new { x.RequirementId, x.OriginalRequirementId });
+        followUp.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        followUp.Property(x => x.OriginalRequirementId).HasColumnName("original_requirement_id");
+        followUp.Property(x => x.LinkedBy).HasColumnName("linked_by");
+        followUp.Property(x => x.LinkedAt).HasColumnName("linked_at").HasDefaultValueSql("now()");
+        followUp.HasIndex(x => x.OriginalRequirementId);
+        followUp.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        followUp.HasOne<Requirement>().WithMany().HasForeignKey(x => x.OriginalRequirementId).OnDelete(DeleteBehavior.Restrict);
+        followUp.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var followUpEvent = model.Entity<RequirementFollowUpEvent>();
+        followUpEvent.ToTable("requirement_follow_up_events", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_follow_up_events_action", "action IN ('added', 'removed')");
+            table.HasCheckConstraint("ck_requirement_follow_up_events_distinct", "requirement_id <> original_requirement_id");
+        });
+        followUpEvent.HasKey(x => x.Id);
+        followUpEvent.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        followUpEvent.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        followUpEvent.Property(x => x.OriginalRequirementId).HasColumnName("original_requirement_id");
+        followUpEvent.Property(x => x.Action).HasColumnName("action");
+        followUpEvent.Property(x => x.Actor).HasColumnName("actor");
+        followUpEvent.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasDefaultValueSql("now()");
+        followUpEvent.HasIndex(x => x.RequirementId);
+        followUpEvent.HasIndex(x => x.OriginalRequirementId);
+        followUpEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        followUpEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.OriginalRequirementId).OnDelete(DeleteBehavior.Restrict);
+        followUpEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -11,30 +11,44 @@ export const REVIEW_NOTE_MAX = 2_000;
 /** One evidence link as it was when a decision was made. */
 export type ReviewedEvidence = { id: string; kind: string; label: string; title: string; state: string | null };
 
-/** A person's decision on a requirement (docs/API.md). `evidence` is what was linked at that moment. */
+/**
+ * A person's decision on a requirement (docs/API.md). `evidence` is what was linked at that moment.
+ * `criteriaVersion` is the acceptance-criteria version it was made against, or null when that was
+ * not recorded (ADR-051).
+ */
 export type Review = {
   id: string; requirementId: string; decision: Decision; note: string; requirementVersion: number;
-  evidence: ReviewedEvidence[]; decidedBy: string; decidedAt: string;
+  criteriaVersion: number | null; evidence: ReviewedEvidence[]; decidedBy: string; decidedAt: string;
 };
 
-/** The latest decision on a requirement, as lists show it. */
-export type ReviewSummary = { decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean };
+/**
+ * The latest decision on a requirement, as lists show it. `criteriaChanged` means the acceptance
+ * criteria have changed since, so the decision applies to an earlier version and it needs review.
+ */
+export type ReviewSummary = {
+  decision: Decision; decidedBy: string; decidedAt: string; outdated: boolean; criteriaChanged: boolean; criteriaVersion: number | null;
+};
 
 const isDate = (value: unknown): value is string => typeof value === "string" && !Number.isNaN(Date.parse(value));
 const isDecision = (value: unknown): value is Decision => DECISIONS.includes(value as Decision);
+export const isVersion = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value > 0;
 
-/** Validates one decision from an API response. Throws when the shape is not the documented one. */
+/**
+ * Validates one decision from an API response. Throws when the shape is not the documented one.
+ * The previous API (ADR-044) sends no `criteriaVersion`; it reads as not recorded.
+ */
 export function parseReview(value: unknown): Review {
   const item = value as Record<string, unknown> | null;
+  const criteriaVersion = item?.criteriaVersion === undefined ? null : item.criteriaVersion;
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.requirementId !== "string" ||
       !isDecision(item.decision) || typeof item.note !== "string" || typeof item.requirementVersion !== "number" ||
       !Number.isInteger(item.requirementVersion) || item.requirementVersion < 1 || !Array.isArray(item.evidence) ||
-      typeof item.decidedBy !== "string" || !isDate(item.decidedAt)) {
+      typeof item.decidedBy !== "string" || !isDate(item.decidedAt) || (criteriaVersion !== null && !isVersion(criteriaVersion))) {
     throw new Error("The API returned an unexpected review.");
   }
   return {
     id: item.id, requirementId: item.requirementId, decision: item.decision, note: item.note,
-    requirementVersion: item.requirementVersion, decidedBy: item.decidedBy, decidedAt: item.decidedAt,
+    requirementVersion: item.requirementVersion, criteriaVersion, decidedBy: item.decidedBy, decidedAt: item.decidedAt,
     evidence: item.evidence.map((entry: unknown) => {
       const link = entry as Record<string, unknown> | null;
       if (typeof link !== "object" || link === null || typeof link.id !== "string" || typeof link.kind !== "string" ||
@@ -52,15 +66,38 @@ export function parseReviews(value: unknown): Review[] {
   return value.map(parseReview);
 }
 
-/** Validates the latest-decision field of a listed requirement. Null means it has not been reviewed. */
+/**
+ * Validates the latest-decision field of a listed requirement. Null means it has not been reviewed.
+ * The previous API (ADR-044) sends neither `criteriaChanged` nor `criteriaVersion`.
+ */
 export function parseReviewSummary(value: unknown): ReviewSummary | null {
   if (value === null) return null;
   const item = value as Record<string, unknown>;
-  if (typeof item !== "object" || !isDecision(item.decision) || typeof item.decidedBy !== "string" || !isDate(item.decidedAt) ||
-      typeof item.outdated !== "boolean") {
+  const criteriaChanged = item?.criteriaChanged === undefined ? false : item.criteriaChanged;
+  const criteriaVersion = item?.criteriaVersion === undefined ? null : item.criteriaVersion;
+  if (typeof item !== "object" || item === null || !isDecision(item.decision) || typeof item.decidedBy !== "string" || !isDate(item.decidedAt) ||
+      typeof item.outdated !== "boolean" || typeof criteriaChanged !== "boolean" || (criteriaVersion !== null && !isVersion(criteriaVersion))) {
     throw new Error("The API returned an unexpected review.");
   }
-  return { decision: item.decision, decidedBy: item.decidedBy, decidedAt: item.decidedAt, outdated: item.outdated };
+  return {
+    decision: item.decision, decidedBy: item.decidedBy, decidedAt: item.decidedAt, outdated: item.outdated, criteriaChanged, criteriaVersion,
+  };
+}
+
+/**
+ * The status a listed requirement shows: "Needs review" when its criteria changed after the
+ * latest decision (ADR-051), otherwise that decision, marked outdated when the requirement or its
+ * evidence changed since, or "Not reviewed".
+ */
+export function reviewStatus(review: ReviewSummary | null): { text: string; tone: Decision | "needs-review" | null; outdated: boolean } {
+  if (!review) return { text: "Not reviewed", tone: null, outdated: false };
+  if (review.criteriaChanged) return { text: "Needs review", tone: "needs-review", outdated: false };
+  return { text: `${decisionText[review.decision]}${review.outdated ? ", outdated" : ""}`, tone: review.decision, outdated: review.outdated };
+}
+
+/** Reports whether a listed requirement counts as Accepted: its latest decision accepted what is there now. */
+export function isAccepted(review: ReviewSummary | null): boolean {
+  return review?.decision === "accepted" && !review.outdated && !review.criteriaChanged;
 }
 
 /** Returns the message for a decision that cannot be sent as it is, or null. Rejecting or asking for more needs a reason. */

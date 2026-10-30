@@ -4,9 +4,11 @@ import { cache } from "react";
 import { apiFetch } from "./api";
 import { auth } from "./auth";
 import {
-  isUuid, parseMembers, parseProject, parseRequirementSummaries,
+  isUuid, parseMembers, parseMilestones, parseProject, parseRequirementSummaries,
   type Project, type ProjectMember, type RequirementSummary,
 } from "./projects";
+import { parseCriteriaVersion, parseCriteriaVersions, type CriteriaVersion } from "./criteria-versions";
+import { parseFollowUps, type FollowUps } from "./follow-ups";
 import { parseDocument, parseDocuments, type ProjectDocument } from "./documents";
 import { parseEvidenceList, type Evidence } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
@@ -31,11 +33,27 @@ export const requireProject = cache(async (projectId: string): Promise<Project> 
   return parseProject(body);
 });
 
-/** Lists a project's active requirements, or only its archived ones, oldest first. Call after `requireProject`. */
-export const listRequirements = cache(async (projectId: string, archived = false): Promise<RequirementSummary[]> => {
-  const body = isUuid(projectId) ? await read(`/projects/${projectId}/requirements${archived ? "?archived=true" : ""}`) : null;
+/**
+ * Lists a project's active requirements, or only its archived ones, oldest first; with a
+ * milestone, only those with that label (ADR-053). Call after `requireProject`.
+ */
+export const listRequirements = cache(async (projectId: string, archived = false, milestone = ""): Promise<RequirementSummary[]> => {
+  const query = new URLSearchParams();
+  if (archived) query.set("archived", "true");
+  if (milestone) query.set("milestone", milestone);
+  const search = query.size ? `?${query}` : "";
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/requirements${search}`) : null;
   if (body === null) notFound();
   return parseRequirementSummaries(body);
+});
+
+/**
+ * Lists the milestone labels used on a project's active requirements, in order. Call after
+ * `requireProject`. The previous API (ADR-044) answers 404, which reads as none.
+ */
+export const listMilestones = cache(async (projectId: string): Promise<string[]> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/milestones`) : null;
+  return body === null ? [] : parseMilestones(body);
 });
 
 /** Lists a project's members, owner first. Call after `requireProject`. */
@@ -75,6 +93,32 @@ export const listReviews = cache(async (requirementId: string): Promise<Review[]
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/reviews`) : null;
   if (body === null) notFound();
   return parseReviews(body);
+});
+
+/**
+ * Lists a requirement's acceptance-criteria versions, newest first (ADR-051). Call after
+ * `requireRequirement`. The previous API (ADR-044) answers 404, which reads as none.
+ */
+export const listCriteriaVersions = cache(async (requirementId: string): Promise<CriteriaVersion[]> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/criteria-versions`) : null;
+  return body === null ? [] : parseCriteriaVersions(body);
+});
+
+/** Loads one acceptance-criteria version, or shows the not-found page. Call after `requireRequirement`. */
+export const requireCriteriaVersion = cache(async (requirementId: string, number: string): Promise<CriteriaVersion> => {
+  const body = isUuid(requirementId) && /^[1-9]\d{0,8}$/.test(number)
+    ? await read(`/requirements/${requirementId}/criteria-versions/${number}`) : null;
+  if (body === null) notFound();
+  return parseCriteriaVersion(body);
+});
+
+/**
+ * Loads a requirement's follow-up links and their history (ADR-052). Call after
+ * `requireRequirement`. The previous API (ADR-044) answers 404, which reads as none.
+ */
+export const listFollowUps = cache(async (requirementId: string): Promise<FollowUps> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/follow-ups`) : null;
+  return body === null ? { followUpOf: [], followedUpBy: [], history: [] } : parseFollowUps(body);
 });
 
 /** Lists a project's active documents, newest first. Call after `requireProject`. */
