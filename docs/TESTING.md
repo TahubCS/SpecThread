@@ -152,11 +152,12 @@ currently require network access during the web build.
 - GitHub repository connection (ADR-032). Browser: connecting, seeing the repository
   across the project, and disconnecting after confirmation; no linked GitHub account;
   a rejected GitHub sign-in; no installation; the choice kept after a refused attempt;
-  a repository or installation that disappeared; non-owners and archived projects
-  seeing it read-only; GitHub down, rate limiting, dropping connections, or answering
+  a repository or installation that disappeared; a team Admin who is not the Owner
+  connecting and disconnecting while the Owner sees the name on the project; Members
+  and archived projects seeing it read-only; GitHub down, rate limiting, dropping connections, or answering
   wrongly while listing and while connecting; API failures while connecting and
   disconnecting; and the error page inside the project frame. API (schema suite):
-  owner-only changes, 404 for non-members, refusing other users' installations and
+  changes by the team Owner or an Admin only (a Member gets 403), 404 for non-members, refusing other users' installations and
   repositories and mismatched pairs, input validation, paging past 100 repositories
   and the 500 limit, 502 and 503 mapping, missing app credentials, anonymous 401, the
   user's token never being stored, and the migration's RLS, constraints, and rollback.

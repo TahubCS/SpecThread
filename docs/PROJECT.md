@@ -72,6 +72,18 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: connect a GitHub repository
+
+As a tech lead (Danielle), I want to connect one GitHub repository to a project so that
+SpecThread can read its issues, pull requests, commits, and check results. Source: "Design
+the Box" F2. Acceptance criteria (ADR-032, ADR-041):
+
+Connection uses the SpecThread GitHub App.
+
+Only the team Owner or an Admin can connect or disconnect the repository.
+
+A project connects to at most one repository; the connected repository's name is shown on the project.
+
 MVP scope
 
 The first usable version should support:

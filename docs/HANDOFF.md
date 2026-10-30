@@ -1,6 +1,34 @@
 # Shared handoff
 
-## Current task: Criteria versions, accepted-criteria warning, follow-ups, and milestones (2026-10-29)
+## Current task: Connect a GitHub repository story (2026-10-30)
+
+- Branch: `feature/repository-connection-story`, from `main` at `09848a9` (PR #23 merged).
+- Scope: the story "connect one GitHub repository to a project" (Danielle, Tech Lead;
+  source "Design the Box" F2). All three criteria were already met by ADR-032 and
+  ADR-041; this task verifies them and closes the one test gap.
+  - Uses the SpecThread GitHub App: the repository is chosen from the installations the
+    user's GitHub token shows, and the API confirms the app can act there
+    (`app/api/GitHub/RepositoryEndpoints.cs`).
+  - Team Owner or Admin only: `CanManageTeam`, checked again under the team lock; a
+    Member gets 403, a non-member 404.
+  - At most one repository: `project_repositories` is keyed by project, so connecting
+    again replaces it. The name shows in the project's Properties, in Settings, and on
+    requirement pages.
+- Completed: an Admin who is not the Owner is now tested connecting and disconnecting,
+  through the API and the browser (the Owner sees the name on the project, then "Not
+  connected"). Test names that said "owner" for the Owner-or-Admin rule were corrected.
+  The story is recorded in docs/PROJECT.md, and ADR-032 notes that ADR-041 replaced its
+  owner-only rule.
+- Changed files: `tests/schema/github-repository.spec.ts`, `tests/e2e/repository.spec.ts`,
+  docs PROJECT, DECISIONS (ADR-032 note), TESTING, HANDOFF. No product code or migration.
+- Checks: `npx playwright test tests/schema/github-repository.spec.ts` (8 passed) and
+  `tests/e2e/repository.spec.ts` (26 passed); `npm run lint`, `npm run typecheck`,
+  `git diff --check` passed.
+- Known issues and risks: none new. As before (ADR-032), the repository name is a
+  snapshot from connection time, and the real GitHub is not exercised by tests.
+- Next step: review, commit with the user's approval, and open a PR to `main`.
+
+## Previous task: Criteria versions, accepted-criteria warning, follow-ups, and milestones (2026-10-29, merged as PR #23)
 
 - Branch: `feature/requirement-change-tracking`, from `main` at `8555d75` (PR #22 merged).
 - Scope: four stories from the scenarios "Changing a requirement after its code was
@@ -93,10 +121,10 @@
   - Playwright prints a pg "terminating connection due to administrator command" stack
     from the shared web test database when the run ends; it happens on `main` too and
     does not fail tests.
-- Next step: review the diff, then commit (with the user's approval) and open a PR to
-  `main`. A local Docker database for manual testing (`specthread-local-db`, port 54329)
-  has every migration applied with `dotnet ef database update`. Possible follow-ups: a Milestones page built on the labels, an edit history
-  for titles and descriptions, and a configurable evidence policy.
+- Outcome: merged to `main` as PR #23 (`09848a9`). A local Docker database for manual
+  testing (`specthread-local-db`, port 54329) has every migration applied with
+  `dotnet ef database update`. Possible follow-ups: a Milestones page built on the
+  labels, an edit history for titles and descriptions, and a configurable evidence policy.
 
 ## Previous task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23, merged as PR #22)
 

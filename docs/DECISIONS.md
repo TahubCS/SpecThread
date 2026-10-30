@@ -626,7 +626,8 @@ by creating an installation token. All GitHub calls go through `IGitHubClient`
 (app/api/GitHub). New settings: `GitHub:AppId`, `GitHub:PrivateKey` (PEM; literal
 `\n` accepted), `GitHub:AppSlug`, and optional `GitHub:ApiBaseUrl` for tests. No
 Setup URL or webhook is used. Members read the connection; only the owner connects
-or disconnects; archived projects cannot change it. GitHub being unreachable is 502,
+or disconnects (ADR-041 later changes this to the team's Owner or an Admin); archived
+projects cannot change it. GitHub being unreachable is 502,
 missing or rejected app credentials 503, and a token or repository GitHub does not
 accept 400 on the field.
 
