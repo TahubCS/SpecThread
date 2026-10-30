@@ -10,7 +10,7 @@ import {
 import { parseCriteriaVersion, parseCriteriaVersions, type CriteriaVersion } from "./criteria-versions";
 import { parseFollowUps, type FollowUps } from "./follow-ups";
 import { parseDocument, parseDocuments, type ProjectDocument } from "./documents";
-import { parseEvidenceList, type Evidence } from "./evidence";
+import { parseEvidenceHistory, parseEvidenceList, type Evidence, type EvidenceEvent } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
 import { parseReviews, type Review } from "./reviews";
 
@@ -86,6 +86,15 @@ export const listEvidence = cache(async (requirementId: string): Promise<Evidenc
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence`) : null;
   if (body === null) notFound();
   return parseEvidenceList(body);
+});
+
+/**
+ * Lists every evidence link added to or removed from a requirement, newest first (ADR-054). Call
+ * after `requireRequirement`. Returns null when it can't be read: the previous API (ADR-044) answers 404.
+ */
+export const listEvidenceHistory = cache(async (requirementId: string): Promise<EvidenceEvent[] | null> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence/history`) : null;
+  return body === null ? null : parseEvidenceHistory(body);
 });
 
 /** Lists the decisions recorded on a requirement, newest first. Call after `requireRequirement`. */

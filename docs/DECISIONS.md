@@ -736,7 +736,8 @@ Decision: `requirement_evidence.source` is `manual` or `suggested` (default `man
 migration EvidenceChecks). `linked_by` is always a person: for a suggested link, the
 person who confirmed it. The link endpoint ignores any `source` a caller sends and
 writes `manual`; only a future "confirm a suggestion" endpoint will write
-`suggested`. The requirement page names who confirmed a suggested link. Rules for
+`suggested`. The requirement page names who confirmed a suggested link (ADR-054 later
+names who added every link, and records additions and removals). Rules for
 the AI work that follows: suggestions are kept in their own store and enter
 `requirement_evidence` only when a project member confirms them; AI never records a
 review decision; every core flow works with AI unavailable or switched off; and AI
@@ -1353,6 +1354,48 @@ Milestones page stays a placeholder. The rule is a fixed stand-in until a config
 evidence policy exists, and check results are as fresh as the last GitHub refresh.
 Migration RequirementMilestone adds the column and its check; its rollback drops it,
 losing every label.
+
+ADR-054: Evidence links are found by title and every change to them is recorded
+
+Status: Accepted
+
+Context: The story "link GitHub issues and pull requests to a requirement" (Danielle,
+Tech Lead; "Design the Box" F2) asks that an issue or pull request can be found by number
+or title; that each link shows the item's title, state, and author; that each link
+records who created it and when; and that a link can be removed with the removal
+recorded. Links were made by number, SHA, tag, or address only (ADR-033), who linked
+an item was shown only for confirmed suggestions (ADR-036), and removing a link deleted
+it without a trace. The user chose GitHub's search over filtering recent items, and a
+history of both additions and removals over removals only.
+
+Decision: `GET /requirements/{id}/evidence/search?q=` asks GitHub's search API
+(`/search/issues`, through `IGitHubClient`) with the installation token for issues and
+pull requests of the connected repository whose titles contain every word, open or
+closed, at most 20, with number, kind, title, state (merged from the pull request's
+`merged_at`), author, and whether each is linked. Every word is quoted, so text such as
+`repo:other/x` is searched for rather than read as a qualifier that could reach
+another repository of the installation, and results whose repository is not the
+connected one are dropped. Nothing is stored; a result is linked through the existing
+link endpoint by its number, which reads the item from GitHub as before. On the
+requirement page a "Find by title" field lists the results with a Link button, or
+"Linked" for one that is.
+
+`requirement_evidence_events` records each link added and removed with the person,
+the time, and the link's kind, label ("#9", a tag, or a short SHA), and title as they
+were, so the history outlives the link; rows are only added. Linking and unlinking
+write it under the team lock in the same transaction as the link; refreshing does not.
+`GET /requirements/{id}/evidence/history` lists it newest first. Each linked item now
+shows "Linked by <name> on <date>" ("Suggested, confirmed by" for a suggestion), and the
+changes appear under the evidence and on the Requirement history page.
+
+Consequences: Search uses the repository name saved at connection (ADR-032), so after
+a rename it finds nothing until the repository is connected again; GitHub's search
+also lags new items by a short time and is rate limited (about 30 searches a minute per
+installation), which shows as 502. Search matches words, not exact phrases. Links made
+or removed by the previous API during a deploy are not recorded. Migration
+RequirementEvidenceEvents adds the table (RLS on, browser grants revoked) and starts it
+with an "added" event for every existing link, from its `linked_by` and `linked_at`; its
+rollback drops the table and loses the history, including every removal.
 
 ADR-NNN: Title
 

@@ -84,6 +84,20 @@ Only the team Owner or an Admin can connect or disconnect the repository.
 
 A project connects to at most one repository; the connected repository's name is shown on the project.
 
+Story: link issues and pull requests
+
+As a tech lead (Danielle), I want to link GitHub issues and pull requests to a requirement
+so that the work that implements it is visible in one place. Source: "Design the Box" F2.
+Acceptance criteria (ADR-033, ADR-054):
+
+Users can find an issue or pull request by number or title.
+
+Each link shows the item's title, state (open/closed/merged), and author.
+
+Each link records who created it and when.
+
+A link can be removed, and the removal is recorded.
+
 MVP scope
 
 The first usable version should support:

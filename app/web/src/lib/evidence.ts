@@ -197,3 +197,59 @@ export function problemDetail(problem: unknown): string | null {
 export function evidenceCountText(count: number): string {
   return count === 0 ? "No evidence" : count === 1 ? "1 evidence link" : `${count} evidence links`;
 }
+
+export const EVIDENCE_SEARCH_MAX = 200;
+
+/** An issue or pull request found by words in its title (ADR-054). `linked` says it is linked to this requirement already. */
+export type EvidenceSearchItem = {
+  number: number; kind: "issue" | "pull_request"; title: string; state: "open" | "closed" | "merged";
+  author: string | null; url: string; linked: boolean;
+};
+
+/** Validates title search results from an API response. Throws when the shape is not the documented one. */
+export function parseEvidenceSearch(value: unknown): EvidenceSearchItem[] {
+  const items = (value as { items?: unknown } | null)?.items;
+  if (!Array.isArray(items)) throw new Error("The API returned unexpected search results.");
+  return items.map((entry: unknown) => {
+    const item = entry as Record<string, unknown> | null;
+    if (typeof item !== "object" || item === null || typeof item.number !== "number" || !Number.isInteger(item.number) || item.number < 1 ||
+        (item.kind !== "issue" && item.kind !== "pull_request") || typeof item.title !== "string" ||
+        (item.state !== "open" && item.state !== "closed" && item.state !== "merged") ||
+        (item.author !== null && typeof item.author !== "string") || !isGitHubLink(item.url) || typeof item.linked !== "boolean") {
+      throw new Error("The API returned unexpected search results.");
+    }
+    return {
+      number: item.number, kind: item.kind, title: item.title, state: item.state, author: item.author as string | null,
+      url: item.url as string, linked: item.linked,
+    };
+  });
+}
+
+/** A link added to or removed from a requirement, with what it was then (ADR-054). */
+export type EvidenceEvent = {
+  id: string; evidenceId: string; action: "added" | "removed"; kind: Evidence["kind"]; label: string; title: string;
+  actor: string; occurredAt: string;
+};
+
+/** Validates a requirement's evidence history from an API response, newest first. */
+export function parseEvidenceHistory(value: unknown): EvidenceEvent[] {
+  if (!Array.isArray(value)) throw new Error("The API returned an unexpected evidence history.");
+  return value.map((entry: unknown) => {
+    const item = entry as Record<string, unknown> | null;
+    if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.evidenceId !== "string" ||
+        (item.action !== "added" && item.action !== "removed") ||
+        (item.kind !== "issue" && item.kind !== "pull_request" && item.kind !== "commit" && item.kind !== "release") ||
+        typeof item.label !== "string" || typeof item.title !== "string" || typeof item.actor !== "string" || !isDate(item.occurredAt)) {
+      throw new Error("The API returned an unexpected evidence history.");
+    }
+    return {
+      id: item.id, evidenceId: item.evidenceId, action: item.action, kind: item.kind, label: item.label, title: item.title,
+      actor: item.actor, occurredAt: item.occurredAt,
+    };
+  });
+}
+
+/** Describes one change to the links, such as "Linked #12 “Guests cannot pay”" or "Removed 4f2a9c1 “Fix totals”". */
+export function evidenceEventText(event: Pick<EvidenceEvent, "action" | "label" | "title">): string {
+  return `${event.action === "added" ? "Linked" : "Removed"} ${event.label} “${event.title}”`;
+}

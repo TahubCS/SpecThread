@@ -185,6 +185,27 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         return found ? send(response, 200, page(found.commits ?? [], url).map(commitJson)) : send(response, 404, { message: "Not Found" });
       }
 
+      // Title search: quoted words, all required, in the one repository named by "repo:".
+      if (request.method === "GET" && url.pathname === "/search/issues") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const query = url.searchParams.get("q") ?? "";
+        const named = /(?:^| )repo:([^/ ]+)\/([^ ]+)(?: |$)/.exec(query);
+        const repository = named && [...users.values()].flat().flatMap(installation => installation.repositories)
+          .find(entry => entry.owner.toLowerCase() === named[1].toLowerCase() && entry.name.toLowerCase() === named[2].toLowerCase());
+        if (!repository) return send(response, 422, { message: "Validation Failed" });
+        const words = [...query.matchAll(/"([^"]*)"/g)].map(match => match[1].toLowerCase());
+        const found = (items.get(repository.id) ?? []).filter(entry => words.every(word => entry.title.toLowerCase().includes(word)));
+        return send(response, 200, {
+          total_count: found.length, incomplete_results: false,
+          items: page(found, url).map(entry => ({
+            number: entry.number, title: entry.title, state: entry.state, user: entry.user === null ? null : { login: entry.user ?? "octocat" },
+            html_url: `https://github.com/${repository.owner}/${repository.name}/${entry.pull ? "pull" : "issues"}/${entry.number}`,
+            repository_url: `https://api.github.com/repos/${repository.owner}/${repository.name}`,
+            ...(entry.pull ? { pull_request: { merged_at: entry.merged ? entry.closed_at ?? entry.updated_at : null } } : {}),
+          })),
+        });
+      }
+
       const item = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)$/.exec(url.pathname);
       if (item && request.method === "GET") {
         if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });

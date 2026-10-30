@@ -2,11 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { apiFetch } from "@/lib/api";
-import { evidenceReferenceError, parseEvidence, parseEvidenceList, problemDetail } from "@/lib/evidence";
+import {
+  EVIDENCE_SEARCH_MAX, evidenceReferenceError, parseEvidence, parseEvidenceList, parseEvidenceSearch, problemDetail, type EvidenceSearchItem,
+} from "@/lib/evidence";
 import { fieldError, isUuid } from "@/lib/projects";
 
 export type EvidenceLinkState = { reference: string; error: string | null; linked: number };
 export type EvidenceActionState = { error: string | null };
+/** `items` is null until a search has been answered. */
+export type EvidenceSearchState = { query: string; items: EvidenceSearchItem[] | null; error: string | null };
 
 const GITHUB_DOWN = "GitHub could not be reached. Try again in a moment.";
 const GITHUB_NOT_SET_UP = "GitHub is not set up for this SpecThread deployment yet.";
@@ -49,6 +53,35 @@ export async function linkEvidence(
   }
   refresh(projectId, requirementId);
   return { reference: "", error: null, linked: previous.linked + 1 };
+}
+
+/**
+ * Finds issues and pull requests of the project's connected repository by words in their titles
+ * (ADR-054). Nothing is linked: each result is linked with `linkEvidence` by its number.
+ */
+export async function searchEvidence(
+  projectId: string, requirementId: string, _previous: EvidenceSearchState, formData: FormData,
+): Promise<EvidenceSearchState> {
+  const failed = "GitHub could not be searched. Please try again.";
+  const entry = formData.get("q");
+  const query = typeof entry === "string" ? entry.trim() : "";
+  const fail = (error: string): EvidenceSearchState => ({ query, items: null, error });
+  if (!query) return fail("Enter words from the title of an issue or pull request.");
+  if (query.length > EVIDENCE_SEARCH_MAX) return fail(`Use ${EVIDENCE_SEARCH_MAX} characters or fewer.`);
+  if (!isUuid(projectId) || !isUuid(requirementId)) return fail(failed);
+
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/evidence/search?${new URLSearchParams({ q: query })}`);
+    if (response.status === 400) return fail(fieldError(await response.json(), "q") ?? failed);
+    if (response.status === 409) return fail(problemDetail(await response.json()) ?? failed);
+    if (response.status === 502) return fail(GITHUB_DOWN);
+    if (response.status === 503) return fail(GITHUB_NOT_SET_UP);
+    if (!response.ok) throw new Error(`Search evidence returned ${response.status}.`);
+    return { query, items: parseEvidenceSearch(await response.json()), error: null };
+  } catch (error) {
+    console.error("Search evidence failed", error);
+    return fail(failed);
+  }
 }
 
 /** Reads every linked item from GitHub again and stores what it reports now. */

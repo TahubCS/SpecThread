@@ -477,3 +477,6 @@ a.row:focus-visible { outline-offset: -2px; }
 .history-list a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
 .history-decisions { margin: 0; padding-left: 18px; color: var(--app-text-2); font-size: 13px; }
 .follow-up-history li { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+/* Finding evidence by title (ADR-054) */
+.evidence-link + .evidence-link { margin-top: 12px; }
+.evidence-link + .evidence-rows, .evidence-link + .muted { margin-top: 8px; }

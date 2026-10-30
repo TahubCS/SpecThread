@@ -9,7 +9,7 @@ import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listEvidence, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
+  listEvidence, listEvidenceHistory, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
 } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
@@ -32,10 +32,10 @@ export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones, evidenceHistory] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
-    listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId),
+    listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -113,7 +113,7 @@ export default async function Page({ params }: Props) {
       <section className="requirement-section" aria-labelledby="evidence-heading">
         <h2 id="evidence-heading">Evidence</h2>
         {repository || evidence.length > 0 ? (
-          <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence}
+          <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence} history={evidenceHistory}
             repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
             people={people} />
         ) : (

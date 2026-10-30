@@ -13,10 +13,11 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and seventeen product tables in
+`SpecThreadDbContext` maps six Better Auth tables and eighteen product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, RequirementFollowUps, and RequirementCriteriaVersionTexts. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts, and
+RequirementEvidenceEvents. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -328,7 +329,8 @@ Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 that come later in time. scripts/test-database.mjs applies the teams scripts first
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, RequirementFollowUps, and RequirementCriteriaVersionTexts.
+RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts, and
+RequirementEvidenceEvents.
 
 ## Project documents migration
 
@@ -478,6 +480,30 @@ The second command generates docs/schema/requirement-criteria-version-texts.sql 
 -rollback.sql from EF's output unchanged. CI applies it after the merge. Rollback: `dotnet
 ef database update RequirementFollowUps --project app/api`, or the rollback script; it
 restores the array-only check and loses no data.
+
+## Evidence link history migration
+
+RequirementEvidenceEvents (ADR-054) adds `requirement_evidence_events`: one row per
+evidence link added or removed, with `requirement_id`, `evidence_id` (the link's ID,
+without a foreign key, because a removal deletes the link), `action` (`added` or
+`removed`), the link's `kind`, `label`, and `title` as they were, `actor`, and
+`occurred_at`. It references requirements and users with restrict deletes, is indexed by
+(requirement_id, occurred_at), has RLS enabled with no allow policies, and revokes
+PUBLIC, anon, and authenticated grants. It starts the history with an `added` row for
+every existing link, from its `linked_by` and `linked_at`, labelled as the API labels
+links (`#` and the number, the tag, or the first 7 characters of the SHA).
+
+```sh
+dotnet ef migrations add RequirementEvidenceEvents --project app/api --configuration Release
+node scripts/generate-requirement-evidence-events.mjs
+```
+
+The second command adds the RLS, grant, and backfill statements and generates
+docs/schema/requirement-evidence-events.sql and -rollback.sql. CI applies it after the
+merge; it only adds a table, so the running API is unaffected, though links it makes or
+removes until the new API is deployed are not recorded. Rollback: `dotnet ef database
+update RequirementCriteriaVersionTexts --project app/api`, or the rollback script; it
+drops only the history, losing every recorded addition and removal; links stay.
 
 ## Supabase tooling
 

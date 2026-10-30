@@ -65,6 +65,8 @@ to the project's team; non-members get 404 as if the project did not exist.
 | DELETE | `/projects/{projectId}/repository` | team Owner/Admin | | 204 (idempotent) |
 
 | GET | `/requirements/{requirementId}/evidence` | member | | 200 `Evidence[]` (oldest first by GitHub's created time) |
+| GET | `/requirements/{requirementId}/evidence/search` | member | query `q`: words from a title | 200 `{ items: EvidenceSearchItem[] }` (at most 20) |
+| GET | `/requirements/{requirementId}/evidence/history` | member | | 200 `EvidenceEvent[]` (newest first) |
 | POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
 | POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
 | DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
@@ -98,6 +100,15 @@ request is ignored: links made through this endpoint are always `manual` (ADR-03
 connected, the app uninstalled, an archived requirement or project, or the evidence
 or connected repository changed while GitHub was being read (reload and retry). 502
 and 503 mean the same as for repositories.
+
+Search (ADR-054) finds issues and pull requests of the connected repository whose
+titles contain every word of `q` (1 to 200 characters, at most 10 words; quotes are
+ignored), through GitHub's search API. Each word is searched for as text, so a
+qualifier such as `repo:` in `q` cannot reach another repository; results from any
+other repository are dropped. It links nothing: link a result by its number. An empty
+`q` is 400 on `q`; no repository connected is 409; 502 and 503 as above, including
+GitHub's search rate limit. Linking and unlinking each add an `EvidenceEvent`, which
+stays after the link is removed; refresh adds none.
 
 Link and refresh read GitHub first and only then take the team lock and save, so a
 large refresh may take tens of seconds; the web app allows these two calls 55 seconds
@@ -231,6 +242,17 @@ type Evidence = {
   githubCreatedAt: string; githubUpdatedAt: string; githubClosedAt: string | null;
   linkedBy: string; linkedAt: string; refreshedAt: string;
 };
+type EvidenceSearchItem = {
+  number: number; kind: "issue" | "pull_request"; title: string; state: "open" | "closed" | "merged";
+  author: string | null; url: string;
+  linked: boolean; // linked to this requirement when the search ran
+};
+type EvidenceEvent = {
+  id: string; evidenceId: string; action: "added" | "removed";
+  // The link as it was then: label is "#9", a release tag, or a short SHA.
+  kind: Evidence["kind"]; label: string; title: string;
+  actor: string; occurredAt: string;
+};
 ```
 
 Review decisions (ADR-038): `note` may have up to 2,000 characters and is required
@@ -326,7 +348,8 @@ from protected pages to /onboarding, and POST /projects returns 409 with
 remain 401, and an account without a user row remains 403. Project access follows the containing team as described above.
 
 Not yet available: activity and audit history. The only change histories kept are
-criteria versions (ADR-051) and follow-up link changes (ADR-052).
+criteria versions (ADR-051), follow-up link changes (ADR-052), and evidence link
+changes (ADR-054).
 
 
 Team management uses authenticated server actions. Role changes require explicit

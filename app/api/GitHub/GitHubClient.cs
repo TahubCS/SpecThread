@@ -37,6 +37,9 @@ internal sealed record GitHubItem(
     public bool? Prerelease { get; init; }
 }
 
+// An issue or pull request found by searching titles. State is "open", "closed", or "merged".
+internal sealed record GitHubSearchItem(int Number, string Kind, string Title, string State, string? Author, string Url);
+
 // One automated check on a commit. Result is "passed", "failed", "running", "skipped",
 // "cancelled", or "neutral". Kind is "check" (a check run) or "status" (an older commit status).
 internal sealed record GitHubCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
@@ -98,6 +101,11 @@ internal interface IGitHubClient
     // Reads the check runs and commit statuses of a commit, acting as the app. NotFound means
     // GitHub does not let the app read them, for example because a permission was not granted.
     Task<GitHubResult<GitHubChecks>> GetChecksAsync(long installationId, long repositoryId, string sha, CancellationToken cancel);
+
+    // Issues and pull requests of owner/name whose titles contain every word, in GitHub's order
+    // of best match, at most MaxSearchResults of them (ADR-054).
+    Task<GitHubResult<List<GitHubSearchItem>>> SearchItemsAsync(
+        long installationId, string owner, string name, IReadOnlyList<string> words, CancellationToken cancel);
 }
 
 internal sealed class GitHubClient(HttpClient http, IConfiguration configuration, ILogger<GitHubClient> logger) : IGitHubClient
@@ -106,6 +114,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     private const int MaxListPages = 5;
     private const int MaxListedRepositories = 500;
     private const int MaxSearchPages = 30;
+    public const int MaxSearchResults = 20;
     private const int MaxCommitMessageLength = 300;
     private const int MaxCheckNameLength = 200;
     private const int MaxReleaseNameLength = 300;
@@ -489,6 +498,54 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             }
             installationTokens[installationId] = value;
             return GitHubResult<string>.Ok(value);
+        }
+    }
+
+    public async Task<GitHubResult<List<GitHubSearchItem>>> SearchItemsAsync(
+        long installationId, string owner, string name, IReadOnlyList<string> words, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<List<GitHubSearchItem>>.Fail(token.Failure);
+
+        // Each word is quoted, so text such as "repo:other/x" is searched for rather than read as
+        // a qualifier that could reach another repository of the installation.
+        var terms = string.Join(' ', words.Select(word => word.Replace("\"", "", StringComparison.Ordinal).Trim())
+            .Where(word => word.Length > 0).Select(word => $"\"{word}\""));
+        if (terms.Length == 0) return GitHubResult<List<GitHubSearchItem>>.Ok([]);
+        var query = Uri.EscapeDataString($"{terms} repo:{owner}/{name} in:title");
+        var (failure, body) = await SendAsync(HttpMethod.Get, $"search/issues?q={query}&per_page={MaxSearchResults}", token.Value!, cancel);
+        // 422: GitHub can't search that repository, for example after a rename. Nothing is found.
+        if (failure == GitHubFailure.NotFound) return GitHubResult<List<GitHubSearchItem>>.Ok([]);
+        if (failure != GitHubFailure.None) return GitHubResult<List<GitHubSearchItem>>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("items", out var entries) || entries.ValueKind != JsonValueKind.Array)
+            {
+                return GitHubResult<List<GitHubSearchItem>>.Fail(GitHubFailure.Unavailable);
+            }
+            var expected = $"/repos/{owner}/{name}";
+            var found = new List<GitHubSearchItem>();
+            foreach (var entry in entries.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object ||
+                    !entry.TryGetProperty("number", out var number) || number.ValueKind != JsonValueKind.Number || !number.TryGetInt32(out var read) || read < 1 ||
+                    !entry.TryGetProperty("title", out var title) || title.ValueKind != JsonValueKind.String ||
+                    !entry.TryGetProperty("state", out var state) || state.GetStringOrNull() is not ("open" or "closed") ||
+                    !entry.TryGetProperty("html_url", out var url) || !IsGitHubLink(url.GetStringOrNull()) ||
+                    !entry.TryGetProperty("repository_url", out var repository) || repository.GetStringOrNull() is not { } repositoryUrl)
+                {
+                    return GitHubResult<List<GitHubSearchItem>>.Fail(GitHubFailure.Unavailable);
+                }
+                // Only the connected repository, whatever GitHub returns.
+                if (!repositoryUrl.EndsWith(expected, StringComparison.OrdinalIgnoreCase)) continue;
+                var pull = entry.TryGetProperty("pull_request", out var marker) && marker.ValueKind == JsonValueKind.Object;
+                var merged = pull && marker.TryGetProperty("merged_at", out var mergedAt) && mergedAt.ValueKind == JsonValueKind.String;
+                found.Add(new GitHubSearchItem(read, pull ? "pull_request" : "issue", title.GetString()!,
+                    merged ? "merged" : state.GetString()!, ReadLogin(entry, "user"), url.GetString()!));
+                if (found.Count == MaxSearchResults) break;
+            }
+            return GitHubResult<List<GitHubSearchItem>>.Ok(found);
         }
     }
 

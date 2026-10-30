@@ -26,7 +26,44 @@
   `git diff --check` passed.
 - Known issues and risks: none new. As before (ADR-032), the repository name is a
   snapshot from connection time, and the real GitHub is not exercised by tests.
-- Next step: review, commit with the user's approval, and open a PR to `main`.
+- Part 2, same branch at the user's request: the story "link GitHub issues and pull
+  requests to a requirement" (Danielle; "Design the Box" F2), ADR-054.
+  - Already met: linking by number or address (ADR-033); each link shows title, state
+    (open/closed/merged), and author; `linked_by`/`linked_at` were stored.
+  - Completed:
+    - Find by title: `GET /requirements/{id}/evidence/search?q=` asks GitHub's search API
+      for issues and pull requests whose titles contain every word, at most 20, with
+      state, author, and whether linked. Words are quoted, and results from another
+      repository are dropped. A "Find by title" field lists results with Link buttons.
+    - Every link now shows "Linked by <name> on <date>".
+    - `requirement_evidence_events` records each link added and removed (who, when, and
+      the link's kind, label, and title), shown under the evidence and on the Requirement
+      history page; `GET /requirements/{id}/evidence/history`.
+  - Decisions (the user's): GitHub search over filtering recent items; record additions
+    and removals, not removals only; stay on this branch.
+  - Changed files: API `GitHub/GitHubClient.cs` (`SearchItemsAsync`),
+    `GitHub/EvidenceEndpoints.cs` (search, history, events on link and unlink),
+    `Requirements/ReviewEndpoints.cs` (shared `Label`), `Data/ProductModels.cs`,
+    `Data/SpecThreadDbContext.cs`, migration `20261030130820_RequirementEvidenceEvents`
+    and the snapshot; `scripts/generate-requirement-evidence-events.mjs`, generated
+    `docs/schema/requirement-evidence-events*.sql`, `scripts/test-database.mjs`,
+    `scripts/test-github.mjs` (search); web `lib/evidence.ts`, `lib/project-data.ts`,
+    `app/projects/evidence-actions.ts`, `components/evidence-panel.tsx`, the requirement
+    and history pages, `app-shell.css`; tests: new `tests/schema/evidence-history.spec.ts`
+    (5124, 5125), two tests in `tests/e2e/evidence.spec.ts`, parser tests in
+    `tests/api/project-data.spec.ts`, migration counts up by one in `reviews.spec.ts`,
+    `evidence.spec.ts`, `github-repository.spec.ts`; docs DECISIONS (ADR-054, ADR-036
+    note), API, DATABASE, ARCHITECTURE (eighteen product tables), PROJECT, TESTING.
+  - Risks: search uses the repository name saved at connection, so after a rename it
+    finds nothing until reconnected; GitHub search is rate limited (about 30 a minute per
+    installation; shown as 502) and lags new items briefly; links changed by the previous
+    API during the deploy are not recorded. CI applies the migration on merge.
+  - Checks: `npm test` 389 passed (it builds the web app and the Release API);
+    `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes`,
+    `has-pending-model-changes` (none), `git diff --check` passed. The migration was
+    applied to the local Docker database with `dotnet ef database update`. Not exercised:
+    the real GitHub search API.
+- Next step: review, then open a PR to `main` carrying both stories and the migration.
 
 ## Previous task: Criteria versions, accepted-criteria warning, follow-ups, and milestones (2026-10-29, merged as PR #23)
 
