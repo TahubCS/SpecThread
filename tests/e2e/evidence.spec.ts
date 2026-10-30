@@ -656,6 +656,14 @@ test("a member finds issues and pull requests by title, links one from the resul
 
   await page.goto(`${url}/history`);
   await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem")).toHaveCount(2);
+
+  // With no links left and the repository disconnected, the changes are still on the requirement.
+  await runTestSql(`DELETE FROM public.project_repositories WHERE project_id = '${projectId}'`);
+  await page.goto(url);
+  await expect(page.getByText("to link issues, pull requests, commits, and releases.")).toBeVisible();
+  await page.getByText("2 link changes").click();
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem").nth(0))
+    .toContainText("Removed #15 “Add guest checkout” by Evidence tester");
 });
 
 test("a search GitHub can't answer, or the API refuses, is explained and links nothing", async ({ page }) => {

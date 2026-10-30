@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
-import { EvidencePanel } from "@/components/evidence-panel";
+import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
@@ -117,10 +117,19 @@ export default async function Page({ params }: Props) {
             repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
             people={people} />
         ) : (
-          <p className="muted">
-            Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
-            link issues, pull requests, commits, and releases.
-          </p>
+          <>
+            <p className="muted">
+              Connect a GitHub repository in <Link href={`/projects/${project.id}/settings/repository`}>project settings</Link> to
+              link issues, pull requests, commits, and releases.
+            </p>
+            {/* Links removed before the repository was disconnected stay in the record (ADR-054). */}
+            {evidenceHistory && evidenceHistory.length > 0 && (
+              <details className="review-history">
+                <summary>{evidenceHistory.length === 1 ? "1 link change" : `${evidenceHistory.length} link changes`}</summary>
+                <EvidenceHistory history={evidenceHistory} people={people} />
+              </details>
+            )}
+          </>
         )}
         {repository === null && evidence.length > 0 && (
           <p className="notice">
