@@ -18,7 +18,8 @@ export async function startApi(port: number, env: Record<string, string>) {
   const stop = () => { child.kill(); };
   try {
     for (let attempt = 0; ; attempt++) {
-      if (child.exitCode !== null) throw new Error(`API exited with code ${child.exitCode}`);
+      // On Linux an unhandled startup exception aborts the process, which sets signalCode, not exitCode.
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`API exited with ${child.exitCode ?? child.signalCode}`);
       try {
         if ((await fetch(`${baseURL}/health`)).ok) break;
       } catch (error) {
