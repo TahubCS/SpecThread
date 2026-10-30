@@ -16,7 +16,7 @@ dotnet build app/api --configuration Release
 `SpecThreadDbContext` maps six Better Auth tables and seventeen product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, and RequirementFollowUps. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementMilestone, RequirementFollowUps, and RequirementCriteriaVersionTexts. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -328,7 +328,7 @@ Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 that come later in time. scripts/test-database.mjs applies the teams scripts first
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, and RequirementFollowUps.
+RequirementMilestone, RequirementFollowUps, and RequirementCriteriaVersionTexts.
 
 ## Project documents migration
 
@@ -459,6 +459,25 @@ The second command adds the RLS and grant statements and generates
 docs/schema/requirement-follow-ups.sql and -rollback.sql. CI applies it after the merge;
 it only adds tables. Rollback: `dotnet ef database update RequirementMilestone --project
 app/api`, or the rollback script; it drops both tables, losing every link and its history.
+
+## Criteria version texts migration
+
+RequirementCriteriaVersionTexts (ADR-051) replaces the check on
+`requirement_criteria_versions.criteria` so it accepts only a JSON array whose elements are
+all strings (an empty array included), using
+`NOT jsonb_path_exists(criteria, 'strict $[*] ? (@.type() != "string")')` (strict, so a nested array is not unwrapped and passed). The API reads each
+version as a list of texts, so any other element would fail on read. Existing rows hold
+only texts: the API writes them and the backfill copies them from `acceptance_criteria`.
+
+```sh
+dotnet ef migrations add RequirementCriteriaVersionTexts --project app/api --configuration Release
+node scripts/generate-requirement-criteria-version-texts.mjs
+```
+
+The second command generates docs/schema/requirement-criteria-version-texts.sql and
+-rollback.sql from EF's output unchanged. CI applies it after the merge. Rollback: `dotnet
+ef database update RequirementFollowUps --project app/api`, or the rollback script; it
+restores the array-only check and loses no data.
 
 ## Supabase tooling
 

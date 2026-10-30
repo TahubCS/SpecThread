@@ -40,9 +40,11 @@
     `EvidencePolicy.cs`; `Projects/ProjectAccess.cs` (milestone validation);
     `Data/ProductModels.cs`, `Data/SpecThreadDbContext.cs`, `Program.cs`; migrations
     `20261030001133_RequirementCriteriaVersions`, `20261030001226_RequirementMilestone`,
-    `20261030001248_RequirementFollowUps` and the snapshot.
+    `20261030001248_RequirementFollowUps`, `20261030013056_RequirementCriteriaVersionTexts`
+    (from review: version criteria must be an array of strings) and the snapshot.
   - Schema: `scripts/generate-requirement-criteria-versions.mjs`,
-    `generate-requirement-milestone.mjs`, `generate-requirement-follow-ups.mjs` (new),
+    `generate-requirement-milestone.mjs`, `generate-requirement-follow-ups.mjs`,
+    `generate-requirement-criteria-version-texts.mjs` (new),
     their generated `docs/schema/*.sql` and `*-rollback.sql`, `scripts/test-database.mjs`.
   - Web: `lib/requirements.ts`, `lib/projects.ts`, `lib/reviews.ts`, `lib/project-data.ts`,
     new `lib/criteria-versions.ts` and `lib/follow-ups.ts`; `app/projects/requirement-actions.ts`,
@@ -54,7 +56,7 @@
     (5122), `milestones.spec.ts` (5123); new `tests/e2e/follow-ups.spec.ts` and
     `milestones.spec.ts`; two warning tests in `tests/e2e/reviews.spec.ts`; parser and
     helper tests in `tests/api/project-data.spec.ts`; the review summary shape in
-    `tests/schema/reviews.spec.ts`; migration-history counts up by three in
+    `tests/schema/reviews.spec.ts`; migration-history counts up by four in
     `reviews.spec.ts`, `evidence.spec.ts`, and `github-repository.spec.ts`; the history
     page listed as connected in `tests/e2e/scaffold.spec.ts`.
   - Docs: DECISIONS (ADR-051, 052, 053; notes on ADR-024, 038, 050), API, DATABASE,
@@ -79,7 +81,7 @@
     RequirementUpdatedBy state, as CI will. The generated SQL scripts were applied by
     the schema tests, including the backfill and each rollback.
 - Known issues and risks:
-  - CI applies the three migrations on merge, in order (ADR-044). Don't apply them to
+  - CI applies the four migrations on merge, in order (ADR-044). Don't apply them to
     Supabase by hand first.
   - Criteria saved or decisions recorded by the previous API during the deploy have no
     version until the next save or decision (catch-up), and such a decision shows
@@ -92,7 +94,8 @@
     from the shared web test database when the run ends; it happens on `main` too and
     does not fail tests.
 - Next step: review the diff, then commit (with the user's approval) and open a PR to
-  `main`. Possible follow-ups: a Milestones page built on the labels, an edit history
+  `main`. A local Docker database for manual testing (`specthread-local-db`, port 54329)
+  has every migration applied with `dotnet ef database update`. Possible follow-ups: a Milestones page built on the labels, an edit history
   for titles and descriptions, and a configurable evidence policy.
 
 ## Previous task: Requirement criteria rule, creation date, linked documents, last editor, and restore (2026-10-23, merged as PR #22)

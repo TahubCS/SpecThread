@@ -1283,6 +1283,8 @@ criteria makes a new version and so needs a new review. The Requirement history 
 now lists the versions with the decisions made on each. Migration
 RequirementCriteriaVersions adds the table (RLS on, browser grants revoked) and the
 column; its rollback drops both, losing every version and every decision's stamp.
+Migration RequirementCriteriaVersionTexts then limits `criteria` to an array of strings,
+since nothing else can be read back; its rollback restores the array-only check.
 
 ADR-052: Requirements can be marked as follow-ups of other requirements
 

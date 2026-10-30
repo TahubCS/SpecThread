@@ -172,7 +172,7 @@ test("criteria saved without a version, as by the previous API during a deploy, 
   ]);
 });
 
-test("the migration protects and constrains versions, backfills version 1, and its rollback removes only the versions", async () => {
+test("the migrations protect and constrain versions to texts, backfill version 1, and roll back newest first", async () => {
   const count = async (sql: string, values: unknown[] = []) => (await database.pool.query(sql, values)).rows[0].count;
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_criteria_versions' AND rowsecurity")).toBe(1);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.role_table_grants WHERE table_name='requirement_criteria_versions' AND grantee IN ('anon','authenticated','PUBLIC')")).toBe(0);
@@ -184,8 +184,11 @@ test("the migration protects and constrains versions, backfills version 1, and i
   };
   await insert({});
   await expect(insert({})).rejects.toThrow(/duplicate key/);
-  for (const values of [{ number: 0 }, { criteria: "{}" }, { criteria: null }, { created_by: null }]) {
-    await expect(insert(values), JSON.stringify(values)).rejects.toThrow(/check constraint|not-null/);
+  await insert({ number: 52, criteria: '["The lid lifts", "The box closes"]' });
+  // Only an array of texts, possibly empty, is ever read back.
+  for (const values of [{ number: 0 }, { criteria: "{}" }, { criteria: '"text"' }, { criteria: "[1]" }, { criteria: '["a", null]' },
+    { criteria: '[["a"]]' }, { criteria: '[{"text": "a"}]' }, { criteria: null }, { created_by: null }]) {
+    await expect(insert({ number: 53, ...values }), JSON.stringify(values)).rejects.toThrow(/check constraint|not-null/);
   }
   await expect(insert({ number: 51, created_by: "nobody" })).rejects.toThrow(/foreign key/);
   await expect(database.pool.query("UPDATE public.requirement_reviews SET criteria_version = 0")).rejects.toThrow(/check constraint/);
@@ -193,12 +196,18 @@ test("the migration protects and constrains versions, backfills version 1, and i
   const history = await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`);
   const requirements = await count("SELECT count(*)::int AS count FROM public.requirements");
   const reviews = await count("SELECT count(*)::int AS count FROM public.requirement_reviews");
+  // Newest first: the texts-only check is rolled back to the array check, keeping every version.
+  const versions = await count("SELECT count(*)::int AS count FROM public.requirement_criteria_versions");
+  await database.pool.query(await readFile("docs/schema/requirement-criteria-version-texts-rollback.sql", "utf8"));
+  await insert({ number: 54, criteria: "[1]" });
+  expect(await count("SELECT count(*)::int AS count FROM public.requirement_criteria_versions")).toBe(versions + 1);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
   await database.pool.query(await readFile("docs/schema/requirement-criteria-versions-rollback.sql", "utf8"));
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_criteria_versions'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM information_schema.columns WHERE table_name='requirement_reviews' AND column_name='criteria_version'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirements")).toBe(requirements);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_reviews")).toBe(reviews);
-  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 2);
 
   // Applied to existing data: version 1 holds each requirement's criteria in order, credited to its
   // last editor, and only decisions on the current requirement version are stamped with it.
@@ -216,5 +225,8 @@ test("the migration protects and constrains versions, backfills version 1, and i
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_reviews WHERE requirement_id = $1 AND requirement_version = $2 AND criteria_version = 1",
     [box.id, box.version])).toBeGreaterThan(0);
   expect(await count("SELECT count(*)::int AS count FROM public.requirement_reviews r JOIN public.requirements q ON q.id = r.requirement_id WHERE r.requirement_version <> q.version AND r.criteria_version IS NOT NULL")).toBe(0);
+  expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
+  // The backfill writes only texts, so the tightened check applies to it.
+  await database.pool.query(await readFile("docs/schema/requirement-criteria-version-texts.sql", "utf8"));
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history);
 });

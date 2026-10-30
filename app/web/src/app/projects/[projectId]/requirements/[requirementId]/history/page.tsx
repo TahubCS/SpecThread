@@ -31,7 +31,9 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       </header>
       <section className="requirement-section" aria-labelledby="versions-heading">
         <h2 id="versions-heading">Acceptance criteria versions</h2>
-        {versions.length === 0
+        {versions === null
+          ? <p className="notice" role="status">Criteria versions can&apos;t be shown right now. Try again in a few minutes.</p>
+          : versions.length === 0
           ? <p className="muted">No criteria versions have been recorded yet.</p>
           : (
             <ol className="history-list" aria-label="Acceptance criteria versions">

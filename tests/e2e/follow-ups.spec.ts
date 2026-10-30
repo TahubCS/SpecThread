@@ -85,3 +85,23 @@ test("a failed or refused link is explained and nothing is linked", async ({ pag
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(alert).toHaveText("That requirement is already a follow-up of this one.");
 });
+
+test("the history page says when criteria versions can't be read, apart from having none", async ({ page }) => {
+  const { urls: [url] } = await createRequirements(page, ["Box opens"]);
+  const requirementId = url.split("/").at(-1)!;
+  const path = `^/requirements/${requirementId}/criteria-versions$`;
+  await failApi(owner.userId, { method: "GET", path, status: 404, body: { status: 404 } });
+  await page.goto(`${url}/history`);
+  await expect(page.getByText("Criteria versions can't be shown right now. Try again in a few minutes.")).toBeVisible();
+  await expect(page.getByText("No criteria versions have been recorded yet.")).toHaveCount(0);
+
+  await clearApiFaults(owner.userId);
+  await failApi(owner.userId, { method: "GET", path, status: 200, body: [] });
+  await page.reload();
+  await expect(page.getByText("No criteria versions have been recorded yet.")).toBeVisible();
+  await expect(page.getByText("Criteria versions can't be shown right now.")).toHaveCount(0);
+
+  await clearApiFaults(owner.userId);
+  await page.reload();
+  await expect(page.getByRole("list", { name: "Acceptance criteria versions" }).locator(":scope > li")).toHaveCount(1);
+});

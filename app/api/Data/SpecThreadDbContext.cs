@@ -174,7 +174,9 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         criteriaVersion.ToTable("requirement_criteria_versions", table =>
         {
             table.HasCheckConstraint("ck_requirement_criteria_versions_number", "number > 0");
-            table.HasCheckConstraint("ck_requirement_criteria_versions_criteria", "jsonb_typeof(criteria) = 'array'");
+            // An array of criterion texts, possibly empty; nothing else is ever read back (ADR-051).
+            table.HasCheckConstraint("ck_requirement_criteria_versions_criteria",
+                "jsonb_typeof(criteria) = 'array' AND NOT jsonb_path_exists(criteria, 'strict $[*] ? (@.type() != \"string\")')");
         });
         criteriaVersion.HasKey(x => x.Id);
         criteriaVersion.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");

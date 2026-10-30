@@ -6,7 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { problemDetail } from "@/lib/evidence";
 import { fieldError, isUuid } from "@/lib/projects";
 import {
-  milestoneError, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors, type RequirementErrors,
+  milestoneError, parseRequirement, readMilestoneInput, readRequirementInput, requirementErrors, requirementProblemErrors, type RequirementErrors,
 } from "@/lib/requirements";
 
 /**
@@ -129,8 +129,9 @@ export async function setMilestone(
   projectId: string, requirementId: string, previous: MilestoneState, formData: FormData,
 ): Promise<MilestoneState> {
   const failed = "The milestone could not be saved. Please try again.";
-  const milestone = formData.get("intent") === "clear" ? "" : String(formData.get("milestone") ?? "").trim();
   const fail = (error: string): MilestoneState => ({ error, saved: previous.saved });
+  const milestone = readMilestoneInput(formData);
+  if (milestone === null) return fail(failed);
   const invalid = milestoneError(milestone);
   if (invalid) return fail(invalid);
   if (!isUuid(projectId) || !isUuid(requirementId)) return fail(failed);

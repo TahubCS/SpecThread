@@ -268,8 +268,9 @@ currently require network access during the web build.
   `accepted_criteria_change` without confirmation that changes nothing, the confirmed
   save, the accepted decision kept on version 1 with `criteriaChanged` on the list, no
   confirmation after a newer rejection; a catch-up version for criteria saved by the
-  previous API; and the migration's RLS, constraints, backfill of version 1 and of
-  decisions on the current requirement version, and rollback. tests/e2e/reviews.spec.ts:
+  previous API; and the migrations' RLS, constraints (texts only, an empty array allowed),
+  backfill of version 1 and of decisions on the current requirement version, and
+  rollbacks, newest first. tests/e2e/reviews.spec.ts:
   the warning after an acceptance, its focus and text, Keep editing sending nothing, a
   title change saving without it, confirming to "Needs review" on the page and the list,
   the read-only version page with its decision, the Requirement history page, and an

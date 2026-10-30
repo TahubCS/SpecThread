@@ -150,6 +150,16 @@ export function requirementErrors(input: RequirementInput): RequirementErrors | 
     ? errors : null;
 }
 
+/**
+ * Reads the label a milestone form sends: empty for Clear, otherwise the trimmed text of its
+ * "milestone" field. Returns null when that field is missing or is not text, such as a file.
+ */
+export function readMilestoneInput(formData: FormData): string | null {
+  if (formData.get("intent") === "clear") return "";
+  const milestone = formData.get("milestone");
+  return typeof milestone === "string" ? milestone.trim() : null;
+}
+
 /** Returns the message for a trimmed milestone label, or null when it is acceptable. Empty means no milestone. */
 export function milestoneError(milestone: string): string | null {
   return milestone.length > MILESTONE_MAX ? `Use ${MILESTONE_MAX} characters or fewer.` : null;

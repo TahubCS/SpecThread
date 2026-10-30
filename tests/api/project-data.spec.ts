@@ -4,7 +4,7 @@ import {
   requirementCounts,
 } from "../../app/web/src/lib/projects";
 import {
-  criteriaChanged, documentChoices, milestoneError, moveItem, parseRequirement, readRequirementInput, requirementErrors, requirementProblemErrors,
+  criteriaChanged, documentChoices, milestoneError, moveItem, parseRequirement, readMilestoneInput, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
 import { criteriaVersionText, parseCriteriaVersion, parseCriteriaVersions } from "../../app/web/src/lib/criteria-versions";
 import { followUpEventText, parseFollowUps } from "../../app/web/src/lib/follow-ups";
@@ -393,6 +393,20 @@ test("changed criteria are detected as the API compares them, and milestones are
   expect(milestoneError("")).toBeNull();
   expect(milestoneError("x".repeat(100))).toBeNull();
   expect(milestoneError("x".repeat(101))).toBe("Use 100 characters or fewer.");
+  const milestoneForm = (entries: [string, string | Blob][]) => {
+    const data = new FormData();
+    for (const [name, value] of entries) data.append(name, value);
+    return data;
+  };
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", "  Sprint 2 "]]))).toBe("Sprint 2");
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", "   "]]))).toBe("");
+  // Clear ignores the field, whatever it holds.
+  for (const value of ["Sprint 2", new Blob(["x"])]) {
+    expect(readMilestoneInput(milestoneForm([["intent", "clear"], ["milestone", value]]))).toBe("");
+  }
+  // A missing field or a file is refused rather than read as text.
+  expect(readMilestoneInput(milestoneForm([["intent", "save"]]))).toBeNull();
+  expect(readMilestoneInput(milestoneForm([["intent", "save"], ["milestone", new Blob(["Sprint 2"])]]))).toBeNull();
   const form = new FormData();
   form.set("title", "Guest checkout");
   form.append("criteria", "Done");

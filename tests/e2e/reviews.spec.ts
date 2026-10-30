@@ -336,9 +336,22 @@ test("changing accepted criteria warns first; cancelling changes nothing, and co
   await expect(warning).toContainText("accepted on criteria version 1 by Grace Hopper");
   await expect(warning).toContainText("That acceptance applies to the previous criteria");
   await page.screenshot({ path: testInfo.outputPath("criteria-warning.png"), fullPage: true });
+  // Enter in a field does not confirm while the warning is open.
+  await page.getByLabel("Criterion 1", { exact: true }).press("Enter");
+  await expect(page).toHaveURL(`${url}/edit`);
+  await expect(warning).toBeVisible();
 
   // Cancelling sends nothing: the edit stays in the form, and the requirement stays accepted.
   await warning.getByRole("button", { name: "Keep editing" }).click();
+  await expect(warning).toHaveCount(0);
+  // With the warning closed, Enter submits as usual and so asks again.
+  await page.getByLabel("Criterion 1", { exact: true }).press("Enter");
+  await expect(warning).toBeVisible();
+  // Put back as accepted, there is nothing to warn about; changed again, the warning waits for the next save.
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done");
+  await expect(warning).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done in one step");
   await expect(warning).toHaveCount(0);
   await expect(page.getByLabel("Criterion 1", { exact: true })).toHaveValue("Done in one step");
   await page.goto(url);

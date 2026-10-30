@@ -65,7 +65,11 @@ export function RequirementForm({ action, initial, documents, documentsHref, sub
   const [sent, setSent] = useState<number[]>([]);
   const [moved, setMoved] = useState("");
   const errors = state.errors;
-  const move = (index: number, to: number) => {
+  // Compared as the API compares them, ignoring rows left empty, which are refused anyway.
+  const changed = criteriaChanged(initial.criteria, rows.map(row => row.text).filter(text => text.trim()));
+  // Criteria put back as they were accepted leave nothing to warn about, and no new version to announce.
+  if (warning && !changed) setWarning(false);
+  const move =(index: number, to: number) => {
     if (to < 0 || to >= rows.length) return;
     setRows(current => moveItem(current, index, to));
     setMoved(`Criterion moved to position ${to + 1} of ${rows.length}.`);
@@ -74,12 +78,16 @@ export function RequirementForm({ action, initial, documents, documentsHref, sub
   return (
     <form className="requirement-form" action={formAction} aria-label={label} onSubmit={event => {
       const confirmed = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("name") === "confirmCriteriaChange";
-      if (!confirmed && accepted && criteriaChanged(initial.criteria, rows.map(row => row.text).filter(text => text.trim()))) {
+      if (!confirmed && accepted && changed) {
         event.preventDefault();
         setWarning(true);
         return;
       }
       setSent(rows.map(row => row.key));
+    }} onKeyDown={event => {
+      // While the warning is open its confirm button is the form's only submit button, so Enter
+      // in a field would confirm. Only an explicit press of that button confirms.
+      if (warning && event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
     }}>
       {errors?.form && <p role="alert" className="notice notice-error">{errors.form}</p>}
       <div className="field">

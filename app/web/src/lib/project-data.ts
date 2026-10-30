@@ -97,11 +97,12 @@ export const listReviews = cache(async (requirementId: string): Promise<Review[]
 
 /**
  * Lists a requirement's acceptance-criteria versions, newest first (ADR-051). Call after
- * `requireRequirement`. The previous API (ADR-044) answers 404, which reads as none.
+ * `requireRequirement`. Returns null when they can't be read: the previous API (ADR-044)
+ * answers 404 although the versions exist, so this is not the same as an empty list.
  */
-export const listCriteriaVersions = cache(async (requirementId: string): Promise<CriteriaVersion[]> => {
+export const listCriteriaVersions = cache(async (requirementId: string): Promise<CriteriaVersion[] | null> => {
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/criteria-versions`) : null;
-  return body === null ? [] : parseCriteriaVersions(body);
+  return body === null ? null : parseCriteriaVersions(body);
 });
 
 /** Loads one acceptance-criteria version, or shows the not-found page. Call after `requireRequirement`. */

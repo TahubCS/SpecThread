@@ -629,7 +629,7 @@ namespace SpecThread.Api.Migrations
 
                     b.ToTable("requirement_criteria_versions", "public", t =>
                         {
-                            t.HasCheckConstraint("ck_requirement_criteria_versions_criteria", "jsonb_typeof(criteria) = 'array'");
+                            t.HasCheckConstraint("ck_requirement_criteria_versions_criteria", "jsonb_typeof(criteria) = 'array' AND NOT jsonb_path_exists(criteria, 'strict $[*] ? (@.type() != \"string\")')");
 
                             t.HasCheckConstraint("ck_requirement_criteria_versions_number", "number > 0");
                         });
