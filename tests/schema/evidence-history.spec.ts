@@ -138,11 +138,15 @@ test("issues and pull requests are found by words in their titles, with state, a
 test("searches are validated, need a connected repository, stay in it, and report GitHub failures", async ({ request }) => {
   const { path, name } = await setUp(request, [item(1, "Guests cannot pay")]);
   const member = await as(request, "member");
-  for (const query of ["", "q=", "q=%20%20", `q=${'"'.repeat(3)}`, `q=${"x".repeat(201)}`]) {
+  const words = (count: number) => Array.from({ length: count }, (_, i) => `w${i}`).join(" ");
+  for (const query of ["", "q=", "q=%20%20", `q=${'"'.repeat(3)}`, `q=${"x".repeat(201)}`, `q=${encodeURIComponent(words(11))}`]) {
     const response = await member.get(`${path}/search?${query}`);
     expect(response.status(), query).toBe(400);
     expect((await response.json()).errors.q, query).toHaveLength(1);
   }
+  // Ten words are searched in full; eleven are refused rather than cut to ten.
+  expect((await (await member.get(`${path}/search?q=${encodeURIComponent(words(11))}`)).json()).errors.q).toEqual(["Use at most 10 words."]);
+  expect((await member.get(`${path}/search?q=${encodeURIComponent(words(10))}`)).status()).toBe(200);
 
   const fault = (data: object) => request.post(`${gitHub}/__github/faults`, { data: { bearer: "installation", path: "^/search/issues$", ...data } });
   const clear = () => request.delete(`${gitHub}/__github/faults?bearer=installation`);

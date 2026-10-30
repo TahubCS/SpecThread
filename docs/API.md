@@ -106,7 +106,7 @@ titles contain every word of `q` (1 to 200 characters, at most 10 words; quotes 
 ignored), through GitHub's search API. Each word is searched for as text, so a
 qualifier such as `repo:` in `q` cannot reach another repository; results from any
 other repository are dropped. It links nothing: link a result by its number. An empty
-`q` is 400 on `q`; no repository connected is 409; 502 and 503 as above, including
+`q`, or one of more than 10 words, is 400 on `q` (words are never dropped); no repository connected is 409; 502 and 503 as above, including
 GitHub's search rate limit. Linking and unlinking each add an `EvidenceEvent`, which
 stays after the link is removed; refresh adds none.
 

@@ -57,8 +57,10 @@ internal static partial class EvidenceEndpoints
         var errors = new InputErrors();
         var text = errors.Required("q", q, MaxSearchLength);
         var words = (text ?? "").Replace("\"", " ", StringComparison.Ordinal)
-            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Take(MaxSearchWords).ToList();
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).ToList();
         if (text is not null && words.Count == 0) errors.Add("q", "Enter words from the title.");
+        // Refused rather than cut short: a shorter search would find titles without every word.
+        else if (words.Count > MaxSearchWords) errors.Add("q", $"Use at most {MaxSearchWords} words.");
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var scope = await FindAsync(db, user.CallerId(), requirementId, cancel);
