@@ -210,6 +210,9 @@ a.row:focus-visible { outline-offset: -2px; }
 .scaffold-status-mark { flex: none; width: 11px; height: 11px; margin-top: 5px; border: 2px solid #f5f5f5; border-radius: 50%; }
 .scaffold-status strong { color: #eaeaea; font-size: 14px; font-weight: 600; }
 .scaffold-status p { margin: 6px 0 0; color: #ababab; line-height: 1.5; }
+.policy-section { max-width: 720px; margin-top: 40px; }
+.policy-section h2 { margin: 0; color: #efefef; font-size: 18px; font-weight: 600; }
+.policy-section p { margin: 12px 0 0; color: #b6b6b6; line-height: 1.6; }
 .scaffold-navigation { display: block; margin-top: 44px; }
 .scaffold-navigation-heading h2 { margin: 0; color: #efefef; font-size: 16px; font-weight: 600; }
 .scaffold-navigation-heading p { margin: 6px 0 0; color: #979797; }

@@ -50,6 +50,12 @@ Docker Compose only when a task requires local dependencies
 
 No local database is required for the initial health and smoke checks
 
+Observability
+
+OpenTelemetry (OTLP/HTTP) to Grafana Cloud; grafana/otel-lgtm locally
+
+Traces, metrics, and logs, off unless an endpoint is configured (ADR-055, OBSERVABILITY.md)
+
 Continuous integration
 
 GitHub Actions

@@ -284,6 +284,38 @@ The project creation form must send `teamId`, and management controls use `teamR
 Claude owns those global project pages/forms. Team archive restoration uses the
 existing project restore API and rechecks current Owner/Admin permission.
 
+## Telemetry (ADR-055)
+
+Optional; nothing is sent until these are set. Telemetry goes to the team's Grafana Cloud stack
+(free tier); docs/OBSERVABILITY.md describes what is recorded. The Grafana owner creates the
+stack and an access-policy token with write scopes for metrics, logs, and traces only, then
+hands the platform owner the header value through a password manager or during a call, never
+in chat, email, or issues.
+
+Set on **Render** (`specthread-api`, Environment) and on **Vercel** (Settings > Environment
+Variables, **Production only**, so Preview deployments send nothing):
+
+| Variable | Value | Secret |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | The stack's OTLP endpoint (Grafana Cloud > stack > OpenTelemetry), for example `https://otlp-gateway-prod-us-west-0.grafana.net/otlp` | No |
+| `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic%20<base64 of "<instanceId>:<token>">`, with the space written as `%20` | Yes (Vercel: Sensitive) |
+
+Then deploy the latest commit on Render (auto-deploy is off) and redeploy Production on Vercel;
+both read the variables only at startup. A value that is not an HTTP(S) URL stops the API from
+starting, so a failed Render deploy after this change points at the endpoint. To turn telemetry
+off, delete `OTEL_EXPORTER_OTLP_ENDPOINT` on both and redeploy. To rotate the token, the
+Grafana owner creates a new one, the platform owner replaces the header on both platforms and
+redeploys, and the Grafana owner then deletes the old token.
+
+Verify, about 10 minutes, with a test account:
+
+- In Grafana, **Explore > Tempo**, a `specthread-web` trace from opening a project continues
+  into `specthread-api` and shows SQL spans; `service.version` is the deployed commit.
+- The web root span's `client.address` is your own IP address, not a Vercel address.
+- Opening an invitation link shows `/invites/[token]` and `/invites/{token}`, never the token.
+- **Explore > Prometheus**: `http_server_request_duration_seconds` exists for `specthread-api`.
+- **Explore > Loki**: API warnings and errors, if any, carry a `trace_id`.
+
 ## 3. Post-Deployment Verification
 
 If signed-in pages fail or the Vercel logs show `Onboarding check failed (status 401)`,

@@ -10,7 +10,8 @@ export async function startApi(port: number, env: Record<string, string>) {
     // Blank by default, so a developer's own user-secrets never reach a test API.
     env: {
       ...process.env, ConnectionStrings__Database: "", Auth__Issuer: "",
-      GitHub__AppId: "", GitHub__PrivateKey: "", GitHub__AppSlug: "", ...env,
+      GitHub__AppId: "", GitHub__PrivateKey: "", GitHub__AppSlug: "",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "", OTEL_EXPORTER_OTLP_HEADERS: "", ...env,
     },
     stdio: "ignore",
   });

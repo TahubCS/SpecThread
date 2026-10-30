@@ -1,0 +1,11 @@
+# Optional local telemetry viewer (docs/OBSERVABILITY.md): Grafana with Tempo, Loki, and
+# Prometheus in one container, the same stores Grafana Cloud uses. Start and stop it with
+# `npm run observability:up` and `npm run observability:down`; nothing is kept between runs.
+# Ports bind to loopback only. Grafana uses 3030 because `next dev` uses 3000.
+name: specthread-observability
+services:
+  lgtm:
+    image: grafana/otel-lgtm:0.38.1
+    ports:
+      - "127.0.0.1:3030:3000" # Grafana
+      - "127.0.0.1:4318:4318" # OTLP over HTTP, where the web app and API send

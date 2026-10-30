@@ -1397,6 +1397,49 @@ RequirementEvidenceEvents adds the table (RLS on, browser grants revoked) and st
 with an "added" event for every existing link, from its `linked_by` and `linked_at`; its
 rollback drops the table and loses the history, including every removal.
 
+ADR-055: OpenTelemetry to Grafana Cloud, off unless configured, with redaction by design
+
+Status: Accepted
+
+Context: The team could not see how requests behave in production or under load: which
+queries a page runs, where time goes between Vercel, Render, and Supabase, what fails, and
+what an account or IP address has been doing when abuse is suspected. ADR-043 counted SQL
+statements by hand. Vercel Hobby keeps runtime logs about an hour and cannot export them;
+Render's free plan has no metrics history. Jacob proposed Grafana, Jaeger, and Sentry. The
+team chose Grafana Cloud's free tier for all three signals, with Jacob owning the Grafana
+stack and the Vercel/Render owner setting its variables; recording the user ID only (no team
+ID), and the client IP on web traces; and naming Grafana Labs and IP addresses on the privacy
+page. Jaeger would duplicate Tempo; Sentry is deferred.
+
+Decision: Both apps use OpenTelemetry and export OTLP over HTTP/protobuf to the endpoint in
+`OTEL_EXPORTER_OTLP_ENDPOINT`, with credentials in `OTEL_EXPORTER_OTLP_HEADERS`. Unset or
+blank means off: nothing is registered, so tests and CI are unaffected. The API
+(`app/api/Observability/ObservabilitySetup.cs`) sends traces (ASP.NET Core, HttpClient,
+Npgsql), metrics (hosting, Kestrel, HttpClient, runtime, Npgsql pool), and logs (framework
+categories at Warning and above); `/health` is not traced; an endpoint that is not an HTTP(S)
+URL stops startup. The web app (`app/web/src/instrumentation.ts`) sends traces through
+`@vercel/otel` with its own exporter, because the library's default would also send unredacted
+spans and would send to localhost:4318 even without an endpoint. Trace context goes to the API
+origin only. Production only: Vercel Preview deployments do not send telemetry. Web server
+logs stay in Vercel.
+
+Redaction is by design, not by list of routes: the API replaces `url.path` with the route
+template; the web exporter drops raw path and query attributes and cuts every URL to its
+scheme and host. No bodies, headers, emails, names, or SQL parameter values are recorded. The
+caller is `user.id` (the Better Auth ID); the web root span carries `client.address` from
+Vercel's `x-real-ip`, read only on Vercel. Neither is ever a metric label. Guard tests send
+telemetry to a fake OTLP receiver and fail if a token, email, name, or session token appears.
+A pinned `grafana/otel-lgtm` container is the optional local viewer. docs/OBSERVABILITY.md has
+the conventions.
+
+Consequences: Production traces and metrics are kept 14 days on the free tier, which also
+limits metric series (10,000), and active Grafana users (3 a month); durable performance
+history needs another store (planned: load-test summaries). IP addresses and user IDs sent to
+Grafana Labs are personal data, named on the privacy page; exports must stay team-only. A
+leaked OTLP token can only write telemetry. The browser suite now runs with telemetry on
+against the fake receiver, so instrumentation problems surface in tests. Rollback: delete
+`OTEL_EXPORTER_OTLP_ENDPOINT` on Vercel and Render and redeploy; no code or migration change.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

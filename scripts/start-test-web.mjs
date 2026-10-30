@@ -5,6 +5,7 @@ import { startTestDatabase } from "./test-database.mjs";
 import buildApi from "./build-api.mjs";
 import { startApiProxy } from "./test-api-proxy.mjs";
 import { startFakeGitHub } from "./test-github.mjs";
+import { startFakeOtlp } from "./test-otlp.mjs";
 
 // Playwright starts webServer entries in order, before globalSetup.
 // Build here before the second entry starts the API and locks its DLL on Windows.
@@ -17,6 +18,14 @@ const proxyOrigin = "http://127.0.0.1:5107";
 const gitHubOrigin = "http://127.0.0.1:5108";
 const gitHubAppId = "424242";
 const gitHubKey = generateKeyPairSync("rsa", { modulusLength: 2048 });
+// The browser-test web app and API send telemetry to a fake receiver on 5126, so the browser suite
+// runs with telemetry on and tests can read back what was sent. Never a developer's own viewer.
+const telemetry = {
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:5126",
+  OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic%20dGVzdA==",
+  OTEL_BSP_SCHEDULE_DELAY: "200",
+  OTEL_BLRP_SCHEDULE_DELAY: "200",
+};
 let database;
 let api;
 let server;
@@ -40,9 +49,11 @@ try {
   await mkdir("playwright/.cache", { recursive: true });
   await writeFile("playwright/.cache/test-web-database.json", JSON.stringify({ name: database.name }));
   const url = new URL(database.connectionString);
+  await startFakeOtlp({ port: 5126 });
   api = spawn("dotnet", ["app/api/bin/Release/net10.0/SpecThread.Api.dll", "--urls", apiOrigin, "--environment", "Development"], {
     env: {
       ...process.env,
+      ...telemetry,
       ConnectionStrings__Database: `Host=${url.hostname};Port=${url.port};Database=postgres;Username=${url.username};Password=${url.password}`,
       Auth__Issuer: process.env.BETTER_AUTH_URL,
       GitHub__ApiBaseUrl: gitHubOrigin,
@@ -56,7 +67,7 @@ try {
   api.on("error", () => void stop(1));
   await startApiProxy({ port: 5107, upstream: apiOrigin });
   await startFakeGitHub({ port: 5108, appId: gitHubAppId, publicKey: gitHubKey.publicKey });
-  const env = { ...process.env, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: proxyOrigin };
+  const env = { ...process.env, ...telemetry, DATABASE_URL: database.connectionString, SPECTHREAD_API_URL: proxyOrigin };
   execFileSync(process.execPath, ["../../node_modules/next/dist/bin/next", "build"], { cwd: "app/web", env, stdio: "inherit" });
   for (let attempt = 0; ; attempt++) {
     if (api.exitCode !== null) throw new Error("The browser-test API exited before it was ready.");

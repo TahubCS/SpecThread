@@ -1,6 +1,67 @@
 # Shared handoff
 
-## Current task: Connect a GitHub repository story (2026-10-30)
+## Current task: Observability Phase 1, instrumentation off by default (2026-10-30)
+
+- Branch: `feature/observability`, from `main` at `ba2013f` (PR #24 merged).
+- Scope: OpenTelemetry in the API and web app, exported to Grafana Cloud in deployment and
+  to an optional local viewer, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set (ADR-055,
+  docs/OBSERVABILITY.md). Phase 2 (dashboards, alerts, Grafana Cloud setup) and Phase 3
+  (load testing) are separate PRs.
+- Completed:
+  - API: `Observability/ObservabilitySetup.cs`, one call in `Program.cs`. Traces (ASP.NET
+    Core, HttpClient, Npgsql), metrics (hosting, Kestrel, HttpClient, runtime, Npgsql),
+    logs (framework categories at Warning and above), OTLP/HTTP. `url.path` replaced by the
+    route template; `user.id` from the JWT `sub`; `/health` not traced; an endpoint that is
+    not an HTTP(S) URL stops startup.
+  - Web: `src/instrumentation.ts` and `lib/telemetry.ts` (`@vercel/otel` with a redacting
+    exporter: no raw paths or queries, URLs cut to scheme and host); trace context only to
+    the API origin; `client.address` from `x-real-ip` on Vercel; `user.id` on the page-gate
+    span in `proxy.ts`.
+  - Tests: fake OTLP receiver (`scripts/test-otlp.mjs`, 5126) started with the browser-test
+    stack, so the browser suite runs with telemetry on; `tests/api/telemetry.spec.ts` (API on
+    5127/5128) and `tests/e2e/telemetry.spec.ts` guard tests; all test APIs blank `OTEL_*`.
+  - Local viewer: `compose.observability.yaml` (`grafana/otel-lgtm:0.38.1`, Grafana on 3030,
+    OTLP on 4318, loopback only); `npm run observability:up` / `observability:down`.
+  - Privacy page: a published "Operational telemetry" section (Grafana Labs, user ID, IP
+    address, 14 days); the rest of the page stays a draft.
+- Decisions (team, recorded in ADR-055): Grafana Cloud free tier for all signals; Jacob owns
+  the Grafana stack, the Vercel/Render owner sets the variables; user ID only (no team ID);
+  full client IP on web traces only; privacy page names Grafana Labs and IP addresses;
+  Preview deployments send nothing; Sentry deferred. Assumption: two variables suffice
+  (protocol, service names, and environment are set in code or by the platform). No
+  `SpecThreadTelemetry` source/meter yet: there is no custom signal to put in it.
+- Changed files: API `Program.cs`, `SpecThread.Api.csproj` and `packages.lock.json`
+  (OpenTelemetry 1.20.1 packages, Npgsql.OpenTelemetry 10.0.3), new `Observability/`; web
+  `package.json` (`@vercel/otel` 2.2.0, `@opentelemetry/api` 1.9.1,
+  `@opentelemetry/sdk-trace-base` 2.12.0), new `src/instrumentation.ts` and
+  `src/lib/telemetry.ts`, `proxy.ts`, `privacy/page.tsx`, `components/policy-page.tsx`,
+  `app-shell.css`; root `package.json`, `package-lock.json`, `playwright.config.ts`,
+  `compose.observability.yaml`, `render.yaml`, both `.env.example`; `scripts/test-otlp.mjs`,
+  `scripts/start-test-web.mjs`; tests `support/otlp.ts`, `support/api-process.ts`,
+  `api/telemetry.spec.ts`, `e2e/telemetry.spec.ts`, `e2e/landing.spec.ts`; docs new
+  OBSERVABILITY, DECISIONS (ADR-055), DEPLOYMENT (Telemetry section), TESTING,
+  ARCHITECTURE, AGENTS.md (one line on telemetry). `.gitignore` ignores `*_plan.md`.
+- Checks: `npm test` 395 passed (builds the web app and Release API); `npm run lint`,
+  `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `git diff --check` passed. The guard tests were seen to fail with redaction disabled on
+  both sides. The API image built and booted as in the `api-image` job (`/health` ok,
+  anonymous `/me` 401). Series budget: after the browser suite ran against the local
+  viewer, the API had sent about 2,100 metric series (limit 10,000). With telemetry off
+  the browser suite logs the same "destination stream closed early" errors from fault
+  tests, so they are not caused by this change. `npm audit` reports critical/high advisories
+  in `next`, `better-auth`, `sharp`, `zod`, and `source-map-js` that predate this branch;
+  none in the new packages.
+- Known issues and risks: not exercised are Vercel's `x-real-ip` (read only on Vercel),
+  `@vercel/otel` flushing before a Vercel function freezes, real Grafana Cloud, and the API
+  sending nothing without an endpoint (nothing is registered; no receiver can observe it).
+  IP addresses and user IDs sent to Grafana Labs are personal data. Grafana Cloud's
+  Application Observability would add span-metric series against the same limit; leave it
+  off. The PR touches shared files (`Program.cs`, `playwright.config.ts`, `render.yaml`,
+  lockfiles): after it merges, teammates run `npm ci` and `dotnet restore app/api`.
+- Next step: review and open the PR to `main`. After it merges and deploys, the Grafana
+  owner and platform owner follow docs/DEPLOYMENT.md "Telemetry (ADR-055)" and verify.
+
+## Previous task: Connect a GitHub repository story (2026-10-30, merged as PR #24)
 
 - Branch: `feature/repository-connection-story`, from `main` at `09848a9` (PR #23 merged).
 - Scope: the story "connect one GitHub repository to a project" (Danielle, Tech Lead;

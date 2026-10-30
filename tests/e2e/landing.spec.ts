@@ -39,6 +39,11 @@ test("privacy and terms are public pages without the app sidebar", async ({ page
   await page.getByRole("contentinfo").getByRole("link", { name: "Privacy" }).click();
   await expect(page).toHaveURL(/\/privacy$/);
   await expect(page.getByRole("heading", { name: "Privacy", level: 1 })).toBeVisible();
+  // Telemetry is disclosed (ADR-055): the processor, what identifies a person, and retention.
+  const telemetry = page.getByRole("region", { name: "Operational telemetry" });
+  await expect(telemetry).toContainText("Grafana Labs");
+  await expect(telemetry).toContainText("IP address");
+  await expect(telemetry).toContainText("14 days");
   await expect(page.locator(".app-sidebar")).toHaveCount(0);
   await page.goto("/terms");
   await expect(page.getByRole("heading", { name: "Terms of use", level: 1 })).toBeVisible();

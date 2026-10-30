@@ -5,6 +5,7 @@ using SpecThread.Api.Auth;
 using SpecThread.Api.Data;
 using SpecThread.Api.Documents;
 using SpecThread.Api.GitHub;
+using SpecThread.Api.Observability;
 using SpecThread.Api.Projects;
 using SpecThread.Api.Requirements;
 using SpecThread.Api.Teams;
@@ -13,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Hosting request-start/finish logs include raw invitation secrets in the URL.
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+builder.AddSpecThreadObservability();
 
 builder.Services.AddOpenApi();
 builder.AddSpecThreadAuthentication();

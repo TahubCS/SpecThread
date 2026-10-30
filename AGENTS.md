@@ -108,7 +108,7 @@ Handle loading, empty, error, unauthorized, and retry states where relevant.
 
 UI work must remain keyboard accessible, responsive, and readable.
 
-Logs must be useful without exposing tokens, credentials, or sensitive payloads.
+Logs must be useful without exposing tokens, credentials, or sensitive payloads. The same applies to telemetry: follow the "Never recorded" list in docs/OBSERVABILITY.md, and fix redaction rather than loosening the telemetry guard tests.
 
 Database changes require migrations and a documented rollback consideration.
 

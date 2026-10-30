@@ -1,3 +1,4 @@
+import { trace } from "@opentelemetry/api";
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { isPublicPath } from "@/lib/app-navigation";
@@ -18,6 +19,8 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   if (isPublicPath(pathname)) return NextResponse.next();
   const { headers, response: session } = await auth.api.getSession({ headers: request.headers, returnHeaders: true });
+  // Who made this request, by ID only (docs/OBSERVABILITY.md). Does nothing while telemetry is off.
+  if (session) trace.getActiveSpan()?.setAttribute("user.id", session.user.id);
   let result = NextResponse.next();
   if (!session) {
     const login = new URL("/login", request.url);
