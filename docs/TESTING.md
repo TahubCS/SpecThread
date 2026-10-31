@@ -83,7 +83,13 @@ real GitHub. The repository API tests use their own stand-in on 5109 and API
 instances on 5110 and 5111; the evidence API tests use 5113 and 5114, and the review
 API tests 5115. Test API
 instances blank the GitHub settings unless a test sets them, so a developer's
-user-secrets never reach them. A test calls `failApi` from tests/support/api-faults.ts to make the
+user-secrets never reach them. They blank `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_HEADERS` the same way, so telemetry is off unless a test turns it on.
+The browser-test web app and its API (5106) do turn it on: scripts/start-test-web.mjs starts
+a fake OTLP receiver on 5126 (scripts/test-otlp.mjs), so the browser suite runs with
+telemetry on, and tests read back what arrived with tests/support/otlp.ts. The telemetry API
+tests start their own API on 5127 (and 5128 for a startup failure) sending to that receiver.
+A test calls `failApi` from tests/support/api-faults.ts to make the
 API fail, drop the connection, answer with a wrong body, or respond slowly for that
 test's own user only, so parallel tests are unaffected. Keep these
 ports free; existing servers are not reused. Do not run competing Next.js builds
@@ -306,6 +312,18 @@ currently require network access during the web build.
   with seeded evidence and an acceptance, the empty state, 390px without horizontal
   scrolling, and a failed save keeping the label. Not exercised: 20 follow-ups through
   the browser, and an Evidence complete requirement fed by the fake GitHub.
+- Telemetry (ADR-055). tests/api/telemetry.spec.ts (API on 5127): spans named by route
+  template with the caller's `user.id`; an invitation token in the path and query, a token
+  in an unmatched path, and the bearer token never sent; the error log linked by trace ID;
+  request metrics by route; `/health` not traced; the credentials header arriving decoded;
+  an endpoint that is not an HTTP(S) URL stopping startup; and the web redaction and header
+  parsing functions directly. tests/e2e/telemetry.spec.ts: an invitation link is one trace
+  across web and API without its token; a signed-in page carries the user's ID on web and API
+  spans, never their email, name, or session token. Each test starts its own trace with a
+  `traceparent` header. Not exercised: Vercel's `x-real-ip` (read only on Vercel), real
+  Grafana Cloud, and the API sending nothing when the endpoint is unset (nothing is
+  registered then, and there is no receiver to observe the absence). The privacy page test in
+  tests/e2e/landing.spec.ts checks the telemetry disclosure.
 - Last editor, archive view, and restore (ADR-050): tests/schema/product-api.spec.ts
   checks `updatedBy` after create and after another member's save; default and
   `archived=true` lists; an archived requirement readable but refusing saves and

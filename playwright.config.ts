@@ -75,7 +75,11 @@ export default defineConfig({
       url: "http://127.0.0.1:5100/health",
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { ConnectionStrings__Database: "", Auth__Issuer: "http://127.0.0.1:5101" },
+      env: {
+        ConnectionStrings__Database: "", Auth__Issuer: "http://127.0.0.1:5101",
+        // Telemetry off, even when a developer's shell or user-secrets point it at a local viewer.
+        OTEL_EXPORTER_OTLP_ENDPOINT: "", OTEL_EXPORTER_OTLP_HEADERS: "",
+      },
     },
   ],
 });

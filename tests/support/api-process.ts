@@ -10,14 +10,16 @@ export async function startApi(port: number, env: Record<string, string>) {
     // Blank by default, so a developer's own user-secrets never reach a test API.
     env: {
       ...process.env, ConnectionStrings__Database: "", Auth__Issuer: "",
-      GitHub__AppId: "", GitHub__PrivateKey: "", GitHub__AppSlug: "", ...env,
+      GitHub__AppId: "", GitHub__PrivateKey: "", GitHub__AppSlug: "",
+      OTEL_EXPORTER_OTLP_ENDPOINT: "", OTEL_EXPORTER_OTLP_HEADERS: "", ...env,
     },
     stdio: "ignore",
   });
   const stop = () => { child.kill(); };
   try {
     for (let attempt = 0; ; attempt++) {
-      if (child.exitCode !== null) throw new Error(`API exited with code ${child.exitCode}`);
+      // On Linux an unhandled startup exception aborts the process, which sets signalCode, not exitCode.
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`API exited with ${child.exitCode ?? child.signalCode}`);
       try {
         if ((await fetch(`${baseURL}/health`)).ok) break;
       } catch (error) {

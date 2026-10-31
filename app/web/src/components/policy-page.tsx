@@ -1,5 +1,10 @@
-/** Renders a public policy page, shown with the minimal public header and never the app sidebar. */
-export function PolicyPage({ title, description }: { title: string; description: string }) {
+import type { ReactNode } from "react";
+
+/**
+ * Renders a public policy page, shown with the minimal public header and never the app sidebar.
+ * `children` holds the sections already published; the draft notice covers the rest.
+ */
+export function PolicyPage({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
   return (
     <section className="scaffold-page" aria-labelledby="page-title">
       <header className="scaffold-heading">
@@ -14,6 +19,7 @@ export function PolicyPage({ title, description }: { title: string; description:
           <p>This page is planned. The full text is not published yet.</p>
         </div>
       </div>
+      {children}
     </section>
   );
 }

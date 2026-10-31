@@ -16,3 +16,8 @@ services:
         sync: false
       - key: Auth__Issuer
         sync: false
+      # Optional telemetry (ADR-055, docs/DEPLOYMENT.md); empty means off.
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false
