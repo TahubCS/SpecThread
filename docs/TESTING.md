@@ -319,15 +319,18 @@ currently require network access during the web build.
   lock); 404 for outsiders, 401 anonymous; table constraints, RLS, and rollback.
   tests/e2e/follow-ups.spec.ts: adding, following the link both ways, removing, the
   change list on the page and the history page, and a failed and a refused add.
-- Milestones and Evidence complete (ADR-053). tests/schema/milestones.spec.ts (API on
+- Milestones (ADR-053) and Evidence complete (ADR-057). tests/schema/milestones.spec.ts (API on
   5123): a label set on create, set and cleared later without a version change, the
   length limit, archived and outsider refusals; the exact-label filter alone and with
-  `archived=true`, the labels endpoint; every case of the Evidence complete rule with
-  evidence rows and checks inserted in the database; the column's check and rollback.
+  `archived=true`, the labels endpoint; every case of the Evidence complete rule and its
+  missing parts, on the list and on the requirement, with issues, pull requests, commits,
+  checks, and releases inserted in the database; the column's check and rollback.
   tests/e2e/milestones.spec.ts: a label on create and on the page, filtering, the counts
-  with seeded evidence and an acceptance, the empty state, 390px without horizontal
+  with a seeded issue, merged pull request, release, and acceptance, the missing parts in
+  the row and as Met/Missing on the requirement page, the empty state, 390px without horizontal
   scrolling, and a failed save keeping the label. Not exercised: 20 follow-ups through
-  the browser, and an Evidence complete requirement fed by the fake GitHub.
+  the browser, and an Evidence complete requirement fed by the fake GitHub. Parsing of
+  `evidenceMissing`, including the previous API's response, is in tests/api/project-data.spec.ts.
 - Telemetry (ADR-055). tests/api/telemetry.spec.ts (API on 5127): spans named by route
   template with the caller's `user.id`; an invitation token in the path and query, a token
   in an unmatched path, and the bearer token never sent; the error log linked by trace ID;

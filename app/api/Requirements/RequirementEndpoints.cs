@@ -47,20 +47,21 @@ internal static class RequirementEndpoints
             .GroupBy(v => v.RequirementId)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(v => v.DecidedAt).ThenByDescending(v => v.Id).First());
         var evidence = (await db.RequirementEvidence.AsNoTracking().Where(e => ids.Contains(e.RequirementId))
-                .Select(e => new { e.RequirementId, e.Id, e.Kind, e.Checks }).ToListAsync(cancel))
+                .Select(e => new { e.RequirementId, Facts = new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains) }).ToListAsync(cancel))
             .ToLookup(e => e.RequirementId);
         var criteriaVersions = await CriteriaVersionEndpoints.LatestNumbersAsync(db, ids, cancel);
 
         return TypedResults.Ok(requirements.ConvertAll(r =>
         {
-            var links = evidence[r.Id].ToList();
+            var links = evidence[r.Id].Select(e => e.Facts).ToList();
+            var missing = EvidencePolicy.Missing(links);
             int? criteriaVersion = criteriaVersions.TryGetValue(r.Id, out var number) ? number : null;
             return new RequirementSummary(
                 r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, links.Count,
                 reviews.TryGetValue(r.Id, out var review)
                     ? ReviewEndpoints.Summarize(review, r.Version, links.Select(e => e.Id), criteriaVersion)
                     : null,
-                r.Milestone, criteriaVersion, EvidencePolicy.IsComplete(links.Select(e => new EvidenceChecks(e.Kind, e.Checks))));
+                r.Milestone, criteriaVersion, missing.Count == 0, missing);
         }));
     }
 
@@ -102,7 +103,7 @@ internal static class RequirementEndpoints
         var documents = await LoadDocuments(db, requirement.Id, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria, documents, 1));
+        return TypedResults.Created($"/requirements/{requirement.Id}", ToResponse(requirement, criteria, documents, 1, EvidencePolicy.Missing([])));
     }
 
     private static async Task<Results<Ok<RequirementResponse>, NotFound>> Get(
@@ -116,7 +117,7 @@ internal static class RequirementEndpoints
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
         return TypedResults.Ok(ToResponse(requirement.Requirement, criteria, await LoadDocuments(db, requirementId, cancel),
-            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel)));
+            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel), await MissingEvidenceAsync(db, requirementId, cancel)));
     }
 
     // Replaces the whole criteria and document lists; a stale version means someone else saved first.
@@ -174,9 +175,10 @@ internal static class RequirementEndpoints
             return Stale(); // Disposing the transaction rolls back the criteria deletion.
         }
         var documents = await LoadDocuments(db, requirementId, cancel);
+        var missing = await MissingEvidenceAsync(db, requirementId, cancel);
         await transaction.CommitAsync(cancel);
 
-        return TypedResults.Ok(ToResponse(requirement, criteria, documents, criteriaVersion));
+        return TypedResults.Ok(ToResponse(requirement, criteria, documents, criteriaVersion, missing));
     }
 
     private static Task<Results<Ok<RequirementResponse>, NotFound, ProblemHttpResult>> Archive(
@@ -214,7 +216,7 @@ internal static class RequirementEndpoints
             .OrderBy(c => c.Position)
             .ToListAsync(cancel);
         return TypedResults.Ok(ToResponse(found.Requirement, criteria, await LoadDocuments(db, requirementId, cancel),
-            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel)));
+            await CriteriaVersionEndpoints.LatestNumberAsync(db, requirementId, cancel), await MissingEvidenceAsync(db, requirementId, cancel)));
     }
 
     // Like FindForMember, but locks the project's team first and then reads the requirement, so
@@ -313,9 +315,16 @@ internal static class RequirementEndpoints
 
     // `criteriaVersion` is null only for a requirement the previous API created during a deploy (ADR-044).
     private static RequirementResponse ToResponse(
-        Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents, int? criteriaVersion) => new(
+        Requirement r, IEnumerable<AcceptanceCriterion> criteria, List<LinkedDocumentResponse> documents, int? criteriaVersion,
+        List<string> evidenceMissing) => new(
         r.Id, r.ProjectId, r.Title, r.Description, r.CreatedBy, r.UpdatedBy ?? r.CreatedBy, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt,
-        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents, criteriaVersion, r.Milestone);
+        criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents, criteriaVersion, r.Milestone,
+        evidenceMissing.Count == 0, evidenceMissing);
+
+    // The parts of the Evidence complete rule one requirement's links do not meet (ADR-057).
+    private static async Task<List<string>> MissingEvidenceAsync(SpecThreadDbContext db, Guid requirementId, CancellationToken cancel) =>
+        EvidencePolicy.Missing(await db.RequirementEvidence.AsNoTracking().Where(e => e.RequirementId == requirementId)
+            .Select(e => new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains)).ToListAsync(cancel));
 
     internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
     {
@@ -334,12 +343,12 @@ internal sealed record UpdateRequirementRequest(
 
 internal sealed record RequirementSummary(
     Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review,
-    string? Milestone, int? CriteriaVersion, bool EvidenceComplete);
+    string? Milestone, int? CriteriaVersion, bool EvidenceComplete, List<string> EvidenceMissing);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, string UpdatedBy, int Version,
     DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, List<CriterionResponse> AcceptanceCriteria,
-    List<LinkedDocumentResponse> Documents, int? CriteriaVersion, string? Milestone);
+    List<LinkedDocumentResponse> Documents, int? CriteriaVersion, string? Milestone, bool EvidenceComplete, List<string> EvidenceMissing);
 
 internal sealed record CriterionResponse(Guid Id, string Text, int Position);
 

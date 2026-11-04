@@ -43,18 +43,33 @@ test("requirements are grouped by milestone, filtered one set at a time, and cou
   await expect(page.getByRole("status").filter({ hasText: "Milestone saved." })).toBeVisible();
   await expect(page.getByText(/^Version 1 ·/)).toBeVisible();
 
-  // "Box opens" has a merged pull request whose checks passed and an acceptance of what is there now.
+  // "Box opens" has an issue, a merged pull request whose checks passed, a release that includes
+  // it (ADR-057), and an acceptance of what is there now.
   const reviewer = await createTestSession("Robert Client");
   await runTestSql(`
-    WITH link AS (
+    WITH issue AS (
+      INSERT INTO public.requirement_evidence (requirement_id,kind,repository_id,repository_owner,repository_name,number,state,title,url,
+        github_created_at,github_updated_at,linked_by)
+      VALUES ('${opens}','issue',1,'acme','box',2,'closed','Box must open','https://github.com/acme/box/issues/2',now(),now(),'${owner.userId}')
+      RETURNING id),
+    pull AS (
       INSERT INTO public.requirement_evidence (requirement_id,kind,repository_id,repository_owner,repository_name,number,state,title,url,
         github_created_at,github_updated_at,linked_by,checks,check_count)
       VALUES ('${opens}','pull_request',1,'acme','box',1,'merged','Open the box','https://github.com/acme/box/pull/1',now(),now(),'${owner.userId}',
         '[{"name":"build","result":"passed","url":null,"completedAt":null,"kind":"check"}]',1)
+      RETURNING id),
+    release AS (
+      INSERT INTO public.requirement_evidence (requirement_id,kind,repository_id,repository_owner,repository_name,tag,title,url,
+        github_created_at,github_updated_at,linked_by,contains)
+      SELECT '${opens}','release',1,'acme','box','v1.0.0','v1.0.0','https://github.com/acme/box/releases/tag/v1.0.0',now(),now(),'${owner.userId}',
+        jsonb_build_object(pull.id::text, true) FROM pull
       RETURNING id)
     INSERT INTO public.requirement_reviews (requirement_id,decision,note,requirement_version,criteria_version,evidence,decided_by)
-    SELECT '${opens}','accepted','',1,1,jsonb_build_array(jsonb_build_object('id',id,'kind','pull_request','label','#1','title','Open the box','state','merged')),
-      '${reviewer.userId}' FROM link;`);
+    SELECT '${opens}','accepted','',1,1,jsonb_build_array(
+        jsonb_build_object('id',issue.id,'kind','issue','label','#2','title','Box must open','state','closed'),
+        jsonb_build_object('id',pull.id,'kind','pull_request','label','#1','title','Open the box','state','merged'),
+        jsonb_build_object('id',release.id,'kind','release','label','v1.0.0','title','v1.0.0','state',null)),
+      '${reviewer.userId}' FROM issue, pull, release;`);
 
   await page.goto(`/projects/${projectId}/requirements`);
   await expect(page.getByLabel("Requirement counts")).toHaveText("3 requirements · 1 Evidence complete · 1 Accepted");
@@ -65,8 +80,25 @@ test("requirements are grouped by milestone, filtered one set at a time, and cou
   await expect(rows).toHaveCount(2);
   await expect(page.getByLabel("Requirement counts")).toHaveText("Sprint 1 · 2 requirements · 1 Evidence complete · 1 Accepted");
   await expect(rows.filter({ hasText: "Box opens" })).toContainText("Evidence complete");
+  await expect(rows.filter({ hasText: "Box opens" })).not.toContainText("Missing");
   await expect(rows.filter({ hasText: "Box closes" })).not.toContainText("Evidence complete");
+  await expect(rows.filter({ hasText: "Box closes" })).toContainText("Missing issue, merged pull request, passing checks, release");
   await page.screenshot({ path: testInfo.outputPath("milestone-filter.png"), fullPage: true });
+
+  // The requirement page lists every part of the rule, separately from the review.
+  await rows.filter({ hasText: "Box opens" }).click();
+  const parts = page.getByRole("list", { name: "Evidence complete rule" }).getByRole("listitem");
+  await expect(parts).toHaveText([
+    "A linked issueMet", "A merged pull requestMet", "Checks passed on the final commit of each merged pull requestMet",
+    "A linked release that includes each merged pull requestMet",
+  ]);
+  await expect(page.getByRole("region", { name: "Evidence" }).getByText("Evidence complete", { exact: true })).toBeVisible();
+  await page.goto(`/projects/${projectId}/requirements`);
+  await rows.filter({ hasText: "Box closes" }).click();
+  await expect(page.getByRole("region", { name: "Evidence" }).getByText("Evidence incomplete", { exact: true })).toBeVisible();
+  await expect(parts.filter({ hasText: "Missing" })).toHaveCount(4);
+  await page.screenshot({ path: testInfo.outputPath("evidence-status.png"), fullPage: true });
+  await page.goto(`/projects/${projectId}/requirements?milestone=Sprint%201`);
 
   await page.getByLabel("Milestone or sprint").selectOption("Sprint 2");
   await page.getByRole("button", { name: "Filter" }).click();

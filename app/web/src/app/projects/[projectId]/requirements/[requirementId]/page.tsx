@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
+import { EvidenceStatus } from "@/components/evidence-status";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
@@ -25,7 +26,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 /**
  * Shows who created a requirement and when, its description, ordered acceptance criteria and their
- * version, milestone, linked documents, follow-up links, evidence, and review decisions, with
+ * version, milestone, linked documents, follow-up links, evidence and its Evidence complete status,
+ * and review decisions, with
  * edit and archive while it can change.
  */
 export default async function Page({ params }: Props) {
@@ -114,6 +116,7 @@ export default async function Page({ params }: Props) {
       </section>
       <section className="requirement-section" aria-labelledby="evidence-heading">
         <h2 id="evidence-heading">Evidence</h2>
+        <EvidenceStatus complete={requirement.evidenceComplete} missing={requirement.evidenceMissing} />
         {repository || evidence.length > 0 ? (
           <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence} history={evidenceHistory}
             suggestions={suggestions} moveTargets={moveTargets}
