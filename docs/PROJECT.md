@@ -152,7 +152,7 @@ Use precise product language:
 
 “Check passed” means a recorded automated check reported success.
 
-“Evidence complete” means the configured evidence policy is satisfied. Until a configurable policy exists, a fixed rule applies (ADR-053): at least one pull request or commit is linked; the checks of every linked pull request and commit could be read; none of those checks failed, is still running, or was cancelled (passed, skipped, and neutral are acceptable); and at least one check passed. Linked issues and releases neither count toward nor block it.
+“Evidence complete” means the configured evidence policy is satisfied. Until a configurable policy exists, the team's fixed rule applies (ADR-056, story US-14): an issue is linked; a merged pull request is linked; the checks on the final commit of every merged pull request could be read, at least one passed, and none failed, is still running, or was cancelled (passed, skipped, and neutral are acceptable); and every merged pull request is included in a linked release. A requirement that is missing any part shows which part. Linked commits and unmerged pull requests neither count toward nor block it. Evidence complete is shown separately from Accepted.
 
 “Accepted” means an authorized human approved the requirement.
 

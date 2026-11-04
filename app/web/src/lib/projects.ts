@@ -55,14 +55,55 @@ export function fieldError(problem: unknown, field: string): string | null {
 /**
  * A requirement as listed for a project (docs/API.md). `evidenceCount` is how many evidence links
  * it has; `review` is its latest decision, or null. `milestone` is its milestone or sprint label
- * (ADR-053), `criteriaVersion` its current acceptance-criteria version (ADR-051), and
- * `evidenceComplete` whether its evidence meets the built-in evidence rule (ADR-053).
+ * (ADR-053), and `criteriaVersion` its current acceptance-criteria version (ADR-051).
+ * `evidenceComplete` is whether its evidence meets the team's Evidence complete rule, and
+ * `evidenceMissing` lists the parts of that rule it does not meet (ADR-056).
  */
 export type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null; evidenceCount: number; review: ReviewSummary | null;
-  milestone: string | null; criteriaVersion: number | null; evidenceComplete: boolean;
+  milestone: string | null; criteriaVersion: number | null; evidenceComplete: boolean; evidenceMissing: EvidencePart[];
 };
+
+/**
+ * The parts of the Evidence complete rule, in the order the API lists missing ones (ADR-056): a
+ * linked issue; a merged pull request; passing checks on each merged pull request's final commit;
+ * and a linked release that includes each merged pull request.
+ */
+export const EVIDENCE_PARTS = ["issue", "merged_pull_request", "passing_checks", "release"] as const;
+export type EvidencePart = typeof EVIDENCE_PARTS[number];
+
+/** What each part of the Evidence complete rule asks for, as shown on a requirement page. */
+export const EVIDENCE_PART_TEXT: Record<EvidencePart, string> = {
+  issue: "A linked issue",
+  merged_pull_request: "A merged pull request",
+  passing_checks: "Checks passed on the final commit of each merged pull request",
+  release: "A linked release that includes each merged pull request",
+};
+
+/** Short names for missing parts in a requirement row. */
+export const EVIDENCE_PART_SHORT: Record<EvidencePart, string> = {
+  issue: "issue", merged_pull_request: "merged pull request", passing_checks: "passing checks", release: "release",
+};
+
+/**
+ * Reads `evidenceComplete` and `evidenceMissing` from an API response, or undefined when either
+ * has the wrong shape. The previous API (ADR-044) may send neither, or no `evidenceMissing`: that
+ * reads as not complete and nothing listed, so no part is claimed missing under the old rule.
+ */
+export function parseEvidenceStatus(item: Record<string, unknown> | null): { evidenceComplete: boolean; evidenceMissing: EvidencePart[] } | undefined {
+  if (item?.evidenceMissing === undefined) {
+    return item?.evidenceComplete === undefined || typeof item.evidenceComplete === "boolean"
+      ? { evidenceComplete: false, evidenceMissing: [] } : undefined;
+  }
+  const missing = item.evidenceMissing;
+  if (typeof item.evidenceComplete !== "boolean" || !Array.isArray(missing) ||
+      !missing.every(part => (EVIDENCE_PARTS as readonly unknown[]).includes(part)) || new Set(missing).size !== missing.length ||
+      item.evidenceComplete !== (missing.length === 0)) {
+    return undefined;
+  }
+  return { evidenceComplete: item.evidenceComplete, evidenceMissing: EVIDENCE_PARTS.filter(part => missing.includes(part)) };
+}
 
 /** A project member with the name and email other members may see (docs/API.md). */
 export type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean };
@@ -87,7 +128,7 @@ export const isLabel = (value: unknown): value is string => typeof value === "st
 
 /**
  * Validates a requirement list from an API response. Throws when the shape is not the documented one.
- * The previous API (ADR-044) sends no `milestone`, `criteriaVersion`, or `evidenceComplete`.
+ * The previous API (ADR-044) may send no `milestone`, `criteriaVersion`, `evidenceComplete`, or `evidenceMissing`.
  */
 export function parseRequirementSummaries(value: unknown): RequirementSummary[] {
   if (!Array.isArray(value)) throw new Error("The API returned an unexpected requirement list.");
@@ -95,18 +136,18 @@ export function parseRequirementSummaries(value: unknown): RequirementSummary[] 
     const item = entry as Record<string, unknown> | null;
     const milestone = optionalField(item?.milestone, isLabel);
     const criteriaVersion = optionalField(item?.criteriaVersion, isVersion);
-    const evidenceComplete = item?.evidenceComplete === undefined ? false : item.evidenceComplete;
+    const evidence = parseEvidenceStatus(item);
     if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
         typeof item.title !== "string" || typeof item.version !== "number" || !isDate(item.createdAt) ||
         !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string") ||
         typeof item.evidenceCount !== "number" || !Number.isInteger(item.evidenceCount) || item.evidenceCount < 0 ||
-        milestone === undefined || criteriaVersion === undefined || typeof evidenceComplete !== "boolean") {
+        milestone === undefined || criteriaVersion === undefined || evidence === undefined) {
       throw new Error("The API returned an unexpected requirement.");
     }
     return {
       id: item.id, projectId: item.projectId, title: item.title, version: item.version,
       createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt, evidenceCount: item.evidenceCount,
-      review: parseReviewSummary(item.review), milestone, criteriaVersion, evidenceComplete,
+      review: parseReviewSummary(item.review), milestone, criteriaVersion, ...evidence,
     };
   });
 }

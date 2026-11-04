@@ -179,8 +179,10 @@ type RequirementSummary = {
     criteriaChanged: boolean; criteriaVersion: number | null } | null;
   milestone: string | null; // ADR-053
   criteriaVersion: number | null; // the current criteria version; null only for one created during a deploy
-  // Whether the linked code meets the built-in evidence rule (ADR-053). Only on the list.
+  // Whether the evidence meets the team's Evidence complete rule, and the parts it does not
+  // meet, in this order (ADR-056). evidenceComplete is true exactly when evidenceMissing is empty.
   evidenceComplete: boolean;
+  evidenceMissing: ("issue" | "merged_pull_request" | "passing_checks" | "release")[];
 };
 type CriteriaVersion = { number: number; criteria: string[]; createdBy: string; createdAt: string };
 type FollowUpLink = { requirementId: string; title: string; archivedAt: string | null; linkedBy: string; linkedAt: string };
@@ -200,7 +202,7 @@ type Review = {
   evidence: { id: string; kind: string; label: string; title: string; state: string | null }[];
   decidedBy: string; decidedAt: string;
 };
-type Requirement = Omit<RequirementSummary, "review" | "evidenceCount" | "evidenceComplete"> & {
+type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string; createdBy: string; // createdAt and updatedAt come from RequirementSummary
   updatedBy: string; // who saved the current version; the creator until someone edits it
   acceptanceCriteria: { id: string; text: string; position: number }[];

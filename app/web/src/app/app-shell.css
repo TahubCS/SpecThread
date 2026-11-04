@@ -426,6 +426,7 @@ a.row:focus-visible { outline-offset: -2px; }
   .row { flex-wrap: wrap; }
   .row-title { flex: 1 1 60%; }
   .row-detail { order: 5; flex-basis: 100%; }
+  .row .evidence-missing { order: 6; flex-basis: 100%; margin-left: 0; white-space: normal; }
   .scaffold-page { padding: 28px 18px 48px; }
   .scaffold-status { padding: 17px; }
   .scaffold-navigation { margin-top: 34px; }
@@ -461,6 +462,17 @@ a.row:focus-visible { outline-offset: -2px; }
 .row .row-count + .evidence-complete { margin-left: 0; }
 .row .evidence-complete + .badge { margin-left: 0; }
 .app-main .badge.evidence-complete { border-color: #24533c; color: var(--app-ok); }
+.row .evidence-missing { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row .row-count + .evidence-missing { margin-left: 0; }
+.row .evidence-missing + .badge { margin-left: 0; }
+.evidence-status { margin-bottom: 14px; }
+.evidence-status-heading { margin: 0 0 8px; }
+.evidence-parts { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.evidence-parts li { display: flex; align-items: center; gap: 8px; color: var(--app-text-2); }
+.evidence-parts li > svg { flex: none; }
+.evidence-parts .is-met > svg { color: var(--app-ok); }
+.evidence-parts .is-missing > svg { color: var(--app-warn); }
+.evidence-part-state { margin-left: auto; color: var(--app-text-3); }
 .requirement-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
 .requirement-filter select { min-width: 0; max-width: 100%; height: 36px; padding: 0 12px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-inset); color: var(--app-text); font: inherit; }
 .requirement-filter label { color: var(--app-text); font-weight: 500; }

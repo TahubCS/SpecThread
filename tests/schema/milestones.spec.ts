@@ -3,7 +3,7 @@ import { expect, test, type APIRequestContext } from "@playwright/test";
 import { startTestDatabase } from "../../scripts/test-database.mjs";
 import { startApi } from "../support/api-process";
 
-// Milestone labels, the milestone filter, and the built-in Evidence complete rule (ADR-053),
+// Milestone labels, the milestone filter (ADR-053), and the team's Evidence complete rule (ADR-056),
 // against a disposable PostgreSQL database. Evidence links are inserted as rows, so GitHub is not involved.
 const issuer = "http://127.0.0.1:5101";
 let database: Awaited<ReturnType<typeof startTestDatabase>>;
@@ -116,39 +116,76 @@ test("the list filters by an exact label, and the labels in use are listed in or
   expect((await request.get(`${api.baseURL}/projects/${projectId}/milestones`)).status()).toBe(401);
 });
 
-test("a requirement is Evidence complete only when its linked code has readable checks that all passed or were skipped", async ({ request }) => {
+test("a requirement is Evidence complete only with an issue, a merged pull request whose checks passed, and a release that includes it", async ({ request }) => {
   const projectId = await createProject(request);
   const check = (result: string) => ({ name: `ci-${result}`, result, url: null, completedAt: null, kind: "check" });
-  const link = async (requirementId: string, kind: "issue" | "pull_request" | "commit" | "release", checks: unknown) => {
-    const number = nextNumber++;
-    const identity = kind === "commit" ? { sha: number.toString(16).padStart(40, "0") }
-      : kind === "release" ? { tag: `v${number}` } : { number, state: "open" };
-    const row = { requirement_id: requirementId, kind, repository_id: 1, repository_owner: "acme", repository_name: "box", title: "t",
-      url: "https://github.com/acme/box", github_created_at: new Date(), github_updated_at: new Date(), linked_by: "owner",
-      checks: checks === null ? null : JSON.stringify(checks), ...identity };
-    const names = Object.keys(row);
-    await database.pool.query(`INSERT INTO public.requirement_evidence (${names.join(",")}) VALUES (${names.map((_, i) => `$${i + 1}`).join(",")})`, Object.values(row));
+  type Link = { kind: "issue" | "pull_request" | "commit" | "release"; state?: string; checks?: unknown; contains?: number[] };
+  // Inserts the links in order; a release's `contains` names the earlier links it includes by position.
+  const link = async (requirementId: string, links: Link[]) => {
+    const ids: string[] = [];
+    for (const { kind, state, checks = null, contains } of links) {
+      const number = nextNumber++;
+      const identity = kind === "commit" ? { sha: number.toString(16).padStart(40, "0") }
+        : kind === "release" ? { tag: `v${number}` } : { number, state: state ?? "open" };
+      const row = { requirement_id: requirementId, kind, repository_id: 1, repository_owner: "acme", repository_name: "box", title: "t",
+        url: "https://github.com/acme/box", github_created_at: new Date(), github_updated_at: new Date(), linked_by: "owner",
+        checks: checks === null ? null : JSON.stringify(checks),
+        contains: contains === undefined ? null : JSON.stringify(Object.fromEntries(ids.map((id, index) => [id, contains.includes(index)]))),
+        ...identity };
+      const names = Object.keys(row);
+      const { rows: [inserted] } = await database.pool.query(
+        `INSERT INTO public.requirement_evidence (${names.join(",")}) VALUES (${names.map((_, i) => `$${i + 1}`).join(",")}) RETURNING id`,
+        Object.values(row));
+      ids.push(inserted.id);
+    }
   };
-  const cases: [string, [Parameters<typeof link>[1], unknown][], boolean][] = [
-    ["no evidence", [], false],
-    ["only an issue", [["issue", null]], false],
-    ["unreadable checks", [["pull_request", null]], false],
-    ["no checks", [["pull_request", []]], false],
-    ["only skipped", [["pull_request", [check("skipped")]]], false],
-    ["passed", [["pull_request", [check("passed")]]], true],
-    ["passed, skipped, and neutral, with a release and an issue", [["pull_request", [check("passed"), check("skipped")]], ["commit", [check("neutral")]], ["release", null], ["issue", null]], true],
-    ["one failed", [["pull_request", [check("passed")]], ["commit", [check("failed")]]], false],
-    ["one running", [["pull_request", [check("passed"), check("running")]]], false],
-    ["one cancelled", [["commit", [check("passed"), check("cancelled")]]], false],
-    ["one unreadable", [["pull_request", [check("passed")]], ["commit", null]], false],
+  const passed = [check("passed")];
+  const issue: Link = { kind: "issue" };
+  const merged = (checks: unknown = passed): Link => ({ kind: "pull_request", state: "merged", checks });
+  const released = (...positions: number[]): Link => ({ kind: "release", contains: positions });
+  const cases: [string, Link[], string[]][] = [
+    ["no evidence", [], ["issue", "merged_pull_request", "passing_checks", "release"]],
+    ["only an issue", [issue], ["merged_pull_request", "passing_checks", "release"]],
+    ["complete", [issue, merged(), released(1)], []],
+    ["a closed issue counts", [{ kind: "issue", state: "closed" }, merged(), released(1)], []],
+    ["no issue", [merged(), released(0)], ["issue"]],
+    ["an open pull request does not count", [issue, { kind: "pull_request", checks: passed }, released(1)],
+      ["merged_pull_request", "passing_checks", "release"]],
+    ["a commit does not count", [issue, { kind: "commit", checks: passed }, released(1)],
+      ["merged_pull_request", "passing_checks", "release"]],
+    ["unreadable checks", [issue, merged(null), released(1)], ["passing_checks"]],
+    ["no checks", [issue, merged([]), released(1)], ["passing_checks"]],
+    ["only skipped", [issue, merged([check("skipped")]), released(1)], ["passing_checks"]],
+    ["passed, skipped, and neutral", [issue, merged([check("passed"), check("skipped"), check("neutral")]), released(1)], []],
+    ["one failed", [issue, merged([check("passed"), check("failed")]), released(1)], ["passing_checks"]],
+    ["one running", [issue, merged([check("passed"), check("running")]), released(1)], ["passing_checks"]],
+    ["one cancelled", [issue, merged([check("passed"), check("cancelled")]), released(1)], ["passing_checks"]],
+    ["no release", [issue, merged()], ["release"]],
+    ["a release without the pull request", [issue, merged(), released()], ["release"]],
+    ["a release not yet compared", [issue, merged(), { kind: "release" }], ["release"]],
+    ["checks failed and no release", [issue, merged([check("failed")])], ["passing_checks", "release"]],
+    ["two merged, one failed", [issue, merged(), merged([check("failed")]), released(1, 2)], ["passing_checks"]],
+    ["two merged, one released", [issue, merged(), merged(), released(1)], ["release"]],
+    ["two merged, each in its own release", [issue, merged(), merged(), released(1), released(2)], []],
+    ["failing commits and open pull requests do not block",
+      [issue, merged(), { kind: "commit", checks: [check("failed")] }, { kind: "pull_request", checks: null }, released(1)], []],
   ];
+  const ids: Record<string, string> = {};
   for (const [title, links] of cases) {
     const requirement = await createRequirement(request, projectId, title, "Sprint 1");
-    for (const [kind, checks] of links) await link(requirement.id, kind, checks);
+    ids[title] = requirement.id;
+    await link(requirement.id, links);
   }
-  const listed = await (await (await as(request, "member")).get(`/projects/${projectId}/requirements?milestone=Sprint%201`)).json();
-  expect(Object.fromEntries(listed.map((r: { title: string; evidenceComplete: boolean }) => [r.title, r.evidenceComplete])))
-    .toEqual(Object.fromEntries(cases.map(([title, , complete]) => [title, complete])));
+  const status = (missing: string[]) => ({ evidenceComplete: missing.length === 0, evidenceMissing: missing });
+  const member = await as(request, "member");
+  const listed = await (await member.get(`/projects/${projectId}/requirements?milestone=Sprint%201`)).json();
+  expect(Object.fromEntries(listed.map((r: { title: string; evidenceComplete: boolean; evidenceMissing: string[] }) =>
+    [r.title, { evidenceComplete: r.evidenceComplete, evidenceMissing: r.evidenceMissing }])))
+    .toEqual(Object.fromEntries(cases.map(([title, , missing]) => [title, status(missing)])));
+  // The requirement itself carries the same status.
+  for (const [title, , missing] of cases) {
+    expect(await (await member.get(`/requirements/${ids[title]}`)).json(), title).toMatchObject(status(missing));
+  }
 });
 
 test("the migration constrains labels, and its rollback removes only the column", async () => {

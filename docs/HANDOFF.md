@@ -1,6 +1,47 @@
 # Shared handoff
 
-## Current task: Observability Phase 1, instrumentation off by default (2026-10-30)
+## Current task: US-14, the team's Evidence complete rule (2026-11-04)
+
+- Branch: `feature/us-14-evidence-policy`, from `main` at `031dd88` (PR #25 merged).
+- Scope: Jira SPEC-22 (US-14). The team's rule replaces ADR-053's, which was not a team
+  decision (ADR-056). Acceptance criteria: the default policy requires a linked issue, a
+  merged pull request, passing checks on its final commit, and a recorded release; a
+  requirement missing any part shows which part; Evidence complete is shown separately
+  from Accepted.
+- Completed:
+  - API: `EvidencePolicy.Missing` returns the unmet parts in order (`issue`,
+    `merged_pull_request`, `passing_checks`, `release`). The list and every single
+    requirement response (get, create, update, archive, restore) carry `evidenceComplete`
+    and `evidenceMissing`.
+  - Web: parsers read both fields (the previous API's list reads as no status, not the old
+    claim); a row shows "Evidence complete" or "Missing issue, ..." (wrapping at phone
+    width); the requirement page's Evidence section lists each part as Met or Missing under
+    an "Evidence complete" or "Evidence incomplete" badge, apart from the Review section.
+- Decisions and assumptions: an issue counts in any state. "A recorded release" means a
+  linked release that GitHub confirmed contains the merged pull request (ADR-037), so an
+  unrelated release does not satisfy it; with several merged pull requests, each needs
+  passing checks and a release that contains it. Linked commits and unmerged pull requests
+  neither count nor block. Without a merged pull request, checks and release are listed as
+  missing too.
+- Changed files: API `Requirements/EvidencePolicy.cs`, `Requirements/RequirementEndpoints.cs`;
+  web `lib/projects.ts`, `lib/requirements.ts`, `components/requirement-rows.tsx`, new
+  `components/evidence-status.tsx`, the requirement page, `app-shell.css`; tests
+  `tests/schema/milestones.spec.ts` (the rule test rewritten: 22 cases, list and single
+  requirement), `tests/e2e/milestones.spec.ts`, `tests/api/project-data.spec.ts`; docs
+  DECISIONS (ADR-056, notes on ADR-038 and ADR-053), PROJECT, API, ARCHITECTURE, TESTING.
+  No migration and no new environment variable.
+- Checks: see the PR description for the full `npm test` result. `npm run lint`,
+  `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `npm run build:api` (0 warnings), and `git diff --check` passed. Run locally with .NET SDK
+  10.0.114 (the only one installable in that environment; `global.json` pins 10.0.401 and
+  was pointed at 10.0.100 only while checking, not committed).
+- Known issues and risks: requirements that were Evidence complete under the old rule
+  (commits only, or no issue or release) stop being so after deploy, and list counts fall.
+  A pull request merged after it was linked counts only once the evidence is refreshed. Not
+  exercised: the real GitHub.
+- Next step: review and open the PR to `main`; then move SPEC-22 to Done.
+
+## Previous task: Observability Phase 1, instrumentation off by default (2026-10-30)
 
 - Branch: `feature/observability`, from `main` at `ba2013f` (PR #24 merged).
 - Scope: OpenTelemetry in the API and web app, exported to Grafana Cloud in deployment and

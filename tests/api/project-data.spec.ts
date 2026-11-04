@@ -59,13 +59,21 @@ test("only UUID-shaped project IDs are sent to the API", () => {
 test("requirement and member lists are accepted only in the documented shape", () => {
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", version: 2,
     createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, evidenceCount: 3, review: null,
-    milestone: "Sprint 3", criteriaVersion: 2, evidenceComplete: true };
+    milestone: "Sprint 3", criteriaVersion: 2, evidenceComplete: true, evidenceMissing: [] };
   expect(parseRequirementSummaries([{ ...requirement, description: "ignored" }])).toEqual([requirement]);
   // The previous API (ADR-044) sends none of the milestone, criteria version, or evidence rule fields.
   const previous: Record<string, unknown> = { ...requirement };
-  for (const field of ["milestone", "criteriaVersion", "evidenceComplete"]) delete previous[field];
-  expect(parseRequirementSummaries([previous])).toEqual([{ ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false }]);
-  for (const value of [{ milestone: "" }, { milestone: 3 }, { criteriaVersion: 0 }, { criteriaVersion: "2" }, { evidenceComplete: "yes" }, { evidenceComplete: null }]) {
+  for (const field of ["milestone", "criteriaVersion", "evidenceComplete", "evidenceMissing"]) delete previous[field];
+  expect(parseRequirementSummaries([previous])).toEqual([{ ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false, evidenceMissing: [] }]);
+  // The API before ADR-056 sends `evidenceComplete` under the old rule; it is not shown as complete.
+  expect(parseRequirementSummaries([{ ...previous, evidenceComplete: true }])[0]).toMatchObject({ evidenceComplete: false, evidenceMissing: [] });
+  // Missing parts are read in the rule's order.
+  expect(parseRequirementSummaries([{ ...requirement, evidenceComplete: false, evidenceMissing: ["release", "issue"] }])[0])
+    .toMatchObject({ evidenceComplete: false, evidenceMissing: ["issue", "release"] });
+  for (const value of [{ milestone: "" }, { milestone: 3 }, { criteriaVersion: 0 }, { criteriaVersion: "2" }, { evidenceComplete: "yes" }, { evidenceComplete: null },
+    { evidenceMissing: null }, { evidenceMissing: "issue" }, { evidenceComplete: false, evidenceMissing: ["commit"] },
+    { evidenceComplete: false, evidenceMissing: ["issue", "issue"] }, { evidenceComplete: true, evidenceMissing: ["issue"] },
+    { evidenceComplete: false, evidenceMissing: [] }, { evidenceComplete: undefined, evidenceMissing: [] }]) {
     expect(() => parseRequirementSummaries([{ ...requirement, ...value }]), JSON.stringify(value)).toThrow("unexpected requirement");
   }
   expect(parseRequirementSummaries([{ ...requirement, evidenceCount: 0 }])[0].evidenceCount).toBe(0);
@@ -112,9 +120,13 @@ test("a requirement response is accepted only in the documented shape, with crit
     acceptanceCriteria: [{ id: "c2", text: "Second", position: 1 }, { id: "c1", text: "First", position: 0 }],
     documents: [{ ...document, extra: 1 }] };
   const parsed = parseRequirement(requirement);
-  expect(parsed).toMatchObject({ criteriaVersion: null, milestone: null });
+  expect(parsed).toMatchObject({ criteriaVersion: null, milestone: null, evidenceComplete: false, evidenceMissing: [] });
   expect(parseRequirement({ ...requirement, criteriaVersion: 4, milestone: "Sprint 3" })).toMatchObject({ criteriaVersion: 4, milestone: "Sprint 3" });
-  for (const value of [{ criteriaVersion: 0 }, { criteriaVersion: "4" }, { milestone: "" }, { milestone: 5 }]) {
+  expect(parseRequirement({ ...requirement, evidenceComplete: false, evidenceMissing: ["passing_checks", "merged_pull_request"] }))
+    .toMatchObject({ evidenceComplete: false, evidenceMissing: ["merged_pull_request", "passing_checks"] });
+  expect(parseRequirement({ ...requirement, evidenceComplete: true, evidenceMissing: [] })).toMatchObject({ evidenceComplete: true, evidenceMissing: [] });
+  for (const value of [{ criteriaVersion: 0 }, { criteriaVersion: "4" }, { milestone: "" }, { milestone: 5 },
+    { evidenceComplete: true, evidenceMissing: ["release"] }, { evidenceComplete: "no", evidenceMissing: [] }, { evidenceComplete: false, evidenceMissing: ["x"] }]) {
     expect(() => parseRequirement({ ...requirement, ...value }), JSON.stringify(value)).toThrow("unexpected requirement");
   }
   expect(parsed.acceptanceCriteria.map(criterion => criterion.text)).toEqual(["First", "Second"]);
