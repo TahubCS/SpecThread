@@ -10,7 +10,9 @@ import {
 import { parseCriteriaVersion, parseCriteriaVersions, type CriteriaVersion } from "./criteria-versions";
 import { parseFollowUps, type FollowUps } from "./follow-ups";
 import { parseDocument, parseDocuments, type ProjectDocument } from "./documents";
-import { parseEvidenceHistory, parseEvidenceList, type Evidence, type EvidenceEvent } from "./evidence";
+import {
+  parseEvidenceHistory, parseEvidenceList, parseEvidenceSuggestions, type Evidence, type EvidenceEvent, type EvidenceSuggestion,
+} from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
 import { parseReviews, type Review } from "./reviews";
 
@@ -95,6 +97,15 @@ export const listEvidence = cache(async (requirementId: string): Promise<Evidenc
 export const listEvidenceHistory = cache(async (requirementId: string): Promise<EvidenceEvent[] | null> => {
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence/history`) : null;
   return body === null ? null : parseEvidenceHistory(body);
+});
+
+/**
+ * Lists a requirement's undecided link suggestions (ADR-056). Call after `requireRequirement`.
+ * The previous API (ADR-044) answers 404, which reads as none.
+ */
+export const listEvidenceSuggestions = cache(async (requirementId: string): Promise<EvidenceSuggestion[]> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence/suggestions`) : null;
+  return body === null ? [] : parseEvidenceSuggestions(body);
 });
 
 /** Lists the decisions recorded on a requirement, newest first. Call after `requireRequirement`. */

@@ -691,3 +691,122 @@ test("a search GitHub can't answer, or the API refuses, is explained and links n
   await expect(page.getByRole("list", { name: "Search results" })).toHaveCount(0);
   await expect(rows(page)).toHaveCount(0);
 });
+
+/** Adds a second requirement to the project and returns its address. */
+async function addRequirement(page: Page, projectId: string, title: string) {
+  await page.goto(`/projects/${projectId}/requirements/new`);
+  await page.getByLabel("Title").fill(title);
+  await page.getByLabel("Criterion 1", { exact: true }).fill("Done");
+  await page.getByRole("button", { name: "Create requirement" }).click();
+  await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
+  return page.url();
+}
+
+test("pull requests that close a linked issue are suggested apart from the evidence, then confirmed or rejected", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  await connect(projectId, [
+    issue(12, "Guests cannot pay"),
+    issue(15, "Add guest checkout", { pull: true, user: "grace", body: "Closes #12" }),
+    issue(16, "Unrelated cleanup", { pull: true, body: "Fixes #12" }),
+    issue(17, "Only mentions it", { pull: true, body: "See #12" }),
+  ]);
+  await page.reload();
+  await link(page, "12");
+  await expect(rows(page)).toHaveCount(1);
+  await page.getByRole("button", { name: "Find suggestions" }).click();
+
+  const suggested = page.locator('ul[aria-label="Suggested links"] > li');
+  await expect(suggested).toHaveCount(2);
+  await expect(suggested.nth(0)).toContainText("Suggested");
+  await expect(suggested.nth(0)).toContainText("Its description says “Closes #12”. Not evidence until confirmed.");
+  await expect(suggested.nth(0)).toContainText("grace");
+  // Not evidence: the linked list and the requirement list don't count them.
+  await expect(rows(page)).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath("evidence-suggestions.png"), fullPage: true });
+  await page.goto(`/projects/${projectId}/requirements`);
+  await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).toContainText("1 evidence link");
+  await page.goto(url);
+
+  await page.getByRole("button", { name: "Confirm #15" }).click();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(rows(page).filter({ hasText: "#15" })).toContainText("Suggested, confirmed by Evidence tester on");
+  await page.getByRole("button", { name: "Reject #16" }).click();
+  await expect(suggested).toHaveCount(0);
+  await expect(rows(page)).toHaveCount(2);
+
+  await page.getByText("3 link changes").click();
+  const changes = page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem");
+  await expect(changes.nth(0)).toContainText("Rejected suggestion #16 “Unrelated cleanup” by Evidence tester");
+  await expect(changes.nth(1)).toContainText("Confirmed suggestion #15 “Add guest checkout” by Evidence tester");
+
+  // A rejected suggestion stays rejected.
+  await page.getByRole("button", { name: "Find suggestions" }).click();
+  await expect(page.getByRole("button", { name: "Find suggestions" })).toBeEnabled();
+  await expect(suggested).toHaveCount(0);
+});
+
+test("a failed search for suggestions, or a refused decision, is explained and changes nothing", async ({ page }) => {
+  const { projectId, requirementId } = await createRequirement(page);
+  await connect(projectId, [issue(12, "Guests cannot pay"), issue(15, "Add guest checkout", { pull: true, body: "Closes #12" })]);
+  await page.reload();
+  await link(page, "12");
+  const scan = `^/requirements/${requirementId}/evidence/suggestions/scan$`;
+  await failApi(owner.userId, { method: "POST", path: scan, status: 502, body: { status: 502 } });
+  await page.getByRole("button", { name: "Find suggestions" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "GitHub could not be reached. Try again in a moment." })).toBeVisible();
+  await clearApiFaults(owner.userId);
+
+  await page.getByRole("button", { name: "Find suggestions" }).click();
+  await expect(page.getByRole("button", { name: "Confirm #15" })).toBeVisible();
+  await failApi(owner.userId, { method: "POST", path: `^/requirements/${requirementId}/evidence/suggestions/.*/confirm$`, status: 409, body: { detail: "Someone has already decided on this suggestion. Reload to see it." } });
+  await page.getByRole("button", { name: "Confirm #15" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Someone has already decided on this suggestion." })).toBeVisible();
+  await expect(rows(page)).toHaveCount(1);
+});
+
+test("a wrongly linked pull request moves to the right requirement, and both show who moved it and when", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  await connect(projectId, [issue(15, "Add saved carts", { pull: true })]);
+  const other = await addRequirement(page, projectId, "Saved carts");
+  await page.goto(url);
+  await link(page, "15");
+  await expect(rows(page)).toHaveCount(1);
+
+  // Cancelling moves nothing.
+  await page.getByRole("button", { name: "Move link to #15", exact: true }).click();
+  await page.getByRole("form", { name: "Move #15" }).getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("form", { name: "Move #15" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Move link to #15", exact: true }).click();
+  const form = page.getByRole("form", { name: "Move #15" });
+  await form.getByLabel("Move #15 to").selectOption({ label: "Saved carts" });
+  await page.screenshot({ path: testInfo.outputPath("evidence-move.png"), fullPage: true });
+  await form.getByRole("button", { name: "Move link" }).click();
+  await expect(rows(page)).toHaveCount(0);
+  await page.getByText("2 link changes").click();
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem").nth(0))
+    .toContainText("Moved #15 “Add saved carts” to “Saved carts” by Evidence tester");
+
+  await page.goto(other);
+  await expect(rows(page)).toHaveCount(1);
+  await expect(rows(page)).toContainText("Linked by Evidence tester on");
+  await page.getByText("1 link change").click();
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem"))
+    .toContainText("Moved #15 “Add saved carts” here from “Guest checkout” by Evidence tester");
+  await page.goto(`${other}/history`);
+  await expect(page.getByRole("list", { name: "Evidence link changes" }).getByRole("listitem")).toContainText("here from “Guest checkout”");
+});
+
+test("a refused move is explained, and the link stays where it was", async ({ page }) => {
+  const { projectId, requirementId, url } = await createRequirement(page);
+  await connect(projectId, [issue(15, "Add saved carts", { pull: true })]);
+  await addRequirement(page, projectId, "Saved carts");
+  await page.goto(url);
+  await link(page, "15");
+  await failApi(owner.userId, { method: "POST", path: `^/requirements/${requirementId}/evidence/.*/move$`, status: 409, body: { detail: "#15 is already linked to that requirement." } });
+  await page.getByRole("button", { name: "Move link to #15", exact: true }).click();
+  await page.getByLabel("Move #15 to").selectOption({ label: "Saved carts" });
+  await page.getByRole("button", { name: "Move link", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "#15 is already linked to that requirement." })).toBeVisible();
+  await expect(rows(page)).toHaveCount(1);
+});

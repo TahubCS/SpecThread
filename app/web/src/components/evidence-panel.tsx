@@ -2,10 +2,12 @@
 
 import { useActionState, useState } from "react";
 import { CircleDot, GitCommitHorizontal, GitPullRequest, RefreshCw, Tag, X } from "lucide-react";
-import { linkEvidence, refreshEvidence, searchEvidence, unlinkEvidence } from "@/app/projects/evidence-actions";
+import {
+  decideSuggestion, findSuggestions, linkEvidence, moveEvidence, refreshEvidence, searchEvidence, unlinkEvidence,
+} from "@/app/projects/evidence-actions";
 import {
   checkSummary, EVIDENCE_REFERENCE_MAX, EVIDENCE_SEARCH_MAX, evidenceChanges, evidenceEventText, evidenceLabel, releaseContents, releasesContaining,
-  type Evidence, type EvidenceEvent,
+  type Evidence, type EvidenceEvent, type EvidenceSuggestion,
 } from "@/lib/evidence";
 import { formatDate } from "@/lib/projects";
 
@@ -23,13 +25,17 @@ const external = { target: "_blank", rel: "noreferrer" } as const;
  * include them; a pull request lists its commits; a release lists which linked changes it contains. Each
  * link names who added it and when (for a suggestion, who confirmed it). While the requirement can
  * change, members add a link by reference or by searching titles, remove one, and read everything
- * from GitHub again. `history` lists every link added or removed (ADR-054); null when it can't be read.
+ * from GitHub again. `history` lists every change to the links (ADR-054); null when it can't be read.
+ * `suggestions` are pull requests that say they close a linked issue, shown apart from the
+ * evidence, which members confirm or reject; `moveTargets` are the requirements a link can move to (ADR-056).
  */
-export function EvidencePanel({ projectId, requirementId, evidence, history = null, repository, people, editable }: {
+export function EvidencePanel({ projectId, requirementId, evidence, history = null, suggestions = [], moveTargets = [], repository, people, editable }: {
   projectId: string;
   requirementId: string;
   evidence: Evidence[];
   history?: EvidenceEvent[] | null;
+  suggestions?: EvidenceSuggestion[];
+  moveTargets?: { id: string; title: string }[];
   repository: string;
   /** Names of the project's members by user ID, for naming who added each link. */
   people: Record<string, string>;
@@ -38,6 +44,8 @@ export function EvidencePanel({ projectId, requirementId, evidence, history = nu
   const [link, linkAction, linking] = useActionState(linkEvidence.bind(null, projectId, requirementId), { reference: "", error: null, linked: 0 });
   const [refreshed, refreshAction, refreshing] = useActionState(refreshEvidence.bind(null, projectId, requirementId), { error: null });
   const [unlinked, unlinkAction, unlinking] = useActionState(unlinkEvidence.bind(null, projectId, requirementId), { error: null });
+  const [moved, moveAction, moving] = useActionState(moveEvidence.bind(null, projectId, requirementId), { error: null });
+  const [movingId, setMovingId] = useState<string | null>(null);
   const lastChecked = evidence.map(item => item.refreshedAt).sort().at(-1);
 
   return (
@@ -67,6 +75,10 @@ export function EvidencePanel({ projectId, requirementId, evidence, history = nu
                   <span className="row-meta">
                     {item.author ? `${item.author} · ` : ""}<time dateTime={item.githubCreatedAt}>{formatDate(item.githubCreatedAt)}</time>
                   </span>
+                  {editable && moveTargets.length > 0 && (
+                    <button type="button" className="button secondary" aria-expanded={movingId === item.id} aria-label={`Move link to ${label}`}
+                      onClick={() => setMovingId(current => current === item.id ? null : item.id)}>Move</button>
+                  )}
                   {editable && (
                     <form action={unlinkAction}>
                       <input type="hidden" name="evidenceId" value={item.id} />
@@ -85,12 +97,17 @@ export function EvidencePanel({ projectId, requirementId, evidence, history = nu
                   {item.source === "suggested" ? "Suggested, confirmed" : "Linked"} by {people[item.linkedBy] ?? "a former member"} on{" "}
                   <time dateTime={item.linkedAt}>{formatDate(item.linkedAt)}</time>
                 </p>
+                {movingId === item.id && (
+                  <MoveForm evidenceId={item.id} label={label} targets={moveTargets} action={moveAction} pending={moving}
+                    onCancel={() => setMovingId(null)} />
+                )}
               </li>
             );
           })}
         </ul>
       )}
       {unlinked.error && <p role="alert" className="notice notice-error">{unlinked.error}</p>}
+      {moved.error && <p role="alert" className="notice notice-error">{moved.error}</p>}
       {evidence.length > 0 && (
         <form className="evidence-refresh" action={refreshAction}>
           <span className="muted">
@@ -104,6 +121,7 @@ export function EvidencePanel({ projectId, requirementId, evidence, history = nu
         </form>
       )}
       {refreshed.error && <p role="alert" className="notice notice-error">{refreshed.error}</p>}
+      <Suggestions projectId={projectId} requirementId={requirementId} suggestions={suggestions} editable={editable} />
       {editable && <LinkForm key={link.linked} action={linkAction} pending={linking} state={link} repository={repository} />}
       {editable && (
         <SearchForm projectId={projectId} requirementId={requirementId} repository={repository} evidence={evidence}
@@ -119,7 +137,88 @@ export function EvidencePanel({ projectId, requirementId, evidence, history = nu
   );
 }
 
-/** Lists evidence links added and removed, newest first, with who made each change and when. */
+/** Renders the choice of requirement to move a link to. */
+function MoveForm({ evidenceId, label, targets, action, pending, onCancel }: {
+  evidenceId: string;
+  label: string;
+  targets: { id: string; title: string }[];
+  action: (formData: FormData) => void;
+  pending: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <form className="evidence-link evidence-move" action={action} aria-label={`Move ${label}`}>
+      <input type="hidden" name="evidenceId" value={evidenceId} />
+      <div className="field">
+        <label htmlFor={`evidence-move-${evidenceId}`}>Move {label} to</label>
+        <div className="evidence-link-row">
+          <select id={`evidence-move-${evidenceId}`} name="targetRequirementId" defaultValue="" required>
+            <option value="" disabled>Choose a requirement</option>
+            {targets.map(target => <option key={target.id} value={target.id}>{target.title}</option>)}
+          </select>
+          <button className="button secondary" type="submit" disabled={pending}>{pending ? "Moving..." : "Move link"}</button>
+          <button className="button secondary" type="button" disabled={pending} onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+      <p className="muted">Decisions on both requirements will need a new review, because their evidence changes.</p>
+    </form>
+  );
+}
+
+/**
+ * Renders suggested links apart from the evidence, each labeled "Suggested" with the reference it
+ * came from, for members to confirm or reject. They count as evidence only once confirmed.
+ */
+function Suggestions({ projectId, requirementId, suggestions, editable }: {
+  projectId: string;
+  requirementId: string;
+  suggestions: EvidenceSuggestion[];
+  editable: boolean;
+}) {
+  const [found, findAction, finding] = useActionState(findSuggestions.bind(null, projectId, requirementId), { error: null });
+  const [decided, decideAction, deciding] = useActionState(decideSuggestion.bind(null, projectId, requirementId), { error: null });
+  if (!editable && suggestions.length === 0) return null;
+  return (
+    <div className="evidence-suggestions">
+      {suggestions.length > 0 && (
+        <ul className="row-list evidence-rows" aria-label="Suggested links">
+          {suggestions.map(item => (
+            <li key={item.id}>
+              <div className="row">
+                <GitPullRequest size={16} strokeWidth={1.75} aria-hidden="true" />
+                <span className="evidence-number">#{item.number}</span>
+                <a className="row-title" href={item.url} {...external}>
+                  {item.title}<span className="sr-only"> (opens GitHub in a new tab)</span>
+                </a>
+                <span className="badge is-suggested">Suggested</span>
+                <span className={`badge evidence-state is-${item.state}`}><span aria-hidden="true" />{stateText[item.state]}</span>
+                {item.author && <span className="row-meta">{item.author}</span>}
+                {editable && (
+                  <form className="suggestion-actions" action={decideAction}>
+                    <input type="hidden" name="suggestionId" value={item.id} />
+                    <button className="button secondary" type="submit" name="decision" value="confirm" disabled={deciding} aria-label={`Confirm #${item.number}`}>Confirm</button>
+                    <button className="button secondary" type="submit" name="decision" value="reject" disabled={deciding} aria-label={`Reject #${item.number}`}>Reject</button>
+                  </form>
+                )}
+              </div>
+              <p className="evidence-changes">Its description says “{item.reference}”. Not evidence until confirmed.</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {decided.error && <p role="alert" className="notice notice-error">{decided.error}</p>}
+      {editable && (
+        <form className="evidence-refresh" action={findAction}>
+          <span className="muted">Finds pull requests that say they close a linked issue.</span>
+          <button className="button secondary" type="submit" disabled={finding}>{finding ? "Finding..." : "Find suggestions"}</button>
+        </form>
+      )}
+      {found.error && <p role="alert" className="notice notice-error">{found.error}</p>}
+    </div>
+  );
+}
+
+/** Lists changes to the evidence links, newest first, with who made each change and when. */
 export function EvidenceHistory({ history, people }: { history: EvidenceEvent[]; people: Record<string, string> }) {
   return (
     <ol className="follow-up-history" aria-label="Evidence link changes">

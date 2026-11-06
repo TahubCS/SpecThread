@@ -206,6 +206,26 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         });
       }
 
+      // An issue's timeline: a cross-reference from each pull request whose description mentions it.
+      const timeline = /^\/repositories\/(\d+)\/issues\/(\d+)\/timeline$/.exec(url.pathname);
+      if (timeline && request.method === "GET") {
+        if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
+        const repositoryId = Number(timeline[1]);
+        const listed = items.get(repositoryId) ?? [];
+        if (!listed.some(entry => entry.number === Number(timeline[2]))) return send(response, 404, { message: "Not Found" });
+        const repository = [...users.values()].flat().flatMap(installation => installation.repositories).find(entry => entry.id === repositoryId);
+        const mentions = listed.filter(entry => entry.pull && new RegExp(`#${timeline[2]}\\b|/issues/${timeline[2]}\\b`).test(entry.body ?? ""));
+        return send(response, 200, page([{ event: "labeled" }, ...mentions.map(entry => ({
+          event: "cross-referenced",
+          source: { type: "issue", issue: {
+            number: entry.number, title: entry.title, state: entry.state, body: entry.body, user: entry.user === null ? null : { login: entry.user ?? "octocat" },
+            html_url: `https://github.com/${repository.owner}/${repository.name}/pull/${entry.number}`,
+            repository_url: `https://api.github.com/repos/${repository.owner}/${repository.name}`,
+            pull_request: { merged_at: entry.merged ? entry.closed_at ?? entry.updated_at : null },
+          } },
+        }))], url));
+      }
+
       const item = /^\/repositories\/(\d+)\/(issues|pulls)\/(\d+)$/.exec(url.pathname);
       if (item && request.method === "GET") {
         if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });

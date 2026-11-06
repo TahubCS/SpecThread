@@ -483,3 +483,10 @@ a.row:focus-visible { outline-offset: -2px; }
 /* Finding evidence by title (ADR-054) */
 .evidence-link + .evidence-link { margin-top: 12px; }
 .evidence-link + .evidence-rows, .evidence-link + .muted { margin-top: 8px; }
+/* Suggested links and moving a link (ADR-056) */
+.evidence-suggestions { margin-top: 12px; }
+.app-main .badge.is-suggested { border-style: dashed; border-color: var(--app-warn); color: var(--app-warn); }
+.evidence-rows .row .is-suggested { margin-left: auto; }
+.suggestion-actions { display: flex; flex: none; gap: 6px; }
+.evidence-rows li > .evidence-move { margin: 8px 14px 10px 44px; }
+.evidence-move .muted { margin: 6px 0 0; font-size: 13px; }

@@ -10,7 +10,7 @@ import { criteriaVersionText, parseCriteriaVersion, parseCriteriaVersions } from
 import { followUpEventText, parseFollowUps } from "../../app/web/src/lib/follow-ups";
 import {
   checkSummary, evidenceChanges, evidenceCountText, evidenceEventText, evidenceLabel, evidenceReferenceError, parseEvidence, parseEvidenceHistory,
-  parseEvidenceList, parseEvidenceSearch, problemDetail,
+  parseEvidenceList, parseEvidenceSearch, parseEvidenceSuggestions, problemDetail,
   releaseContents, releasesContaining,
 } from "../../app/web/src/lib/evidence";
 import { parseAvailableRepositories, parseProjectRepository, parseRepositoryChoice } from "../../app/web/src/lib/repositories";
@@ -458,11 +458,31 @@ test("title search results and the evidence history are accepted only in the doc
 
   const event = { id: "v1", evidenceId: "e1", action: "removed" as const, kind: "commit", label: "4f2a9c1", title: "Fix totals", actor: "u1",
     occurredAt: "2026-10-30T10:00:00Z" };
-  expect(parseEvidenceHistory([{ ...event, extra: 1 }])).toEqual([event]);
+  expect(parseEvidenceHistory([{ ...event, extra: 1 }])).toEqual([{ ...event, otherRequirementId: null, otherRequirementTitle: null }]);
   for (const value of [null, {}, [{ ...event, action: "renamed" }], [{ ...event, kind: "deployment" }], [{ ...event, label: 1 }],
     [{ ...event, actor: null }], [{ ...event, occurredAt: "soon" }]]) {
     expect(() => parseEvidenceHistory(value), JSON.stringify(value)).toThrow("unexpected evidence history");
   }
-  expect(evidenceEventText(event)).toBe("Removed 4f2a9c1 “Fix totals”");
-  expect(evidenceEventText({ ...event, action: "added" as const, label: "#15", title: "Add guest checkout" })).toBe("Linked #15 “Add guest checkout”");
+  // The previous API sends no other requirement.
+  const change = { action: "removed" as const, label: "4f2a9c1", title: "Fix totals", otherRequirementTitle: null };
+  expect(parseEvidenceHistory([event])[0]).toMatchObject({ otherRequirementId: null, otherRequirementTitle: null });
+  expect(parseEvidenceHistory([{ ...event, action: "moved_in", otherRequirementId: "r2", otherRequirementTitle: "Saved carts" }])[0])
+    .toMatchObject({ action: "moved_in", otherRequirementId: "r2", otherRequirementTitle: "Saved carts" });
+  expect(() => parseEvidenceHistory([{ ...event, otherRequirementId: 1 }])).toThrow("unexpected evidence history");
+  expect(() => parseEvidenceHistory([{ ...event, otherRequirementTitle: 1 }])).toThrow("unexpected evidence history");
+  expect(evidenceEventText(change)).toBe("Removed 4f2a9c1 “Fix totals”");
+  const pull = { label: "#15", title: "Add checkout", otherRequirementTitle: null };
+  expect(evidenceEventText({ ...pull, action: "added" })).toBe("Linked #15 “Add checkout”");
+  expect(evidenceEventText({ ...pull, action: "confirmed" })).toBe("Confirmed suggestion #15 “Add checkout”");
+  expect(evidenceEventText({ ...pull, action: "rejected" })).toBe("Rejected suggestion #15 “Add checkout”");
+  expect(evidenceEventText({ ...pull, action: "moved_out", otherRequirementTitle: "Saved carts" })).toBe("Moved #15 “Add checkout” to “Saved carts”");
+  expect(evidenceEventText({ ...pull, action: "moved_in", otherRequirementTitle: "Guest checkout" })).toBe("Moved #15 “Add checkout” here from “Guest checkout”");
+
+  const suggestion = { id: "s1", number: 15, title: "Add checkout", state: "open", author: null, url: "https://github.com/acme/web/pull/15",
+    reference: "Closes #184", foundAt: "2026-11-05T10:00:00Z" };
+  expect(parseEvidenceSuggestions([{ ...suggestion, extra: 1 }])).toEqual([suggestion]);
+  for (const value of [null, {}, [null], [{ ...suggestion, number: 0 }], [{ ...suggestion, state: "draft" }], [{ ...suggestion, author: 1 }],
+    [{ ...suggestion, url: "https://evil.example/pull/15" }], [{ ...suggestion, reference: null }], [{ ...suggestion, foundAt: "soon" }]]) {
+    expect(() => parseEvidenceSuggestions(value), JSON.stringify(value)).toThrow("unexpected suggestions");
+  }
 });

@@ -9,7 +9,7 @@ import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listEvidence, listEvidenceHistory, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
+  listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
 } from "@/lib/project-data";
 import { formatDate } from "@/lib/projects";
 
@@ -32,10 +32,11 @@ export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones, evidenceHistory] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones, evidenceHistory, suggestions] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
     listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
+    listEvidenceSuggestions(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -44,6 +45,7 @@ export default async function Page({ params }: Props) {
   // Requirements this one could follow up: not itself, and not already linked either way.
   const linked = new Set([requirement.id, ...[...followUps.followUpOf, ...followUps.followedUpBy].map(link => link.requirementId)]);
   const candidates = requirements.filter(other => !linked.has(other.id)).map(({ id, title }) => ({ id, title }));
+  const moveTargets = requirements.filter(other => other.id !== requirement.id).map(({ id, title }) => ({ id, title }));
 
   return (
     <article className="project-page is-form" aria-labelledby="page-title">
@@ -114,6 +116,7 @@ export default async function Page({ params }: Props) {
         <h2 id="evidence-heading">Evidence</h2>
         {repository || evidence.length > 0 ? (
           <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence} history={evidenceHistory}
+            suggestions={suggestions} moveTargets={moveTargets}
             repository={repository?.fullName ?? evidence[0].repository} editable={editable && repository !== null}
             people={people} />
         ) : (

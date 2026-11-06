@@ -14,6 +14,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<RequirementEvidence> RequirementEvidence => Set<RequirementEvidence>();
     public DbSet<RequirementReview> RequirementReviews => Set<RequirementReview>();
     public DbSet<RequirementEvidenceEvent> RequirementEvidenceEvents => Set<RequirementEvidenceEvent>();
+    public DbSet<RequirementEvidenceSuggestion> RequirementEvidenceSuggestions => Set<RequirementEvidenceSuggestion>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<UserOnboarding> UserOnboardings => Set<UserOnboarding>();
@@ -266,7 +267,10 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         var evidenceEvent = model.Entity<RequirementEvidenceEvent>();
         evidenceEvent.ToTable("requirement_evidence_events", table =>
         {
-            table.HasCheckConstraint("ck_requirement_evidence_events_action", "action IN ('added', 'removed')");
+            table.HasCheckConstraint("ck_requirement_evidence_events_action",
+                "action IN ('added', 'removed', 'confirmed', 'rejected', 'moved_in', 'moved_out')");
+            table.HasCheckConstraint("ck_requirement_evidence_events_move",
+                "(action IN ('moved_in', 'moved_out')) = (other_requirement_id IS NOT NULL)");
             table.HasCheckConstraint("ck_requirement_evidence_events_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
             table.HasCheckConstraint("ck_requirement_evidence_events_label", "length(btrim(label)) > 0");
         });
@@ -280,9 +284,38 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         evidenceEvent.Property(x => x.Title).HasColumnName("title");
         evidenceEvent.Property(x => x.Actor).HasColumnName("actor");
         evidenceEvent.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasDefaultValueSql("now()");
+        evidenceEvent.Property(x => x.OtherRequirementId).HasColumnName("other_requirement_id");
         evidenceEvent.HasIndex(x => new { x.RequirementId, x.OccurredAt });
         evidenceEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        evidenceEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.OtherRequirementId).OnDelete(DeleteBehavior.Restrict);
         evidenceEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
+
+        var suggestion = model.Entity<RequirementEvidenceSuggestion>();
+        suggestion.ToTable("requirement_evidence_suggestions", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_evidence_suggestions_status", "status IN ('pending', 'confirmed', 'rejected')");
+            table.HasCheckConstraint("ck_requirement_evidence_suggestions_state", "state IN ('open', 'closed', 'merged')");
+            table.HasCheckConstraint("ck_requirement_evidence_suggestions_number", "number > 0 AND repository_id > 0");
+            table.HasCheckConstraint("ck_requirement_evidence_suggestions_decision",
+                "(status = 'pending') = (decided_by IS NULL) AND (decided_by IS NULL) = (decided_at IS NULL)");
+        });
+        suggestion.HasKey(x => x.Id);
+        suggestion.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        suggestion.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        suggestion.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        suggestion.Property(x => x.Number).HasColumnName("number");
+        suggestion.Property(x => x.Title).HasColumnName("title");
+        suggestion.Property(x => x.State).HasColumnName("state");
+        suggestion.Property(x => x.Author).HasColumnName("author");
+        suggestion.Property(x => x.Url).HasColumnName("url");
+        suggestion.Property(x => x.Reference).HasColumnName("reference");
+        suggestion.Property(x => x.Status).HasColumnName("status").HasDefaultValue("pending");
+        suggestion.Property(x => x.FoundAt).HasColumnName("found_at").HasDefaultValueSql("now()");
+        suggestion.Property(x => x.DecidedBy).HasColumnName("decided_by");
+        suggestion.Property(x => x.DecidedAt).HasColumnName("decided_at");
+        suggestion.HasIndex(x => new { x.RequirementId, x.RepositoryId, x.Number }).IsUnique();
+        suggestion.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        suggestion.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.DecidedBy).OnDelete(DeleteBehavior.Restrict);
 
         var review = model.Entity<RequirementReview>();
         review.ToTable("requirement_reviews", table =>

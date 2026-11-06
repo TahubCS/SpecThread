@@ -98,6 +98,28 @@ Each link records who created it and when.
 
 A link can be removed, and the removal is recorded.
 
+Story: suggest links from explicit references
+
+As a tech lead (Danielle), I want SpecThread to suggest links from explicit references such
+as "Closes #184" so that I don't have to link every pull request by hand. Source: "Design
+the Box" F2 / MVP scope. Acceptance criteria (ADR-056):
+
+Suggestions are clearly labeled "Suggested" and are not counted as evidence until confirmed.
+
+A user can confirm or reject each suggestion.
+
+Confirming or rejecting is recorded with name and timestamp.
+
+Story: move a wrongly linked pull request
+
+As a tech lead (Danielle), I want to move a wrongly linked pull request to the correct
+requirement so that a developer's mistaken issue reference doesn't misstate the evidence.
+Source: scenario "Changing a requirement after its code was merged". Acceptance criteria (ADR-056):
+
+A user can unlink a pull request from one requirement and link it to another.
+
+Both requirements' timelines show the change, who made it, and when.
+
 MVP scope
 
 The first usable version should support:

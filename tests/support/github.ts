@@ -63,6 +63,8 @@ export type FakeItem = {
   number: number; pull?: boolean; merged?: boolean; title: string; state: "open" | "closed";
   /** GitHub login; null for a deleted account. */
   user?: string | null;
+  /** A pull request's description, where a reference such as "Closes #184" is found. */
+  body?: string;
   created_at: string; updated_at: string; closed_at?: string | null;
   /** For pull requests: totals, and the commits GitHub lists for it. */
   additions?: number; deletions?: number; changed_files?: number; commit_count?: number; commits?: FakeCommit[];

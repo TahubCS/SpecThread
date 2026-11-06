@@ -32,6 +32,7 @@ internal static partial class EvidenceEndpoints
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
         evidence.MapGet("/history", History).WithName("ListEvidenceHistory");
+        MapSuggestions(evidence);
         evidence.MapPost("/", Link).WithName("LinkEvidence")
             .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
@@ -40,6 +41,9 @@ internal static partial class EvidenceEndpoints
             .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
         evidence.MapDelete("/{evidenceId:guid}", Unlink).WithName("UnlinkEvidence")
             .ProducesProblem(StatusCodes.Status409Conflict);
+        evidence.MapPost("/{evidenceId:guid}/move", Move).WithName("MoveEvidence")
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status502BadGateway).ProducesProblem(StatusCodes.Status503ServiceUnavailable);
     }
 
     private static async Task<Results<Ok<List<EvidenceResponse>>, NotFound>> List(
@@ -78,14 +82,15 @@ internal static partial class EvidenceEndpoints
             new EvidenceSearchItem(item.Number, item.Kind, item.Title, item.State, item.Author, item.Url, linked.Contains(item.Number)))));
     }
 
-    // Every link added to or removed from the requirement, newest first (ADR-054).
+    // Every change to the requirement's links, newest first (ADR-054, ADR-056).
     private static async Task<Results<Ok<List<EvidenceEventResponse>>, NotFound>> History(
         Guid requirementId, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         if (await FindAsync(db, user.CallerId(), requirementId, cancel) is null) return TypedResults.NotFound();
         var events = await db.RequirementEvidenceEvents.AsNoTracking().Where(e => e.RequirementId == requirementId)
             .OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
-            .Select(e => new EvidenceEventResponse(e.Id, e.EvidenceId, e.Action, e.Kind, e.Label, e.Title, e.Actor, e.OccurredAt))
+            .Select(e => new EvidenceEventResponse(e.Id, e.EvidenceId, e.Action, e.Kind, e.Label, e.Title, e.Actor, e.OccurredAt, e.OtherRequirementId,
+                db.Requirements.Where(r => r.Id == e.OtherRequirementId).Select(r => r.Title).FirstOrDefault()))
             .ToListAsync(cancel);
         return TypedResults.Ok(events);
     }
@@ -143,47 +148,67 @@ internal static partial class EvidenceEndpoints
         if (found.Value!.Kind == "commit" && here.Exists(e => e.Kind == "commit" && e.Sha == found.Value.Sha)) return AlreadyLinked(Label(found.Value));
         if (found.Value.Kind == "release" && here.Exists(e => e.Kind == "release" && e.Tag == found.Value.Tag)) return AlreadyLinked(Label(found.Value));
 
-        var checks = await ReadChecksAsync(github, repository, found.Value.Kind, found.Value.Sha, cancel);
-        if (checks.Failure is not (GitHubFailure.None or GitHubFailure.NotFound)) return Failed(checks.Failure, fullName);
+        var saved = await SaveLinkAsync(db, github, repository, requirementId, userId, here, found.Value, "manual", "added", async (_, _) =>
+        {
+            // Linked by hand: there is nothing left to suggest.
+            if (found.Value.Number is { } linked) await DropPendingAsync(db, requirementId, repository.RepositoryId, linked, cancel);
+            return null;
+        }, cancel);
+        if (saved.Problem is not null) return saved.Problem;
+        if (saved.Evidence is null) return TypedResults.NotFound();
+        return TypedResults.Created($"/requirements/{requirementId}/evidence/{saved.Evidence.Id}", ToResponse(saved.Evidence));
+    }
+
+    // Reads what the link needs from GitHub, then saves it with its history under the team lock.
+    // `underLock` runs there first and may refuse. Evidence and Problem are both null when the
+    // requirement is gone.
+    private static async Task<SavedLink> SaveLinkAsync(
+        SpecThreadDbContext db, IGitHubClient github, ProjectRepository repository, Guid requirementId, string userId, List<RequirementEvidence> here,
+        GitHubItem found, string source, string action, Func<RequirementEvidence, DateTime, Task<ProblemHttpResult?>> underLock, CancellationToken cancel)
+    {
+        var fullName = $"{repository.Owner}/{repository.Name}";
+        var checks = await ReadChecksAsync(github, repository, found.Kind, found.Sha, cancel);
+        if (checks.Failure is not (GitHubFailure.None or GitHubFailure.NotFound)) return new(null, Failed(checks.Failure, fullName));
 
         var now = Clock.UtcNow();
         var evidence = new RequirementEvidence
         {
             Id = Guid.NewGuid(),
             RequirementId = requirementId,
-            Kind = found.Value.Kind,
+            Kind = found.Kind,
             RepositoryId = repository.RepositoryId,
             RepositoryOwner = repository.Owner,
             RepositoryName = repository.Name,
-            Number = found.Value.Number,
+            Number = found.Number,
             Title = "",
             Url = "",
             LinkedBy = userId,
             LinkedAt = now,
-            Source = "manual",
+            Source = source,
         };
-        Apply(evidence, found.Value, now);
+        Apply(evidence, found, now);
         ApplyChecks(evidence, checks, now);
 
         // A new release is compared with every linked change; a new change with every linked release.
         var contents = evidence.Kind == "release"
             ? await ReadContentsAsync(github, repository, [evidence], here, cancel)
             : await ReadContentsAsync(github, repository, here.FindAll(e => e.Kind == "release"), [evidence], cancel);
-        if (contents != GitHubFailure.None) return Failed(contents, fullName);
+        if (contents != GitHubFailure.None) return new(null, Failed(contents, fullName));
 
         // GitHub was read without holding the team lock. Take it now and check again what the reads relied on.
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
-            case Recheck.NotFound: return TypedResults.NotFound();
-            case Recheck.Archived: return ProjectEndpoints.Archived();
-            case Recheck.Changed: return Changed();
+            case Recheck.NotFound: return new(null, null);
+            case Recheck.Archived: return new(null, ProjectEndpoints.Archived());
+            case Recheck.Changed: return new(null, Changed());
         }
         // Counted again under the lock, so links added at the same time cannot pass the limit together.
-        if (await db.RequirementEvidence.CountAsync(e => e.RequirementId == requirementId, cancel) >= MaxEvidence) return LimitReached();
+        if (await db.RequirementEvidence.CountAsync(e => e.RequirementId == requirementId, cancel) >= MaxEvidence) return new(null, LimitReached());
+        if (await underLock(evidence, now) is { } refused) return new(null, refused);
 
         db.RequirementEvidence.Add(evidence);
-        Record(db, evidence, "added", userId, now);
+        Record(db, evidence, action, userId, now);
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -191,15 +216,15 @@ internal static partial class EvidenceEndpoints
         catch (DbUpdateConcurrencyException)
         {
             // A linked release this link updates was removed meanwhile.
-            return Changed();
+            return new(null, Changed());
         }
         catch (DbUpdateException)
         {
             // Two links of the same item at once: a unique index refused this one.
-            return AlreadyLinked(Label(found.Value));
+            return new(null, AlreadyLinked(Label(found)));
         }
         await transaction.CommitAsync(cancel);
-        return TypedResults.Created($"/requirements/{requirementId}/evidence/{evidence.Id}", ToResponse(evidence));
+        return new(evidence, null);
     }
 
     // Reads every linked issue, pull request, and release of the connected repository again, the
@@ -249,6 +274,9 @@ internal static partial class EvidenceEndpoints
             (release, change) => before[release.Id].Sha == release.Sha && before[change.Id].Change == ChangeSha(change) &&
                 before[release.Id].Contains.GetValueOrDefault(change.Id));
         if (contents != GitHubFailure.None) return Failed(contents, fullName);
+        // Refreshing also looks for pull requests that close the linked issues (ADR-056).
+        var mentions = await ReadMentionsAsync(github, repository, items, cancel);
+        if (mentions.Failure != GitHubFailure.None) return Failed(mentions.Failure, fullName);
 
         // GitHub was read without holding the team lock, which can take a while. Take it now and
         // check again what the reads relied on.
@@ -259,6 +287,7 @@ internal static partial class EvidenceEndpoints
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }
+        if (!await SaveSuggestionsAsync(db, requirementId, repository, mentions.Value!, now, cancel)) return Changed();
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -291,11 +320,12 @@ internal static partial class EvidenceEndpoints
         return TypedResults.NoContent();
     }
 
-    private static void Record(SpecThreadDbContext db, RequirementEvidence evidence, string action, string userId, DateTime at) =>
+    private static void Record(
+        SpecThreadDbContext db, RequirementEvidence evidence, string action, string userId, DateTime at, Guid? requirementId = null, Guid? otherRequirementId = null) =>
         db.RequirementEvidenceEvents.Add(new RequirementEvidenceEvent
         {
             Id = Guid.NewGuid(),
-            RequirementId = evidence.RequirementId,
+            RequirementId = requirementId ?? evidence.RequirementId,
             EvidenceId = evidence.Id,
             Action = action,
             Kind = evidence.Kind,
@@ -303,6 +333,7 @@ internal static partial class EvidenceEndpoints
             Title = evidence.Title,
             Actor = userId,
             OccurredAt = at,
+            OtherRequirementId = otherRequirementId,
         });
 
     // Null when the requirement does not exist or the caller is not a member of its project.
@@ -556,6 +587,8 @@ internal static partial class EvidenceEndpoints
         e.Source, e.LinkedBy, e.LinkedAt, e.RefreshedAt);
 
     private sealed record Scope(Guid ProjectId, bool Archived);
+
+    private sealed record SavedLink(RequirementEvidence? Evidence, ProblemHttpResult? Problem);
 }
 
 internal sealed record EvidenceReference(int? Number, string? Sha, string? Tag, string? Repository);
@@ -566,9 +599,10 @@ internal sealed record EvidenceSearchItem(int Number, string Kind, string Title,
 
 internal sealed record EvidenceSearchResponse(List<EvidenceSearchItem> Items);
 
-// Action is "added" or "removed"; Kind, Label, and Title are the link's as it was then.
+// Kind, Label, and Title are the link's as it was then. A move names the requirement on its other side.
 internal sealed record EvidenceEventResponse(
-    Guid Id, Guid EvidenceId, string Action, string Kind, string Label, string Title, string Actor, DateTime OccurredAt);
+    Guid Id, Guid EvidenceId, string Action, string Kind, string Label, string Title, string Actor, DateTime OccurredAt,
+    Guid? OtherRequirementId, string? OtherRequirementTitle);
 
 internal sealed record EvidenceCommit(string Sha, string Message, string? Author, DateTime Date, string Url);
 

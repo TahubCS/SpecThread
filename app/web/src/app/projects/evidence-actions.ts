@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { apiFetch } from "@/lib/api";
 import {
-  EVIDENCE_SEARCH_MAX, evidenceReferenceError, parseEvidence, parseEvidenceList, parseEvidenceSearch, problemDetail, type EvidenceSearchItem,
+  EVIDENCE_SEARCH_MAX, evidenceReferenceError, parseEvidence, parseEvidenceList, parseEvidenceSearch, parseEvidenceSuggestions, problemDetail,
+  type EvidenceSearchItem,
 } from "@/lib/evidence";
 import { fieldError, isUuid } from "@/lib/projects";
 
@@ -82,6 +83,78 @@ export async function searchEvidence(
     console.error("Search evidence failed", error);
     return fail(failed);
   }
+}
+
+/** Looks for pull requests that say they close the linked issues (ADR-056). What it finds is suggested, never linked. */
+export async function findSuggestions(projectId: string, requirementId: string): Promise<EvidenceActionState> {
+  const failed = "Suggestions could not be found. Please try again.";
+  if (!isUuid(projectId) || !isUuid(requirementId)) return { error: failed };
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/evidence/suggestions/scan`, { method: "POST", timeoutMs: GITHUB_WRITE_TIMEOUT_MS });
+    if (response.status === 409) return { error: problemDetail(await response.json()) ?? failed };
+    if (response.status === 502) return { error: GITHUB_DOWN };
+    if (response.status === 503) return { error: GITHUB_NOT_SET_UP };
+    if (!response.ok) throw new Error(`Find suggestions returned ${response.status}.`);
+    parseEvidenceSuggestions(await response.json());
+  } catch (error) {
+    console.error("Find suggestions failed", error);
+    return { error: failed };
+  }
+  refresh(projectId, requirementId);
+  return { error: null };
+}
+
+/** Confirms or rejects one suggestion, by the form's `suggestionId` and the button's `decision`. Both are recorded with who and when. */
+export async function decideSuggestion(
+  projectId: string, requirementId: string, _previous: EvidenceActionState, formData: FormData,
+): Promise<EvidenceActionState> {
+  const failed = "The suggestion could not be saved. Please try again.";
+  const suggestionId = String(formData.get("suggestionId") ?? "");
+  const decision = formData.get("decision");
+  if (!isUuid(projectId) || !isUuid(requirementId) || !isUuid(suggestionId) || (decision !== "confirm" && decision !== "reject")) return { error: failed };
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/evidence/suggestions/${suggestionId}/${decision}`, {
+      method: "POST", timeoutMs: GITHUB_WRITE_TIMEOUT_MS,
+    });
+    // 409 explains itself: decided already, linked already, gone from GitHub, the limit, or archived.
+    if (response.status === 409) return { error: problemDetail(await response.json()) ?? failed };
+    if (response.status === 502) return { error: GITHUB_DOWN };
+    if (response.status === 503) return { error: GITHUB_NOT_SET_UP };
+    if (!response.ok) throw new Error(`Decide suggestion returned ${response.status}.`);
+  } catch (error) {
+    console.error("Decide suggestion failed", error);
+    return { error: failed };
+  }
+  refresh(projectId, requirementId);
+  return { error: null };
+}
+
+/** Moves a link to another requirement of the project in one step (ADR-056). Both requirements' histories show it. */
+export async function moveEvidence(
+  projectId: string, requirementId: string, _previous: EvidenceActionState, formData: FormData,
+): Promise<EvidenceActionState> {
+  const failed = "The link could not be moved. Please try again.";
+  const evidenceId = String(formData.get("evidenceId") ?? "");
+  const targetRequirementId = String(formData.get("targetRequirementId") ?? "");
+  if (!targetRequirementId) return { error: "Choose the requirement to move this link to." };
+  if (!isUuid(projectId) || !isUuid(requirementId) || !isUuid(evidenceId) || !isUuid(targetRequirementId)) return { error: failed };
+  try {
+    const response = await apiFetch(`/requirements/${requirementId}/evidence/${evidenceId}/move`, {
+      method: "POST", body: JSON.stringify({ targetRequirementId }), timeoutMs: GITHUB_WRITE_TIMEOUT_MS,
+    });
+    if (response.status === 400) return { error: fieldError(await response.json(), "targetRequirementId") ?? failed };
+    if (response.status === 409) return { error: problemDetail(await response.json()) ?? failed };
+    if (response.status === 502) return { error: GITHUB_DOWN };
+    if (response.status === 503) return { error: GITHUB_NOT_SET_UP };
+    if (!response.ok) throw new Error(`Move evidence returned ${response.status}.`);
+    parseEvidence(await response.json());
+  } catch (error) {
+    console.error("Move evidence failed", error);
+    return { error: failed };
+  }
+  // Both requirements change, along with the counts on the project's lists.
+  revalidatePath(`/projects/${projectId}`, "layout");
+  return { error: null };
 }
 
 /** Reads every linked item from GitHub again and stores what it reports now. */

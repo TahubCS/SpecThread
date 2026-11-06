@@ -67,6 +67,11 @@ to the project's team; non-members get 404 as if the project did not exist.
 | GET | `/requirements/{requirementId}/evidence` | member | | 200 `Evidence[]` (oldest first by GitHub's created time) |
 | GET | `/requirements/{requirementId}/evidence/search` | member | query `q`: words from a title | 200 `{ items: EvidenceSearchItem[] }` (at most 20) |
 | GET | `/requirements/{requirementId}/evidence/history` | member | | 200 `EvidenceEvent[]` (newest first) |
+| GET | `/requirements/{requirementId}/evidence/suggestions` | member | | 200 `EvidenceSuggestion[]` (undecided, by number) |
+| POST | `/requirements/{requirementId}/evidence/suggestions/scan` | member | | 200 `EvidenceSuggestion[]` |
+| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/confirm` | member | | 201 `Evidence` (`source: "suggested"`) |
+| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/reject` | member | | 204 |
+| POST | `/requirements/{requirementId}/evidence/{evidenceId}/move` | member | `{ targetRequirementId }` | 200 `Evidence` |
 | POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
 | POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
 | DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
@@ -109,6 +114,25 @@ other repository are dropped. It links nothing: link a result by its number. An 
 `q`, or one of more than 10 words, is 400 on `q` (words are never dropped); no repository connected is 409; 502 and 503 as above, including
 GitHub's search rate limit. Linking and unlinking each add an `EvidenceEvent`, which
 stays after the link is removed; refresh adds none.
+
+Suggestions (ADR-056) are pull requests of the connected repository whose description
+closes an issue linked to the requirement (close, fix, or resolve in GitHub's forms,
+before `#N`, `owner/name#N`, or the issue's address). Scan and refresh bring the undecided
+ones up to date, and answer 409 if the linked issues change while GitHub is read. They are not evidence: no evidence list, count, review, or Evidence
+complete includes them. Confirm links the pull request as GitHub reports it now; reject
+keeps it from being suggested again, though it can still be linked by hand. Either adds an
+`EvidenceEvent`. A suggestion decided already, or a pull request gone from GitHub, is
+409, as are no repository connected and an archived requirement or project; 502 and 503
+as above. Linking a suggested pull request by hand removes its suggestion.
+
+Move takes a link to another active requirement of the project in one step. The link
+keeps its ID, `linkedBy` and `linkedAt` become the mover and now, and `source` becomes
+`manual`. Each requirement gets an `EvidenceEvent`, and decisions on both become
+`outdated`. A target that is missing, the same requirement, or in another project is 400 on
+`targetRequirementId`. An archived target, the item already linked there, 50 links there,
+no repository connected, or the link or the target's links changing during the move is
+409. A pull request moved away is not suggested again for that requirement; a decision
+already made on it stays as it was.
 
 Link and refresh read GitHub first and only then take the team lock and save, so a
 large refresh may take tens of seconds; the web app allows these two calls 55 seconds
@@ -248,10 +272,17 @@ type EvidenceSearchItem = {
   linked: boolean; // linked to this requirement when the search ran
 };
 type EvidenceEvent = {
-  id: string; evidenceId: string; action: "added" | "removed";
+  id: string; evidenceId: string; // for a rejection, the suggestion's ID
+  action: "added" | "removed" | "confirmed" | "rejected" | "moved_in" | "moved_out";
   // The link as it was then: label is "#9", a release tag, or a short SHA.
   kind: Evidence["kind"]; label: string; title: string;
   actor: string; occurredAt: string;
+  otherRequirementId: string | null; otherRequirementTitle: string | null; // the other side of a move
+};
+type EvidenceSuggestion = {
+  id: string; number: number; title: string; state: "open" | "closed" | "merged"; author: string | null; url: string;
+  reference: string; // what was found, such as "Closes #184"
+  foundAt: string;
 };
 ```
 
@@ -349,7 +380,7 @@ remain 401, and an account without a user row remains 403. Project access follow
 
 Not yet available: activity and audit history. The only change histories kept are
 criteria versions (ADR-051), follow-up link changes (ADR-052), and evidence link
-changes (ADR-054).
+changes (ADR-054, ADR-056).
 
 
 Team management uses authenticated server actions. Role changes require explicit
