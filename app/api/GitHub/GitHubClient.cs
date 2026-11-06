@@ -44,6 +44,10 @@ internal sealed record GitHubSearchItem(int Number, string Kind, string Title, s
 // the reference in; it is read for this request only and is never stored or logged.
 internal sealed record GitHubMention(int Number, string Title, string State, string? Author, string Url, string Body);
 
+// The pull requests found in an issue's timeline. Truncated means reading stopped at the page
+// limit, so one that is not listed may still mention the issue.
+internal sealed record GitHubMentions(List<GitHubMention> Items, bool Truncated);
+
 // One automated check on a commit. Result is "passed", "failed", "running", "skipped",
 // "cancelled", or "neutral". Kind is "check" (a check run) or "status" (an older commit status).
 internal sealed record GitHubCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
@@ -113,7 +117,7 @@ internal interface IGitHubClient
 
     // Pull requests of owner/name that mention the issue, from its timeline (ADR-056). NotFound
     // when the issue can't be read.
-    Task<GitHubResult<List<GitHubMention>>> ListMentionsAsync(
+    Task<GitHubResult<GitHubMentions>> ListMentionsAsync(
         long installationId, long repositoryId, string owner, string name, int issueNumber, CancellationToken cancel);
 }
 
@@ -558,11 +562,11 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         }
     }
 
-    public async Task<GitHubResult<List<GitHubMention>>> ListMentionsAsync(
+    public async Task<GitHubResult<GitHubMentions>> ListMentionsAsync(
         long installationId, long repositoryId, string owner, string name, int issueNumber, CancellationToken cancel)
     {
         var token = await CreateInstallationTokenAsync(installationId, cancel);
-        if (token.Failure != GitHubFailure.None) return GitHubResult<List<GitHubMention>>.Fail(token.Failure);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubMentions>.Fail(token.Failure);
 
         var expected = $"/repos/{owner}/{name}";
         var found = new Dictionary<int, GitHubMention>();
@@ -570,11 +574,11 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         {
             var (failure, body) = await SendAsync(
                 HttpMethod.Get, $"repositories/{repositoryId}/issues/{issueNumber}/timeline?per_page={PageSize}&page={page}", token.Value!, cancel);
-            if (failure != GitHubFailure.None) return GitHubResult<List<GitHubMention>>.Fail(AsInstallation(failure));
+            if (failure != GitHubFailure.None) return GitHubResult<GitHubMentions>.Fail(AsInstallation(failure));
             using (body)
             {
                 var root = body!.RootElement;
-                if (root.ValueKind != JsonValueKind.Array) return GitHubResult<List<GitHubMention>>.Fail(GitHubFailure.Unavailable);
+                if (root.ValueKind != JsonValueKind.Array) return GitHubResult<GitHubMentions>.Fail(GitHubFailure.Unavailable);
                 foreach (var entry in root.EnumerateArray())
                 {
                     if (entry.ValueKind != JsonValueKind.Object || !entry.TryGetProperty("event", out var kind) || kind.GetStringOrNull() != "cross-referenced" ||
@@ -590,7 +594,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
                         !item.TryGetProperty("html_url", out var url) || !IsGitHubLink(url.GetStringOrNull()) ||
                         !item.TryGetProperty("repository_url", out var repository) || repository.GetStringOrNull() is not { } repositoryUrl)
                     {
-                        return GitHubResult<List<GitHubMention>>.Fail(GitHubFailure.Unavailable);
+                        return GitHubResult<GitHubMentions>.Fail(GitHubFailure.Unavailable);
                     }
                     // Pull requests of other repositories can mention the issue too; only this one's count.
                     if (!repositoryUrl.EndsWith(expected, StringComparison.OrdinalIgnoreCase)) continue;
@@ -598,10 +602,10 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
                     var text = item.TryGetProperty("body", out var description) ? description.GetStringOrNull() ?? "" : "";
                     found[read] = new GitHubMention(read, title.GetString()!, merged ? "merged" : state.GetString()!, ReadLogin(item, "user"), url.GetString()!, text);
                 }
-                if (root.GetArrayLength() < PageSize) break;
+                if (root.GetArrayLength() < PageSize) return GitHubResult<GitHubMentions>.Ok(new([.. found.Values], false));
             }
         }
-        return GitHubResult<List<GitHubMention>>.Ok([.. found.Values]);
+        return GitHubResult<GitHubMentions>.Ok(new([.. found.Values], true));
     }
 
     // An installation token GitHub just issued and then rejects is GitHub's problem, not the user's.

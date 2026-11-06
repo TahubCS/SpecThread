@@ -60,7 +60,7 @@ internal static partial class EvidenceEndpoints
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }
-        await SaveSuggestionsAsync(db, requirementId, repository, mentions.Value!, Clock.UtcNow(), cancel);
+        if (!await SaveSuggestionsAsync(db, requirementId, repository, mentions.Value!, Clock.UtcNow(), cancel)) return Changed();
         await db.SaveChangesAsync(cancel);
         await transaction.CommitAsync(cancel);
         return TypedResults.Ok(await ReadSuggestionsAsync(db, requirementId, scope.ProjectId, cancel));
@@ -163,29 +163,22 @@ internal static partial class EvidenceEndpoints
         var others = await db.RequirementEvidence.Where(e => e.RequirementId == targetId).ToListAsync(cancel);
         if (others.Exists(e => SameItem(e, evidence))) return AlreadyLinkedThere(evidence);
         if (others.Count >= MaxEvidence) return LimitReached();
+        // Without a repository, links can't be changed, and nothing could compare the move with releases.
+        var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
+        if (repository is null) return NoRepository();
 
+        // What the comparison below relies on, taken before it changes the tracked releases.
+        var compared = Comparable(others);
         // What a release contains was compared with the links of the requirement it was on.
         if (evidence.Kind == "release") evidence.Contains = null;
-        var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
-        if (repository is not null)
-        {
-            var contents = evidence.Kind == "release"
-                ? await ReadContentsAsync(github, repository, [evidence], others, cancel)
-                : await ReadContentsAsync(github, repository, others.FindAll(e => e.Kind == "release"), [evidence], cancel);
-            if (contents != GitHubFailure.None) return Failed(contents, $"{repository.Owner}/{repository.Name}");
-        }
+        var contents = evidence.Kind == "release"
+            ? await ReadContentsAsync(github, repository, [evidence], others, cancel)
+            : await ReadContentsAsync(github, repository, others.FindAll(e => e.Kind == "release"), [evidence], cancel);
+        if (contents != GitHubFailure.None) return Failed(contents, $"{repository.Owner}/{repository.Name}");
 
         // GitHub was read without holding the team lock. Take it now and check again what the reads relied on.
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
-        var check = repository is not null
-            ? await LockAndRecheckAsync(db, userId, requirementId, repository, cancel)
-            : await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel) switch
-            {
-                null => Recheck.NotFound,
-                { Archived: true } => Recheck.Archived,
-                _ => Recheck.Ready,
-            };
-        switch (check)
+        switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
             case Recheck.NotFound: return TypedResults.NotFound();
             case Recheck.Archived: return ProjectEndpoints.Archived();
@@ -195,7 +188,12 @@ internal static partial class EvidenceEndpoints
         {
             return TypedResults.Problem("A link can't be moved to an archived requirement.", statusCode: StatusCodes.Status409Conflict);
         }
-        if (await db.RequirementEvidence.CountAsync(e => e.RequirementId == targetId, cancel) >= MaxEvidence) return LimitReached();
+        // Moved or removed by someone else meanwhile: this move would write over that.
+        if (!await db.RequirementEvidence.AsNoTracking().AnyAsync(e => e.Id == evidenceId && e.RequirementId == requirementId, cancel)) return Changed();
+        // The target's links changed meanwhile: the comparison is out of date, and saving it would
+        // overwrite newer answers. An unchanged target also still has room for this link.
+        var current = await db.RequirementEvidence.AsNoTracking().Where(e => e.RequirementId == targetId).ToListAsync(cancel);
+        if (!Comparable(current).SequenceEqual(compared)) return Changed();
 
         var now = Clock.UtcNow();
         Record(db, evidence, "moved_out", userId, now, requirementId, targetId);
@@ -226,18 +224,20 @@ internal static partial class EvidenceEndpoints
 
     // Reads, for each linked issue, the pull requests that say they close it. Issues GitHub can't
     // show are skipped, like items deleted there on refresh. Reads must not touch the DbContext.
-    private static async Task<GitHubResult<List<EvidenceMention>>> ReadMentionsAsync(
+    private static async Task<GitHubResult<EvidenceMentions>> ReadMentionsAsync(
         IGitHubClient github, ProjectRepository repository, List<RequirementEvidence> links, CancellationToken cancel)
     {
         var issues = links.FindAll(e => e.Kind == "issue" && e.Number is not null);
         var reads = await ReadConcurrentlyAsync(issues, issue => github.ListMentionsAsync(
             repository.InstallationId, repository.RepositoryId, repository.Owner, repository.Name, issue.Number!.Value, cancel), cancel);
         var found = new List<EvidenceMention>();
+        var complete = true;
         for (var index = 0; index < issues.Count; index++)
         {
             if (reads[index].Failure == GitHubFailure.NotFound) continue;
-            if (reads[index].Failure != GitHubFailure.None) return GitHubResult<List<EvidenceMention>>.Fail(reads[index].Failure);
-            foreach (var pull in reads[index].Value!)
+            if (reads[index].Failure != GitHubFailure.None) return GitHubResult<EvidenceMentions>.Fail(reads[index].Failure);
+            complete &= !reads[index].Value!.Truncated;
+            foreach (var pull in reads[index].Value!.Items)
             {
                 if (ClosingKeyword(pull.Body, repository, issues[index].Number!.Value) is { } keyword)
                 {
@@ -245,7 +245,7 @@ internal static partial class EvidenceEndpoints
                 }
             }
         }
-        return GitHubResult<List<EvidenceMention>>.Ok(found);
+        return GitHubResult<EvidenceMentions>.Ok(new EvidenceMentions(found, complete, [.. issues.Select(issue => issue.Number!.Value)]));
     }
 
     // The keyword with which the text closes the issue, as GitHub reads closing references: "#N",
@@ -266,20 +266,29 @@ internal static partial class EvidenceEndpoints
         return null;
     }
 
-    // Brings the undecided suggestions in line with a complete read: new ones are added, ones no
-    // longer referenced go, and decided ones are left as they are. Call under the team lock.
-    private static async Task SaveSuggestionsAsync(
-        SpecThreadDbContext db, Guid requirementId, ProjectRepository repository, List<EvidenceMention> mentions, DateTime now, CancellationToken cancel)
+    // Brings the undecided suggestions in line with a read: new ones are added, and decided ones
+    // are left as they are. Ones no longer referenced go, unless the read stopped early and so can't
+    // tell. Saves nothing and returns false when the linked issues are not the ones read, because
+    // the read then answers for other links. Call under the team lock.
+    private static async Task<bool> SaveSuggestionsAsync(
+        SpecThreadDbContext db, Guid requirementId, ProjectRepository repository, EvidenceMentions mentions, DateTime now, CancellationToken cancel)
     {
         var known = await db.RequirementEvidenceSuggestions
             .Where(s => s.RequirementId == requirementId && s.RepositoryId == repository.RepositoryId).ToListAsync(cancel);
-        var linked = (await db.RequirementEvidence.AsNoTracking()
-                .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId && e.Number != null)
-                .Select(e => e.Number!.Value).ToListAsync(cancel))
-            .ToHashSet();
-        var wanted = mentions.Where(m => !linked.Contains(m.Pull.Number)).DistinctBy(m => m.Pull.Number).ToList();
-        db.RequirementEvidenceSuggestions.RemoveRange(known.Where(s => s.Status == "pending" && !wanted.Exists(m => m.Pull.Number == s.Number)));
-        var pending = known.Count(s => s.Status == "pending" && wanted.Exists(m => m.Pull.Number == s.Number));
+        var links = await db.RequirementEvidence.AsNoTracking()
+            .Where(e => e.RequirementId == requirementId && e.RepositoryId == repository.RepositoryId && e.Number != null)
+            .Select(e => new { e.Kind, Number = e.Number!.Value }).ToListAsync(cancel);
+        if (!links.Where(e => e.Kind == "issue").Select(e => e.Number).ToHashSet().SetEquals(mentions.Issues)) return false;
+
+        var linked = links.Select(e => e.Number).ToHashSet();
+        var wanted = mentions.Items.Where(m => !linked.Contains(m.Pull.Number)).DistinctBy(m => m.Pull.Number).ToList();
+        if (mentions.Complete)
+        {
+            var stale = known.FindAll(s => s.Status == "pending" && !wanted.Exists(m => m.Pull.Number == s.Number));
+            db.RequirementEvidenceSuggestions.RemoveRange(stale);
+            known.RemoveAll(stale.Contains);
+        }
+        var pending = known.Count(s => s.Status == "pending");
         foreach (var (pull, reference) in wanted)
         {
             var row = known.Find(s => s.Number == pull.Number);
@@ -300,6 +309,7 @@ internal static partial class EvidenceEndpoints
                 FoundAt = now,
             });
         }
+        return true;
     }
 
     private static Task<int> DropPendingAsync(SpecThreadDbContext db, Guid requirementId, long repositoryId, int number, CancellationToken cancel) =>
@@ -307,7 +317,9 @@ internal static partial class EvidenceEndpoints
             .Where(s => s.RequirementId == requirementId && s.RepositoryId == repositoryId && s.Number == number && s.Status == "pending")
             .ExecuteDeleteAsync(cancel);
 
-    // Records that a pull request moved away must not be suggested for this requirement again.
+    // Records that a pull request moved away must not be suggested for this requirement again. A
+    // decided row already keeps it from coming back, so that decision stays as it was made; the
+    // move itself is in the history.
     private static async Task RefuseSuggestionAsync(
         SpecThreadDbContext db, Guid requirementId, RequirementEvidence evidence, int number, string userId, DateTime now, CancellationToken cancel)
     {
@@ -330,7 +342,7 @@ internal static partial class EvidenceEndpoints
             };
             db.RequirementEvidenceSuggestions.Add(row);
         }
-        (row.Status, row.DecidedBy, row.DecidedAt) = ("rejected", userId, now);
+        if (row.Status == "pending") (row.Status, row.DecidedBy, row.DecidedAt) = ("rejected", userId, now);
     }
 
     private static async Task<List<EvidenceSuggestionResponse>> ReadSuggestionsAsync(
@@ -341,6 +353,10 @@ internal static partial class EvidenceEndpoints
             .OrderBy(s => s.Number)
             .Select(s => new EvidenceSuggestionResponse(s.Id, s.Number, s.Title, s.State, s.Author, s.Url, s.Reference, s.FoundAt))
             .ToListAsync(cancel);
+
+    // What a comparison with releases depends on, in a stable order.
+    private static List<(Guid Id, string? Sha, string? Change, string? Contains)> Comparable(List<RequirementEvidence> links) =>
+        [.. links.Select(e => (e.Id, e.Sha, ChangeSha(e), e.Contains)).OrderBy(e => e.Id)];
 
     private static bool SameItem(RequirementEvidence a, RequirementEvidence b) =>
         a.RepositoryId == b.RepositoryId && a.Kind == b.Kind && a.Number == b.Number && a.Tag == b.Tag && (a.Number is not null || a.Tag is not null || a.Sha == b.Sha);
@@ -360,6 +376,9 @@ internal static partial class EvidenceEndpoints
 }
 
 internal sealed record EvidenceMention(GitHubMention Pull, string Reference);
+
+// What a read found. Complete is false when a timeline stopped early; Issues are the linked issues it read.
+internal sealed record EvidenceMentions(List<EvidenceMention> Items, bool Complete, List<int> Issues);
 
 internal sealed record MoveEvidenceRequest(Guid? TargetRequirementId);
 

@@ -1472,16 +1472,22 @@ Confirming reads the pull request from GitHub and links it like any link, with
 `confirmed` or `rejected` event in the history (ADR-054). A decided row is never suggested
 again; a rejected pull request can still be linked by hand. Undecided rows that a
 complete read no longer finds are dropped, and linking the pull request by hand drops its
-suggestion.
+suggestion. A read that stopped at the timeline limit drops nothing, because it can't tell.
+Because GitHub is read outside the team lock, nothing is saved if the linked issues
+changed meanwhile (409).
 
 `POST /requirements/{id}/evidence/{evidenceId}/move` moves any link to another active
-requirement of the project, in one transaction under the team lock. The row keeps its
+requirement of the project, in one transaction under the team lock. It needs a connected
+repository, as the page already says of changing links. Under the lock it confirms that
+the link is still on the source and the target's links are the ones compared, and
+answers 409 otherwise, so a concurrent change is not overwritten. The row keeps its
 ID, so the decisions on both requirements become outdated; `linked_by` and `linked_at`
 become the mover and the time, and `source` becomes `manual`. Each history gets an event,
 `moved_out` and `moved_in`, naming the other requirement. A moved change is compared
 with the target's releases, and a moved release with the target's changes. A pull
 request moved away is recorded as rejected for the requirement it left, or the same
-closing reference would suggest it straight back.
+closing reference would suggest it straight back. An earlier decision on it stays as it
+was made, and already prevents that.
 
 Consequences: Suggestions appear only when someone asks or refreshes, so a pull request
 opened later waits for that. Only pull request descriptions are read: commit messages,

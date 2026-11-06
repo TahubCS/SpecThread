@@ -189,9 +189,11 @@ currently require network access during the web build.
   Evidence complete; confirm and reject with who and when, decided ones refused and never
   suggested again; linking by hand, edited references, refresh, and items gone from
   GitHub; members only, archived (also while waiting for the team lock), disconnected,
-  and GitHub failures; moves with both histories, outdated decisions, no re-suggestion,
-  and moving back; refusals for the target, a duplicate, and the limit; release
-  comparison after a move; and the migration's constraints, RLS, and rollback. Browser
+  and GitHub failures; a linked issue changing during a scan, and a truncated timeline
+  dropping nothing; moves with both histories, outdated decisions, no re-suggestion, and
+  moving back; refusals for the target, a duplicate, the limit, and no repository; the
+  link or the target's links changing while a move waits for the lock; an earlier
+  decision surviving a move; release comparison after a move; and the migration's constraints, RLS, and rollback. Browser
   (tests/e2e/evidence.spec.ts): finding, the label and reference, not counted, confirm,
   reject, the change list, staying rejected, a failed scan and a refused decision; moving
   with cancel, both requirements' changes and the history page, and a refused move. Not

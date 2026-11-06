@@ -118,7 +118,7 @@ stays after the link is removed; refresh adds none.
 Suggestions (ADR-056) are pull requests of the connected repository whose description
 closes an issue linked to the requirement (close, fix, or resolve in GitHub's forms,
 before `#N`, `owner/name#N`, or the issue's address). Scan and refresh bring the undecided
-ones up to date. They are not evidence: no evidence list, count, review, or Evidence
+ones up to date, and answer 409 if the linked issues change while GitHub is read. They are not evidence: no evidence list, count, review, or Evidence
 complete includes them. Confirm links the pull request as GitHub reports it now; reject
 keeps it from being suggested again, though it can still be linked by hand. Either adds an
 `EvidenceEvent`. A suggestion decided already, or a pull request gone from GitHub, is
@@ -129,8 +129,10 @@ Move takes a link to another active requirement of the project in one step. The 
 keeps its ID, `linkedBy` and `linkedAt` become the mover and now, and `source` becomes
 `manual`. Each requirement gets an `EvidenceEvent`, and decisions on both become
 `outdated`. A target that is missing, the same requirement, or in another project is 400 on
-`targetRequirementId`. An archived target, the item already linked there, or 50 links
-there is 409. A pull request moved away is not suggested again for that requirement.
+`targetRequirementId`. An archived target, the item already linked there, 50 links there,
+no repository connected, or the link or the target's links changing during the move is
+409. A pull request moved away is not suggested again for that requirement; a decision
+already made on it stays as it was.
 
 Link and refresh read GitHub first and only then take the team lock and save, so a
 large refresh may take tens of seconds; the web app allows these two calls 55 seconds

@@ -324,6 +324,79 @@ test("a moved change is compared with the releases it joins, and a moved release
   expect(await contains(from)).toEqual({ [change.id]: true });
 });
 
+test("a scan saves nothing if the linked issues changed while GitHub was read, and a truncated read drops nothing", async ({ request }) => {
+  const { projectId, ids: [id], paths: [path], repositoryId } = await setUp(request, [item(1, "Guests cannot pay"), pull(2, "Add it", "Closes #1")]);
+  const owner = await as(request, "owner");
+  expect((await owner.post(path, { reference: "1" })).status()).toBe(201);
+
+  const pending = await withTeamLock(database.pool, projectId, async client => {
+    const response = owner.post(`${path}/suggestions/scan`);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query("DELETE FROM public.requirement_evidence WHERE requirement_id = $1", [id]);
+    return { response };
+  });
+  expect((await pending.response).status()).toBe(409);
+  expect(await (await owner.get(`${path}/suggestions`)).json()).toEqual([]);
+
+  expect((await owner.post(path, { reference: "1" })).status()).toBe(201);
+  expect(await scan(owner, path)).toHaveLength(1);
+  // Every page full and the reference not among them: GitHub stopped being read, not referencing it.
+  const full = Array.from({ length: 100 }, () => ({ event: "labeled" }));
+  const timeline = `^/repositories/${repositoryId}/issues/1/timeline$`;
+  await request.post(`${gitHub}/__github/faults`, { data: { bearer: "installation", path: timeline, status: 200, body: full } });
+  expect(await scan(owner, path)).toHaveLength(1);
+  await request.delete(`${gitHub}/__github/faults?bearer=installation`);
+  // A complete read without it still drops it.
+  await request.post(`${gitHub}/__github/faults`, { data: { bearer: "installation", path: timeline, status: 200, times: 1, body: [] } });
+  expect(await scan(owner, path)).toEqual([]);
+});
+
+test("a move refuses without a repository, or when the link or the target changed while it waited, and keeps earlier decisions", async ({ request }) => {
+  const { projectId, ids: [fromId, toId, thirdId], paths: [from, to] } = await setUp(request,
+    [item(1, "Guests cannot pay"), pull(2, "Add it", "Closes #1"), item(3, "Other")], ["From", "To", "Third"]);
+  const [owner, member] = [await as(request, "owner"), await as(request, "member")];
+  expect((await owner.post(from, { reference: "1" })).status()).toBe(201);
+  const [suggestion] = await scan(owner, from);
+  const link = await (await member.post(`${from}/suggestions/${suggestion.id}/confirm`)).json();
+  const body = { targetRequirementId: toId };
+  const history = async (id: string) => (await database.pool.query("SELECT count(*)::int AS count FROM public.requirement_evidence_events WHERE requirement_id = $1", [id])).rows[0].count;
+  const [fromEvents, toEvents] = [await history(fromId), await history(toId)];
+
+  // Moved elsewhere while this move waited: it is not moved again, and no history is written.
+  const moved = await withTeamLock(database.pool, projectId, async client => {
+    const response = owner.post(`${from}/${link.id}/move`, body);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query("UPDATE public.requirement_evidence SET requirement_id = $1 WHERE id = $2", [thirdId, link.id]);
+    return { response };
+  });
+  expect((await moved.response).status()).toBe(409);
+  expect((await database.pool.query("SELECT requirement_id FROM public.requirement_evidence WHERE id = $1", [link.id])).rows[0].requirement_id).toBe(thirdId);
+  expect([await history(fromId), await history(toId)]).toEqual([fromEvents, toEvents]);
+  await database.pool.query("UPDATE public.requirement_evidence SET requirement_id = $1 WHERE id = $2", [fromId, link.id]);
+
+  // The target's links changed while this move waited: what was compared is out of date.
+  const added = await (await owner.post(to, { reference: "3" })).json();
+  const changed = await withTeamLock(database.pool, projectId, async client => {
+    const response = owner.post(`${from}/${link.id}/move`, body);
+    expect(await stillWaiting(response)).toBe(true);
+    await client.query("DELETE FROM public.requirement_evidence WHERE id = $1", [added.id]);
+    return { response };
+  });
+  expect((await changed.response).status()).toBe(409);
+
+  // The decision made on the suggestion stays as it was, and still keeps it from coming back.
+  expect((await owner.post(`${from}/${link.id}/move`, body)).status()).toBe(200);
+  const { rows: [row] } = await database.pool.query("SELECT status, decided_by FROM public.requirement_evidence_suggestions WHERE id = $1", [suggestion.id]);
+  expect(row).toEqual({ status: "confirmed", decided_by: "member" });
+  expect(await scan(owner, from)).toEqual([]);
+
+  await database.pool.query("DELETE FROM public.project_repositories WHERE project_id = $1", [projectId]);
+  const refused = await owner.post(`${to}/${link.id}/move`, { targetRequirementId: fromId });
+  expect(refused.status()).toBe(409);
+  expect((await refused.json()).detail).toBe("Connect a GitHub repository to this project first.");
+  expect((await database.pool.query("SELECT requirement_id FROM public.requirement_evidence WHERE id = $1", [link.id])).rows[0].requirement_id).toBe(toId);
+});
+
 test("the migration protects suggestions, constrains them and the history, and its rollback keeps what the old history can hold", async ({ request }) => {
   const { ids: [fromId, toId], paths: [from] } = await setUp(request, [item(1, "One"), pull(2, "Two", "Closes #1"), pull(3, "Three", "Closes #1")]);
   const owner = await as(request, "owner");

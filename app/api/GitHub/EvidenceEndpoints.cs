@@ -287,7 +287,7 @@ internal static partial class EvidenceEndpoints
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }
-        await SaveSuggestionsAsync(db, requirementId, repository, mentions.Value!, now, cancel);
+        if (!await SaveSuggestionsAsync(db, requirementId, repository, mentions.Value!, now, cancel)) return Changed();
         try
         {
             await db.SaveChangesAsync(cancel);

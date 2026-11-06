@@ -43,7 +43,11 @@
   - CI applies the migration on merge. Don't apply it to Supabase by hand first.
   - Rolling the migration back deletes rejections, so rejected pull requests can be
     suggested again.
-- Checks: `npm test` 407 passed (it builds the web app and the Release API).
+- Review follow-up (six comments, all valid): a scan or refresh saves nothing if the linked
+  issues changed while GitHub was read; a truncated timeline drops no suggestions; a move
+  needs a connected repository, rechecks under the lock that the link is still on the
+  source and the target's links are unchanged, and leaves an earlier decision as it was.
+- Checks: `npm test` 409 passed (it builds the web app and the Release API).
   `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes`,
   `has-pending-model-changes` (none), and `git diff --check` passed.
 - Next step: review, then open a PR to `main`.
