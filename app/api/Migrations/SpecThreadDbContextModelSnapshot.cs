@@ -877,6 +877,10 @@ namespace SpecThread.Api.Migrations
                         .HasColumnName("occurred_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<Guid?>("OtherRequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("other_requirement_id");
+
                     b.Property<Guid>("RequirementId")
                         .HasColumnType("uuid")
                         .HasColumnName("requirement_id");
@@ -890,15 +894,103 @@ namespace SpecThread.Api.Migrations
 
                     b.HasIndex("Actor");
 
+                    b.HasIndex("OtherRequirementId");
+
                     b.HasIndex("RequirementId", "OccurredAt");
 
                     b.ToTable("requirement_evidence_events", "public", t =>
                         {
-                            t.HasCheckConstraint("ck_requirement_evidence_events_action", "action IN ('added', 'removed')");
+                            t.HasCheckConstraint("ck_requirement_evidence_events_action", "action IN ('added', 'removed', 'confirmed', 'rejected', 'moved_in', 'moved_out')");
 
                             t.HasCheckConstraint("ck_requirement_evidence_events_kind", "kind IN ('issue', 'pull_request', 'commit', 'release')");
 
                             t.HasCheckConstraint("ck_requirement_evidence_events_label", "length(btrim(label)) > 0");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_events_move", "(action IN ('moved_in', 'moved_out')) = (other_requirement_id IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidenceSuggestion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Author")
+                        .HasColumnType("text")
+                        .HasColumnName("author");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DecidedBy")
+                        .HasColumnType("text")
+                        .HasColumnName("decided_by");
+
+                    b.Property<DateTime>("FoundAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("found_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("integer")
+                        .HasColumnName("number");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reference");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DecidedBy");
+
+                    b.HasIndex("RequirementId", "RepositoryId", "Number")
+                        .IsUnique();
+
+                    b.ToTable("requirement_evidence_suggestions", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_evidence_suggestions_decision", "(status = 'pending') = (decided_by IS NULL) AND (decided_by IS NULL) = (decided_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_suggestions_number", "number > 0 AND repository_id > 0");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_suggestions_state", "state IN ('open', 'closed', 'merged')");
+
+                            t.HasCheckConstraint("ck_requirement_evidence_suggestions_status", "status IN ('pending', 'confirmed', 'rejected')");
                         });
                 });
 
@@ -1407,6 +1499,25 @@ namespace SpecThread.Api.Migrations
                         .HasForeignKey("Actor")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("OtherRequirementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidenceSuggestion", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("SpecThread.Api.Data.Requirement", null)
                         .WithMany()

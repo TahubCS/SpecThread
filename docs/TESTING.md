@@ -69,7 +69,7 @@ web app at 127.0.0.1:3100, a test-only JWKS issuer (scripts/start-test-jwks.mjs)
 at 127.0.0.1:5101, and the API in Development at 127.0.0.1:5100 trusting that
 issuer. Auth tests also start extra API instances on 5102-5104, and product API tests on 5105.
 The Teams API tests use 5116, team management 5117, invitations 5118, documents 5119, requirement documents 5120, criteria
-versions 5121, follow-ups 5122, milestones 5123, and evidence search and history 5124 (fake GitHub) and 5125
+versions 5121, follow-ups 5122, milestones 5123, evidence search and history 5124 (fake GitHub) and 5125, and evidence suggestions 5130 (fake GitHub) and 5131
 (requirement documents moved from
 5107 to 5109 when the branches were merged, because the proxy and GitHub stand-ins
 below already use those).
@@ -182,6 +182,20 @@ currently require network access during the web build.
   a result, "Linked by" on the link, the result marked Linked and offered again after
   removal, the change list on the page and the history page, no matches, and a search
   failing, refused, or answered wrongly.
+- Suggestions and moves (ADR-056). tests/schema/evidence-suggestions.spec.ts (fake GitHub
+  on 5130, API on 5131): every form of closing reference, and plain mentions, other
+  repositories, longer numbers, and unlinked issues not matching; descriptions not
+  stored; a pending suggestion missing from the evidence list, count, review snapshot, and
+  Evidence complete; confirm and reject with who and when, decided ones refused and never
+  suggested again; linking by hand, edited references, refresh, and items gone from
+  GitHub; members only, archived (also while waiting for the team lock), disconnected,
+  and GitHub failures; moves with both histories, outdated decisions, no re-suggestion,
+  and moving back; refusals for the target, a duplicate, and the limit; release
+  comparison after a move; and the migration's constraints, RLS, and rollback. Browser
+  (tests/e2e/evidence.spec.ts): finding, the label and reference, not counted, confirm,
+  reject, the change list, staying rejected, a failed scan and a refused decision; moving
+  with cancel, both requirements' changes and the history page, and a refused move. Not
+  exercised: the real GitHub timeline, and timelines over 100 events.
 - Evidence (ADR-033). Browser: the hint when no repository is connected; linking by
   number, `#number`, and address; timeline order, state, and author; refused
   references with what was typed kept; refresh picking up closed and merged items and

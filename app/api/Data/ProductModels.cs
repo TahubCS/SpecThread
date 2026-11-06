@@ -137,9 +137,11 @@ public sealed class RequirementFollowUpEvent
     public DateTime OccurredAt { get; set; }
 }
 
-// An evidence link added to or removed from a requirement, with who did it and when (ADR-054).
-// Kind, Label, and Title are copied from the link, which a removal deletes. EvidenceId is the
-// link's ID, kept without a foreign key for the same reason. Rows are only ever added.
+// A change to a requirement's evidence, with who made it and when (ADR-054, ADR-056). Action is
+// "added", "removed", "confirmed" or "rejected" (a suggestion), or "moved_in" or "moved_out",
+// where OtherRequirementId is the requirement on the other side of the move. Kind, Label, and
+// Title are copied from the link, which a removal deletes. EvidenceId is the link's ID, or a
+// rejected suggestion's, kept without a foreign key for the same reason. Rows are only ever added.
 public sealed class RequirementEvidenceEvent
 {
     public Guid Id { get; set; }
@@ -151,6 +153,29 @@ public sealed class RequirementEvidenceEvent
     public required string Title { get; set; }
     public required string Actor { get; set; }
     public DateTime OccurredAt { get; set; }
+    public Guid? OtherRequirementId { get; set; }
+}
+
+// A pull request whose text closes an issue linked to the requirement (ADR-056). It is not
+// evidence: nothing reads this table when counting, reviewing, or judging evidence, and it enters
+// requirement_evidence only when a person confirms it (ADR-036). Status is "pending",
+// "confirmed", or "rejected"; a decided row stays, so the same pull request is not suggested
+// again. Reference is the keyword and issue found, such as "Closes #184", never the text around it.
+public sealed class RequirementEvidenceSuggestion
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public long RepositoryId { get; set; }
+    public int Number { get; set; }
+    public required string Title { get; set; }
+    public required string State { get; set; }
+    public string? Author { get; set; }
+    public required string Url { get; set; }
+    public required string Reference { get; set; }
+    public string Status { get; set; } = "pending";
+    public DateTime FoundAt { get; set; }
+    public string? DecidedBy { get; set; }
+    public DateTime? DecidedAt { get; set; }
 }
 
 // A person's decision on a requirement (ADR-038). Evidence is a JSON array of the evidence links

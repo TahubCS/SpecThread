@@ -1,6 +1,54 @@
 # Shared handoff
 
-## Current task: Observability Phase 1, instrumentation off by default (2026-10-30)
+## Current task: Link suggestions from closing references, and moving a link (2026-11-05)
+
+- Branch: `feature/evidence-suggestions-and-moves`, from `main` at `031dd88` (PR #25 merged).
+- Scope: two stories for Danielle (Tech Lead), ADR-056: suggest links from explicit
+  references such as "Closes #184" ("Design the Box" F2 / MVP scope), and move a wrongly
+  linked pull request to the correct requirement ("Changing a requirement after its code
+  was merged").
+- User decisions: one branch; scan on request and on Refresh, not webhooks; a rejection
+  stays rejected; any linked item can move, not only pull requests.
+- Completed:
+  - Suggestions: pull requests of the connected repository whose description closes a
+    linked issue, read from the issue's GitHub timeline. "Find suggestions" and Refresh
+    update them. They are listed apart from the evidence, labeled "Suggested" with the
+    reference found, and count as nothing until confirmed. Confirm links the pull request
+    (`source = suggested`); reject keeps it from coming back. Both are recorded with who
+    and when, on the row and in the link history.
+  - Moves: a Move control on each link, in one transaction, keeping the link's ID. Both
+    requirements' link histories name the other. Decisions on both become outdated, release
+    comparisons follow the link, and a pull request moved away isn't suggested back.
+- Changed files: API `GitHub/EvidenceChangeEndpoints.cs` (new), `GitHub/EvidenceEndpoints.cs`
+  (`SaveLinkAsync` split out of Link so confirming reuses it; history, refresh),
+  `GitHub/GitHubClient.cs` (`ListMentionsAsync`), `Data/ProductModels.cs`,
+  `Data/SpecThreadDbContext.cs`, migration `RequirementEvidenceSuggestions` and the
+  snapshot; `scripts/generate-requirement-evidence-suggestions.mjs`, generated
+  `docs/schema/requirement-evidence-suggestions*.sql`, `scripts/test-database.mjs`,
+  `scripts/test-github.mjs` (timeline); web `lib/evidence.ts`, `lib/project-data.ts`,
+  `app/projects/evidence-actions.ts`, `components/evidence-panel.tsx`, the requirement
+  page, `app-shell.css`; tests: new `tests/schema/evidence-suggestions.spec.ts` (5130,
+  5131), four tests in `tests/e2e/evidence.spec.ts`, parser tests in
+  `tests/api/project-data.spec.ts`, `tests/support/github.ts`, migration counts up by one in
+  `reviews.spec.ts`, `evidence.spec.ts`, `github-repository.spec.ts`; docs DECISIONS
+  (ADR-056, ADR-036 note), API, DATABASE, ARCHITECTURE (nineteen product tables), PROJECT,
+  TESTING.
+- Known issues and risks:
+  - Suggestions wait for someone to press Find suggestions or Refresh; there is no webhook.
+  - Only pull request descriptions are read, not commit messages or comments.
+  - Refresh makes one more GitHub call per linked issue and fails if that read fails.
+  - The real GitHub timeline format is not exercised by tests; try it once on a real
+    repository before relying on it.
+  - The scaffold Suggestions page stays a placeholder; suggestions are on the requirement page.
+  - CI applies the migration on merge. Don't apply it to Supabase by hand first.
+  - Rolling the migration back deletes rejections, so rejected pull requests can be
+    suggested again.
+- Checks: `npm test` 407 passed (it builds the web app and the Release API).
+  `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes`,
+  `has-pending-model-changes` (none), and `git diff --check` passed.
+- Next step: review, then open a PR to `main`.
+
+## Previous task: Observability Phase 1, instrumentation off by default (2026-10-30)
 
 - Branch: `feature/observability`, from `main` at `ba2013f` (PR #24 merged).
 - Scope: OpenTelemetry in the API and web app, exported to Grafana Cloud in deployment and

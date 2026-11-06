@@ -737,7 +737,8 @@ migration EvidenceChecks). `linked_by` is always a person: for a suggested link,
 person who confirmed it. The link endpoint ignores any `source` a caller sends and
 writes `manual`; only a future "confirm a suggestion" endpoint will write
 `suggested`. The requirement page names who confirmed a suggested link (ADR-054 later
-names who added every link, and records additions and removals). Rules for
+names who added every link, and records additions and removals; ADR-056 adds the first
+suggestions, from explicit references rather than AI). Rules for
 the AI work that follows: suggestions are kept in their own store and enter
 `requirement_evidence` only when a project member confirms them; AI never records a
 review decision; every core flow works with AI unavailable or switched off; and AI
@@ -1439,6 +1440,58 @@ Grafana Labs are personal data, named on the privacy page; exports must stay tea
 leaked OTLP token can only write telemetry. The browser suite now runs with telemetry on
 against the fake receiver, so instrumentation problems surface in tests. Rollback: delete
 `OTEL_EXPORTER_OTLP_ENDPOINT` on Vercel and Render and redeploy; no code or migration change.
+
+ADR-056: Links are suggested from closing references, and a link can move between requirements
+
+Status: Accepted
+
+Context: Two stories for Danielle (Tech Lead). From "Design the Box" F2 and the MVP scope:
+suggest links from explicit references such as "Closes #184", labeled "Suggested" and not
+counted as evidence until confirmed, with each confirmation or rejection recorded by name
+and time. From the scenario "Changing a requirement after its code was merged": move a
+wrongly linked pull request to the correct requirement, with both timelines showing the
+change, who made it, and when. ADR-036 reserved `source = suggested` and said suggestions
+live apart from evidence. The user chose scanning on request over webhooks, rejections
+that stay rejected, and moving any linked item rather than only pull requests.
+
+Decision: Suggestions are deterministic; no AI is involved. For each issue linked to a
+requirement, the API reads the issue's GitHub timeline for cross-references from pull
+requests of the connected repository, and keeps those whose description uses a closing
+keyword for that issue: close, fix, or resolve in GitHub's forms, before `#N`,
+`owner/name#N`, or the issue's address. A plain mention is not enough. This runs on
+`POST /requirements/{id}/evidence/suggestions/scan` ("Find suggestions") and on Refresh.
+No webhook is added, so ADR-032 stands.
+
+`requirement_evidence_suggestions` holds them, one row per requirement and pull request,
+with the item as read and the reference found ("Closes #184"); the description itself
+is neither stored nor logged. Nothing that counts evidence reads this table: the
+evidence list, `evidenceCount`, Evidence complete (ADR-053), review snapshots, and
+"outdated" (ADR-038) all see only `requirement_evidence`. Any member confirms or rejects.
+Confirming reads the pull request from GitHub and links it like any link, with
+`source = suggested`. Each decision stays on the row with who and when, and as a
+`confirmed` or `rejected` event in the history (ADR-054). A decided row is never suggested
+again; a rejected pull request can still be linked by hand. Undecided rows that a
+complete read no longer finds are dropped, and linking the pull request by hand drops its
+suggestion.
+
+`POST /requirements/{id}/evidence/{evidenceId}/move` moves any link to another active
+requirement of the project, in one transaction under the team lock. The row keeps its
+ID, so the decisions on both requirements become outdated; `linked_by` and `linked_at`
+become the mover and the time, and `source` becomes `manual`. Each history gets an event,
+`moved_out` and `moved_in`, naming the other requirement. A moved change is compared
+with the target's releases, and a moved release with the target's changes. A pull
+request moved away is recorded as rejected for the requirement it left, or the same
+closing reference would suggest it straight back.
+
+Consequences: Suggestions appear only when someone asks or refreshes, so a pull request
+opened later waits for that. Only pull request descriptions are read: commit messages,
+comments, and references without a closing keyword are not, nor are pull requests that
+reference an issue not linked to the requirement. The timeline is read to 500 events per
+issue. Refresh makes one more GitHub call per linked issue and fails if that read fails.
+Migration RequirementEvidenceSuggestions adds the table (RLS on, browser grants revoked),
+widens the event actions, and adds `other_requirement_id`. Its rollback drops the table,
+keeps a move as a removal and an addition and a confirmation as an addition, and deletes
+rejected events, which have no earlier form.
 
 ADR-NNN: Title
 

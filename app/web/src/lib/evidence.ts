@@ -225,31 +225,79 @@ export function parseEvidenceSearch(value: unknown): EvidenceSearchItem[] {
   });
 }
 
-/** A link added to or removed from a requirement, with what it was then (ADR-054). */
+const EVENT_ACTIONS = ["added", "removed", "confirmed", "rejected", "moved_in", "moved_out"] as const;
+
+/**
+ * A change to a requirement's links, with what the link was then (ADR-054, ADR-056). A move names
+ * the requirement on its other side, which is null for every other change.
+ */
 export type EvidenceEvent = {
-  id: string; evidenceId: string; action: "added" | "removed"; kind: Evidence["kind"]; label: string; title: string;
-  actor: string; occurredAt: string;
+  id: string; evidenceId: string; action: (typeof EVENT_ACTIONS)[number]; kind: Evidence["kind"]; label: string; title: string;
+  actor: string; occurredAt: string; otherRequirementId: string | null; otherRequirementTitle: string | null;
 };
 
-/** Validates a requirement's evidence history from an API response, newest first. */
+/**
+ * Validates a requirement's evidence history from an API response, newest first. The previous API
+ * (ADR-044) sends no other requirement; its events have none.
+ */
 export function parseEvidenceHistory(value: unknown): EvidenceEvent[] {
   if (!Array.isArray(value)) throw new Error("The API returned an unexpected evidence history.");
   return value.map((entry: unknown) => {
     const item = entry as Record<string, unknown> | null;
+    const otherId = item?.otherRequirementId === undefined ? null : item.otherRequirementId;
+    const otherTitle = item?.otherRequirementTitle === undefined ? null : item.otherRequirementTitle;
     if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.evidenceId !== "string" ||
-        (item.action !== "added" && item.action !== "removed") ||
+        !EVENT_ACTIONS.includes(item.action as EvidenceEvent["action"]) ||
+        (otherId !== null && typeof otherId !== "string") || (otherTitle !== null && typeof otherTitle !== "string") ||
         (item.kind !== "issue" && item.kind !== "pull_request" && item.kind !== "commit" && item.kind !== "release") ||
         typeof item.label !== "string" || typeof item.title !== "string" || typeof item.actor !== "string" || !isDate(item.occurredAt)) {
       throw new Error("The API returned an unexpected evidence history.");
     }
     return {
-      id: item.id, evidenceId: item.evidenceId, action: item.action, kind: item.kind, label: item.label, title: item.title,
-      actor: item.actor, occurredAt: item.occurredAt,
+      id: item.id, evidenceId: item.evidenceId, action: item.action as EvidenceEvent["action"], kind: item.kind, label: item.label, title: item.title,
+      actor: item.actor, occurredAt: item.occurredAt, otherRequirementId: otherId, otherRequirementTitle: otherTitle,
     };
   });
 }
 
-/** Describes one change to the links, such as "Linked #12 “Guests cannot pay”" or "Removed 4f2a9c1 “Fix totals”". */
-export function evidenceEventText(event: Pick<EvidenceEvent, "action" | "label" | "title">): string {
-  return `${event.action === "added" ? "Linked" : "Removed"} ${event.label} “${event.title}”`;
+/** Describes one change to the links, such as "Linked #12 “Guests cannot pay”" or "Moved #15 “Add checkout” to “Guest checkout”". */
+export function evidenceEventText(event: Pick<EvidenceEvent, "action" | "label" | "title" | "otherRequirementTitle">): string {
+  const item = `${event.label} “${event.title}”`;
+  const other = `“${event.otherRequirementTitle ?? "another requirement"}”`;
+  switch (event.action) {
+    case "added": return `Linked ${item}`;
+    case "removed": return `Removed ${item}`;
+    case "confirmed": return `Confirmed suggestion ${item}`;
+    case "rejected": return `Rejected suggestion ${item}`;
+    case "moved_in": return `Moved ${item} here from ${other}`;
+    case "moved_out": return `Moved ${item} to ${other}`;
+  }
+}
+
+/**
+ * A pull request that says it closes an issue linked to the requirement (ADR-056). It is not
+ * evidence until a person confirms it. `reference` is what was found, such as "Closes #184".
+ */
+export type EvidenceSuggestion = {
+  id: string; number: number; title: string; state: "open" | "closed" | "merged"; author: string | null; url: string;
+  reference: string; foundAt: string;
+};
+
+/** Validates a list of suggestions from an API response. Throws when the shape is not the documented one. */
+export function parseEvidenceSuggestions(value: unknown): EvidenceSuggestion[] {
+  if (!Array.isArray(value)) throw new Error("The API returned unexpected suggestions.");
+  return value.map((entry: unknown) => {
+    const item = entry as Record<string, unknown> | null;
+    if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.number !== "number" ||
+        !Number.isInteger(item.number) || item.number < 1 || typeof item.title !== "string" ||
+        (item.state !== "open" && item.state !== "closed" && item.state !== "merged") ||
+        (item.author !== null && typeof item.author !== "string") || !isGitHubLink(item.url) ||
+        typeof item.reference !== "string" || !isDate(item.foundAt)) {
+      throw new Error("The API returned unexpected suggestions.");
+    }
+    return {
+      id: item.id, number: item.number, title: item.title, state: item.state, author: item.author as string | null,
+      url: item.url as string, reference: item.reference, foundAt: item.foundAt,
+    };
+  });
 }

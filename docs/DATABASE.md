@@ -13,11 +13,11 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and eighteen product tables in
+`SpecThreadDbContext` maps six Better Auth tables and nineteen product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts, and
-RequirementEvidenceEvents. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
+RequirementEvidenceEvents, and RequirementEvidenceSuggestions. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -329,8 +329,8 @@ Roll back by script (docs/schema/*-rollback.sql) for one migration at a time:
 that come later in time. scripts/test-database.mjs applies the teams scripts first
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
-RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts, and
-RequirementEvidenceEvents.
+RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
+RequirementEvidenceEvents, and RequirementEvidenceSuggestions.
 
 ## Project documents migration
 
@@ -504,6 +504,31 @@ merge; it only adds a table, so the running API is unaffected, though links it m
 removes until the new API is deployed are not recorded. Rollback: `dotnet ef database
 update RequirementCriteriaVersionTexts --project app/api`, or the rollback script; it
 drops only the history, losing every recorded addition and removal; links stay.
+
+## Evidence suggestions migration
+
+RequirementEvidenceSuggestions (ADR-056) adds `requirement_evidence_suggestions`: one row
+per requirement and pull request (unique on requirement_id, repository_id, number) with
+the item's `title`, `state`, `author`, and `url`, the `reference` found, `status`
+(`pending`, `confirmed`, or `rejected`), `found_at`, and `decided_by` and `decided_at`,
+which are set exactly when it is decided. It references requirements and users with
+restrict deletes, has RLS enabled with no allow policies, and revokes PUBLIC, anon, and
+authenticated grants. It also widens `requirement_evidence_events.action` to `confirmed`,
+`rejected`, `moved_in`, and `moved_out`, and adds `other_requirement_id` (nullable, foreign
+key to requirements, set exactly on moves).
+
+```sh
+dotnet ef migrations add RequirementEvidenceSuggestions --project app/api --configuration Release
+node scripts/generate-requirement-evidence-suggestions.mjs
+```
+
+The second command adds the RLS, grant, and rollback statements and generates
+docs/schema/requirement-evidence-suggestions.sql and -rollback.sql. CI applies it after
+the merge; the running API only writes `added` and `removed`, which stay valid. Rollback:
+`dotnet ef database update RequirementEvidenceEvents --project app/api`, or the rollback
+script. It drops the table, losing every suggestion and which were rejected. Events stay
+in the older form: `moved_out` becomes `removed`, `moved_in` and `confirmed` become
+`added`, and `rejected` events are deleted. Links stay.
 
 ## Supabase tooling
 
