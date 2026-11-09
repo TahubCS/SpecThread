@@ -33,7 +33,7 @@ async function createRequirement(page: Page, projectId: string, title: string, m
 test("requirements are grouped by milestone, filtered one set at a time, and counted", async ({ page }, testInfo) => {
   const projectId = await createProject(page);
   const opens = await createRequirement(page, projectId, "Box opens", "Sprint 1");
-  await createRequirement(page, projectId, "Box closes", "Sprint 1");
+  const closes = await createRequirement(page, projectId, "Box closes", "Sprint 1");
   await createRequirement(page, projectId, "Box ships");
 
   // A label set later on the requirement page, suggested from the labels in use.
@@ -111,6 +111,21 @@ test("requirements are grouped by milestone, filtered one set at a time, and cou
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects/${projectId}/requirements?milestone=Sprint%201`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // The rule's parts fit on the requirement page too.
+  await page.goto(`/projects/${projectId}/requirements/${closes}`);
+  await expect(page.getByRole("list", { name: "Evidence complete rule" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+  // During a deploy the previous API (ADR-044) sends no evidence status, and the page then claims none.
+  const now = new Date().toISOString();
+  await failApi(owner.userId, { method: "GET", path: `^/requirements/${closes}$`, status: 200, body: {
+    id: closes, projectId, title: "Box closes", description: "", createdBy: owner.userId, updatedBy: owner.userId, version: 1,
+    createdAt: now, updatedAt: now, archivedAt: null, acceptanceCriteria: [{ id: "c1", text: "Done", position: 0 }], documents: [],
+    criteriaVersion: 1, milestone: "Sprint 1" } });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Evidence" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Evidence complete rule" })).toHaveCount(0);
+  await expect(page.getByText("Evidence incomplete")).toHaveCount(0);
 });
 
 test("a milestone that cannot be saved is explained and the requirement keeps its label", async ({ page }) => {

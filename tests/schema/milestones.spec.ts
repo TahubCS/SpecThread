@@ -186,6 +186,22 @@ test("a requirement is Evidence complete only with an issue, a merged pull reque
   for (const [title, , missing] of cases) {
     expect(await (await member.get(`/requirements/${ids[title]}`)).json(), title).toMatchObject(status(missing));
   }
+
+  // So does every other response that returns one requirement: create, edit, archive, and restore.
+  const created = await member.post(`/projects/${projectId}/requirements`, { title: "New", acceptanceCriteria: ["Done"] });
+  expect(created.status()).toBe(201);
+  expect(await created.json()).toMatchObject(status(["issue", "merged_pull_request", "passing_checks", "release"]));
+  const complete = await (await member.get(`/requirements/${ids.complete}`)).json();
+  const edited = await member.put(`/requirements/${ids.complete}`, { title: "complete", description: "Edited",
+    acceptanceCriteria: complete.acceptanceCriteria.map((c: { text: string }) => c.text), documentIds: [], version: complete.version });
+  expect(edited.status()).toBe(200);
+  expect(await edited.json()).toMatchObject({ description: "Edited", ...status([]) });
+  const archived = await member.post(`/requirements/${ids["no issue"]}/archive`);
+  expect(archived.status()).toBe(200);
+  expect(await archived.json()).toMatchObject({ archivedAt: expect.any(String), ...status(["issue"]) });
+  const restored = await member.post(`/requirements/${ids["no issue"]}/restore`);
+  expect(restored.status()).toBe(200);
+  expect(await restored.json()).toMatchObject({ archivedAt: null, ...status(["issue"]) });
 });
 
 test("the migration constrains labels, and its rollback removes only the column", async () => {
