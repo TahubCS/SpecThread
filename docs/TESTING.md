@@ -22,6 +22,11 @@ On Linux CI install browsers with `npx playwright install --with-deps chromium`.
 The GitHub Actions workflow runs these same checks. It does not need Supabase
 credentials. Reinstall Chromium after updating Playwright.
 
+CI caches npm packages from `package-lock.json` and NuGet packages from
+`app/api/packages.lock.json`; the API restore remains locked. If the `verify` job
+fails, its Playwright HTML report and `test-results/` directory are uploaded as a
+GitHub Actions artifact for seven days when present.
+
 A second CI job, `api-image`, builds the root Dockerfile that Render deploys and runs
 it as Render does: Production, port 8080, no database or issuer. It requires `/health`
 to answer `{"status":"ok"}`, anonymous `/me` to answer 401, the OpenAPI document not to
@@ -31,6 +36,9 @@ trust store. Reproduce it with `docker build --tag specthread-api:ci .` and
 
 A third job, `deploy-api`, runs only on pushes to `main` after both pass. It is not a
 check: it applies migrations to Supabase and deploys the API (ADR-044, docs/DEPLOYMENT.md).
+After the Render deploy hook succeeds, it polls the public `/health` endpoint for up
+to five minutes and requires `{"status":"ok"}`. This checks service liveness, not
+that the exact requested commit is serving traffic.
 
 The test web server and schema project require a running Docker engine and
 postgres:17. The first webServer entry calls scripts/build-api.mjs before starting

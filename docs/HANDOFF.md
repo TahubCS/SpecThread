@@ -41,6 +41,37 @@
   exercised: the real GitHub.
 - Next step: review and open the PR to `main`; then move SPEC-22 to Done.
 
+## Previous task: CI pipeline feedback and deployment availability (2026-10-30)
+
+- Branch: `feature/pipeline-feedback`, from `main` at `09848a9`.
+- Scope: improve CI feedback, NuGet restore performance, and API deployment availability
+  without changing application behavior, migrations, or production secrets.
+- Completed:
+  - `.github/workflows/ci.yml` enables setup-dotnet NuGet caching keyed by
+    `app/api/packages.lock.json` in `verify` and `deploy-api`; restores remain locked.
+  - Failed `verify` runs upload any available Playwright report and test results for
+    seven days.
+  - After a successful Render deploy-hook request, `deploy-api` polls the API's public
+    `/health` endpoint for up to five minutes (30 attempts, two-second request timeout,
+    eight-second pauses) and fails clearly if it never returns the expected liveness
+    response.
+  - `docs/CI-PIPELINE-FEEDBACK.md` records the design and acceptance criteria; this
+    guide records the CI behavior.
+- Changed files: `.github/workflows/ci.yml`, `docs/CI-PIPELINE-FEEDBACK.md`,
+  `docs/TESTING.md`, and this handoff.
+- Validation: workflow YAML parsed and structural assertions passed; the health poll's
+  calculated worst case is 292 seconds. Passed `git diff --check`, `npm run lint`,
+  `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `npm run build`, `npm run build:api`, and `npm test` (409 passed). GitHub Actions has
+  not run on this branch yet.
+- Risks and limitations: `/health` is liveness-only and may be answered by an already
+  healthy instance; this does not prove the requested SHA is serving. Verifying the
+  deployed revision would require Render deployment-status access or an API version
+  endpoint. The health poll runs only after a merge to `main`, not in a PR.
+- Next step: open a PR and confirm the workflow passes. After merge, check that the
+  Render deployment reaches healthy status; compare CI restore duration after the
+  NuGet cache has been populated.
+
 ## Previous task: Link suggestions from closing references, and moving a link (2026-11-05)
 
 - Branch: `feature/evidence-suggestions-and-moves`, from `main` at `031dd88` (PR #25 merged).
@@ -220,7 +251,6 @@
 - Next step: review, then open a PR to `main` carrying both stories and the migration.
 
 ## Previous task: Criteria versions, accepted-criteria warning, follow-ups, and milestones (2026-10-29, merged as PR #23)
-
 - Branch: `feature/requirement-change-tracking`, from `main` at `8555d75` (PR #22 merged).
 - Scope: four stories from the scenarios "Changing a requirement after its code was
   merged", "Signing off a contract milestone", and "Checking student team progress":

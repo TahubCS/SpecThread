@@ -21,6 +21,8 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: app/api/packages.lock.json
       - run: npm ci
       - run: dotnet restore app/api --locked-mode
       - run: dotnet tool restore
@@ -29,6 +31,16 @@ jobs:
       - run: npm run typecheck
       - run: dotnet format app/api --verify-no-changes --no-restore
       - run: npm test
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   # Render deploys the API from this Dockerfile only after a merge (render.yaml). Build and boot
   # the same image here, so a broken image or Production startup fails the PR instead.
@@ -89,6 +101,8 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: app/api/packages.lock.json
       - run: dotnet restore app/api --locked-mode
       - run: dotnet tool restore
       - name: Build the migration bundle
@@ -116,3 +130,15 @@ jobs:
           test -n "$RENDER_DEPLOY_HOOK_URL" ||
             { echo "::error::Set the RENDER_DEPLOY_HOOK_URL secret in the api-deploy environment."; exit 1; }
           curl --silent --show-error --fail --request POST --output /dev/null "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}"
+      - name: Wait for Render API health
+        run: |
+          for attempt in $(seq 1 30); do
+            body=$(curl --silent --fail --max-time 2 https://specthread-api.onrender.com/health) || body=""
+            if [ "$body" = '{"status":"ok"}' ]; then
+              echo "Render API health check passed."
+              exit 0
+            fi
+            if [ "$attempt" -lt 30 ]; then sleep 8; fi
+          done
+          echo "::error::Render API did not become healthy within five minutes."
+          exit 1
