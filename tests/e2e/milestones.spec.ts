@@ -111,6 +111,10 @@ test("requirements are grouped by milestone, filtered one set at a time, and cou
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects/${projectId}/requirements?milestone=Sprint%201`);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // The missing parts wrap onto their own line rather than being cut off.
+  const missing = page.getByText("Missing issue, merged pull request, passing checks, release");
+  await expect(missing).toBeVisible();
+  expect(await missing.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
   // The rule's parts fit on the requirement page too.
   await page.goto(`/projects/${projectId}/requirements/${closes}`);
   await expect(page.getByRole("list", { name: "Evidence complete rule" })).toBeVisible();

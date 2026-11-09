@@ -191,11 +191,12 @@ test("a requirement is Evidence complete only with an issue, a merged pull reque
   const created = await member.post(`/projects/${projectId}/requirements`, { title: "New", acceptanceCriteria: ["Done"] });
   expect(created.status()).toBe(201);
   expect(await created.json()).toMatchObject(status(["issue", "merged_pull_request", "passing_checks", "release"]));
-  const complete = await (await member.get(`/requirements/${ids.complete}`)).json();
-  const edited = await member.put(`/requirements/${ids.complete}`, { title: "complete", description: "Edited",
-    acceptanceCriteria: complete.acceptanceCriteria.map((c: { text: string }) => c.text), documentIds: [], version: complete.version });
+  // Edited with a part still missing, so a response that claims nothing missing is caught.
+  const before = await (await member.get(`/requirements/${ids["no issue"]}`)).json();
+  const edited = await member.put(`/requirements/${ids["no issue"]}`, { title: "no issue", description: "Edited",
+    acceptanceCriteria: before.acceptanceCriteria.map((c: { text: string }) => c.text), documentIds: [], version: before.version });
   expect(edited.status()).toBe(200);
-  expect(await edited.json()).toMatchObject({ description: "Edited", ...status([]) });
+  expect(await edited.json()).toMatchObject({ description: "Edited", ...status(["issue"]) });
   const archived = await member.post(`/requirements/${ids["no issue"]}/archive`);
   expect(archived.status()).toBe(200);
   expect(await archived.json()).toMatchObject({ archivedAt: expect.any(String), ...status(["issue"]) });

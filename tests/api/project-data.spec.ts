@@ -67,6 +67,10 @@ test("requirement and member lists are accepted only in the documented shape", (
   expect(parseRequirementSummaries([previous])).toEqual([{ ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false, evidenceMissing: [] }]);
   // The API before ADR-057 sends `evidenceComplete` under the old rule; it is not shown as complete.
   expect(parseRequirementSummaries([{ ...previous, evidenceComplete: true }])[0]).toMatchObject({ evidenceComplete: false, evidenceMissing: [] });
+  // Even then, a value of the wrong shape is refused.
+  for (const evidenceComplete of ["yes", null, 1]) {
+    expect(() => parseRequirementSummaries([{ ...previous, evidenceComplete }]), String(evidenceComplete)).toThrow("unexpected requirement");
+  }
   // Missing parts are read in the rule's order.
   expect(parseRequirementSummaries([{ ...requirement, evidenceComplete: false, evidenceMissing: ["release", "issue"] }])[0])
     .toMatchObject({ evidenceComplete: false, evidenceMissing: ["issue", "release"] });
