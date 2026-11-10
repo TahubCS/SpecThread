@@ -1,5 +1,5 @@
 import type { ProjectDocument } from "./documents";
-import { isLabel, optionalField, type RequirementSummary } from "./projects";
+import { isLabel, optionalField, parseEvidenceStatus, type RequirementSummary } from "./projects";
 import { isVersion } from "./reviews";
 
 /** A project document a requirement links to. It stays linked after it is archived (ADR-049). */
@@ -7,8 +7,8 @@ export type LinkedDocument = {
   id: string; title: string; fileName: string; contentType: string; archivedAt: string | null; linkedBy: string; linkedAt: string;
 };
 
-/** A requirement with its description, ordered acceptance criteria, and linked documents (docs/API.md). */
-export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount" | "evidenceComplete"> & {
+/** A requirement with its description, ordered acceptance criteria, linked documents, and evidence status (docs/API.md). */
+export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
   description: string;
   createdBy: string;
   /** Who saved the current version (the creator until someone edits it). */
@@ -68,8 +68,9 @@ export type RequirementErrors = {
 /**
  * Validates one requirement from an API response. Throws when the shape is not the documented one.
  * Vercel deploys the web before CI deploys the API (ADR-044), so a response from the previous
- * API may lack `updatedBy`, `documents`, `criteriaVersion`, and `milestone`: they read as the
- * creator, no documents, no recorded criteria version, and no milestone.
+ * API may lack `updatedBy`, `documents`, `criteriaVersion`, `milestone`, `evidenceComplete`, and
+ * `evidenceMissing`: they read as the creator, no documents, no recorded criteria version, no
+ * milestone, and no evidence status.
  */
 export function parseRequirement(value: unknown): Requirement {
   const item = value as Record<string, unknown> | null;
@@ -79,16 +80,17 @@ export function parseRequirement(value: unknown): Requirement {
   const updatedBy = item?.updatedBy === undefined ? item?.createdBy : item.updatedBy;
   const criteriaVersion = optionalField(item?.criteriaVersion, isVersion);
   const milestone = optionalField(item?.milestone, isLabel);
+  const evidence = parseEvidenceStatus(item);
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
       typeof item.title !== "string" || typeof item.description !== "string" || typeof item.createdBy !== "string" || typeof updatedBy !== "string" ||
       typeof item.version !== "number" || !isDate(item.createdAt) || !isDate(item.updatedAt) ||
       (item.archivedAt !== null && typeof item.archivedAt !== "string") || !Array.isArray(criteria) || !Array.isArray(documents) ||
-      criteriaVersion === undefined || milestone === undefined) {
+      criteriaVersion === undefined || milestone === undefined || evidence === undefined) {
     throw new Error("The API returned an unexpected requirement.");
   }
   return {
     id: item.id, projectId: item.projectId, title: item.title, description: item.description, createdBy: item.createdBy,
-    updatedBy, criteriaVersion, milestone,
+    updatedBy, criteriaVersion, milestone, ...evidence,
     version: item.version, createdAt: item.createdAt as string, updatedAt: item.updatedAt as string, archivedAt: item.archivedAt,
     acceptanceCriteria: criteria.map((entry: unknown) => {
       const criterion = entry as Record<string, unknown> | null;

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { FileText } from "lucide-react";
 import { evidenceCountText } from "@/lib/evidence";
-import { formatDate, type RequirementSummary } from "@/lib/projects";
+import { EVIDENCE_PART_SHORT, formatDate, type RequirementSummary } from "@/lib/projects";
 import { reviewStatus } from "@/lib/reviews";
 
 /**
  * Renders requirements as linked rows with each one's milestone, evidence count, whether its
- * evidence is complete, its review status, and the date it was last changed or archived.
+ * evidence is complete or which parts it is missing (ADR-057), its review status, and the date it
+ * was last changed or archived.
  */
 export function RequirementRows({ requirements, label }: { requirements: RequirementSummary[]; label: string }) {
   return (
@@ -21,6 +22,11 @@ export function RequirementRows({ requirements, label }: { requirements: Require
               {requirement.milestone && <span className="milestone-label">{requirement.milestone}</span>}
               <span className="row-meta row-count">{evidenceCountText(requirement.evidenceCount)}</span>
               {requirement.evidenceComplete && <span className="badge evidence-complete">Evidence complete</span>}
+              {requirement.evidenceMissing.length > 0 && (
+                <span className="row-meta evidence-missing">
+                  Missing {requirement.evidenceMissing.map(part => EVIDENCE_PART_SHORT[part]).join(", ")}
+                </span>
+              )}
               <span className={`badge review-badge${status.tone ? ` is-${status.tone}` : ""}${status.outdated ? " is-outdated" : ""}`}>
                 {status.tone && <span aria-hidden="true" />}{status.text}
               </span>

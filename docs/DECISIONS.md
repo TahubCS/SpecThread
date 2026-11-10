@@ -818,7 +818,7 @@ looks only at who created the requirement, not at who edited it last. A decision
 can be made with no evidence linked. Nothing is locked after acceptance: an edit or
 a changed link marks the decision outdated and waits for a new one. There is no
 assignment of reviewers, no notification, and no evidence policy; "My reviews" and
-Inbox stay previews (ADR-053 later adds a fixed Evidence complete rule). The snapshot does not record check results or release
+Inbox stay previews (ADR-057 later sets a fixed Evidence complete rule). The snapshot does not record check results or release
 contents, and a refresh that changes a link's state does not mark the decision
 outdated. ADR-051 later records the criteria version each decision was made against and
 asks for confirmation before accepted criteria change. The list endpoint reads every decision of the listed requirements to find
@@ -1349,6 +1349,8 @@ shows counts above the rows ("Sprint 1 · 2 requirements · 1 Evidence complete 
 Accepted"); Accepted counts a latest decision of accepted that is neither outdated nor on
 earlier criteria.
 
+ADR-057 replaces the Evidence complete rule above; it was not a team decision.
+
 Consequences: Labels match exactly, so "Sprint 1" and "sprint 1" are two milestones;
 the suggestions reduce that. There is no milestone record, date, or rename; the
 Milestones page stays a placeholder. The rule is a fixed stand-in until a configurable
@@ -1498,6 +1500,42 @@ Migration RequirementEvidenceSuggestions adds the table (RLS on, browser grants 
 widens the event actions, and adds `other_requirement_id`. Its rollback drops the table,
 keeps a move as a removal and an addition and a confirmation as an addition, and deletes
 rejected events, which have no earlier form.
+
+ADR-057: Evidence complete needs an issue, a merged pull request with passing checks, and a release
+
+Status: Accepted
+
+Context: ADR-053's rule for "Evidence complete" (linked code with passing checks; issues
+and releases neither count nor block) was written during development without a team
+decision. The team's rule is the one in Jira story US-14 (SPEC-22): the default policy
+requires a linked issue, a merged pull request, passing checks on its final commit, and a
+recorded release; a requirement missing any part shows which part; and Evidence complete
+is shown separately from Accepted. This decision replaces ADR-053's rule; the rest of
+ADR-053 (milestone labels) stands.
+
+Decision: `EvidencePolicy` in the API lists the parts a requirement's evidence does not
+meet, in this order: `issue` (no issue is linked, in any state); `merged_pull_request` (no
+linked pull request is merged); `passing_checks` (a merged pull request's stored checks,
+which are those of its final commit (ADR-035), could not be read, include none that passed,
+or include one that failed, is still running, or was cancelled; passed, skipped, and neutral
+are fine); and `release` (a merged pull request is not in the history of any linked release,
+as compared through GitHub (ADR-037)). Every merged pull request must meet the last two.
+Without a merged pull request, `passing_checks` and `release` are missing too. A requirement
+is Evidence complete when nothing is missing. Linked commits and unmerged pull requests
+neither count toward nor block it. The requirement list and a single requirement both carry
+`evidenceComplete` and `evidenceMissing`. The list row shows "Evidence complete" or the
+missing parts in short; the requirement page lists each part of the rule as Met or Missing
+in its Evidence section, apart from the Review section, where acceptance stays a person's
+decision (ADR-004, ADR-038).
+
+Consequences: Requirements that were Evidence complete under ADR-053 with only commits, or
+without an issue or a release, no longer are, and counts on the list fall until those links
+are added. A release counts only once GitHub has confirmed it contains the merged pull
+request; a pull request merged after it was linked counts once the evidence is refreshed,
+as its state and merge commit are a snapshot (ADR-033, ADR-037). Check results are as fresh as the last refresh. During a deploy the web may
+read the previous API, whose list sends `evidenceComplete` under ADR-053's rule and no
+`evidenceMissing`: the web then shows no evidence status rather than the old claim. The rule
+is still fixed; a configurable policy per project would be a later decision. No migration.
 
 ADR-NNN: Title
 

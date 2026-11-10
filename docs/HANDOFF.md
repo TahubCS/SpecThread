@@ -1,6 +1,53 @@
 # Shared handoff
 
-## Current task: CI pipeline feedback and deployment availability (2026-10-30)
+## Current task: US-14, the team's Evidence complete rule (2026-11-04)
+
+- Branch: `feature/us-14-evidence-policy`, from `main` at `031dd88`, with `main` merged in at
+  `fd89908` (PR #26 and #27). PR #28.
+- Scope: Jira SPEC-22 (US-14). The team's rule replaces ADR-053's, which was not a team
+  decision (ADR-057). Acceptance criteria: the default policy requires a linked issue, a
+  merged pull request, passing checks on its final commit, and a recorded release; a
+  requirement missing any part shows which part; Evidence complete is shown separately
+  from Accepted.
+- Completed:
+  - API: `EvidencePolicy.Missing` returns the unmet parts in order (`issue`,
+    `merged_pull_request`, `passing_checks`, `release`). The list and every single
+    requirement response (get, create, update, archive, restore) carry `evidenceComplete`
+    and `evidenceMissing`.
+  - Web: parsers read both fields (the previous API's list reads as no status, not the old
+    claim); a row shows "Evidence complete" or "Missing issue, ..." (wrapping at phone
+    width); the requirement page's Evidence section lists each part as Met or Missing under
+    an "Evidence complete" or "Evidence incomplete" badge, apart from the Review section.
+- Decisions and assumptions: an issue counts in any state. "A recorded release" means a
+  linked release that GitHub confirmed contains the merged pull request (ADR-037), so an
+  unrelated release does not satisfy it; with several merged pull requests, each needs
+  passing checks and a release that contains it. Linked commits and unmerged pull requests
+  neither count nor block. Without a merged pull request, checks and release are listed as
+  missing too.
+- Changed files: API `Requirements/EvidencePolicy.cs`, `Requirements/RequirementEndpoints.cs`;
+  web `lib/projects.ts`, `lib/requirements.ts`, `components/requirement-rows.tsx`, new
+  `components/evidence-status.tsx`, the requirement page, `app-shell.css`; tests
+  `tests/schema/milestones.spec.ts` (the rule test rewritten: 22 cases, list and single
+  requirement, and the create, edit, archive, and restore responses),
+  `tests/e2e/milestones.spec.ts` (row text, Met/Missing, the previous API, 390px),
+  `tests/api/project-data.spec.ts`; docs
+  DECISIONS (ADR-057, notes on ADR-038 and ADR-053), PROJECT, API, ARCHITECTURE, TESTING.
+  No migration and no new environment variable.
+- Checks (on the PR's contents, after merging `main` at `fd89908`): `npm test` 409 passed;
+  `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `npm run build:api` (0 warnings), and `git diff --check` passed. Mutation check: each of 32
+  changed lines (17 API, 8 web parsing, 7 UI and layout) was broken one at a time and its
+  tests run; three went uncaught at first (the edit response, an older API's malformed
+  value, cut-off text on phones), tests were added, and all 32 now fail a test. Run locally with .NET SDK
+  10.0.114 (the only one installable in that environment; `global.json` pins 10.0.401 and
+  was pointed at 10.0.100 only while checking, not committed).
+- Known issues and risks: requirements that were Evidence complete under the old rule
+  (commits only, or no issue or release) stop being so after deploy, and list counts fall.
+  A pull request merged after it was linked counts only once the evidence is refreshed. Not
+  exercised: the real GitHub.
+- Next step: review and merge PR #28; then move SPEC-22 to Done.
+
+## Previous task: CI pipeline feedback and deployment availability (2026-10-30)
 
 - Branch: `feature/pipeline-feedback`, from `main` at `09848a9`.
 - Scope: improve CI feedback, NuGet restore performance, and API deployment availability
