@@ -8,8 +8,9 @@ using SpecThread.Api.Projects;
 namespace SpecThread.Api.Requirements;
 
 // Records a person's decision on a requirement: accepted, rejected, or more evidence requested
-// (ADR-038). Any project member reads the decisions. Any member except the requirement's author
-// records one. Decisions are only ever added, so the history stays as it was made.
+// (ADR-038). Any project member reads the decisions. Owners, Admins, Members, and Reviewers record
+// one, including on requirements they wrote; Observers only read (ADR-058). Decisions are only
+// ever added, so the history stays as it was made.
 internal static class ReviewEndpoints
 {
     public const int MaxNoteLength = 2_000;
@@ -51,13 +52,9 @@ internal static class ReviewEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!TeamRoles.CanReview(found.Role)) return ObserversCannotDecide();
         if (found.Archived) return ProjectEndpoints.Archived();
         var requirement = found.Requirement;
-        // A second person has to look: nobody decides on a requirement they wrote.
-        if (requirement.CreatedBy == userId)
-        {
-            return TypedResults.Problem("You created this requirement, so another project member has to review it.", statusCode: StatusCodes.Status403Forbidden);
-        }
         // Nobody decides on text they have not seen.
         if (requirement.Version != request.Version)
         {
@@ -112,6 +109,9 @@ internal static class ReviewEndpoints
         db.Requirements.Where(r => r.Id == requirementId)
             .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => r.Id)
             .AnyAsync(cancel);
+
+    private static ProblemHttpResult ObserversCannotDecide() =>
+        TypedResults.Problem("Observers can read decisions but not record them.", statusCode: StatusCodes.Status403Forbidden);
 
     private static ReviewResponse ToResponse(RequirementReview r) =>
         new(r.Id, r.RequirementId, r.Decision, r.Note, r.RequirementVersion, ReadSnapshot(r), r.DecidedBy, r.DecidedAt, r.CriteriaVersion);

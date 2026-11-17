@@ -71,6 +71,7 @@ internal static class DocumentEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var project = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
         if (project is null) return TypedResults.NotFound();
+        if (!TeamRoles.CanEdit(await db.CallerRoleAsync(project.TeamId, userId, cancel))) return ProjectEndpoints.EditorsOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
         var document = new Document
@@ -123,6 +124,7 @@ internal static class DocumentEndpoints
         var projectId = await db.Documents.Where(d => d.Id == documentId).Select(d => (Guid?)d.ProjectId).SingleOrDefaultAsync(cancel);
         var project = projectId is null ? null : await ProjectEndpoints.LockProjectForCaller(db, projectId.Value, user.CallerId(), cancel);
         if (project is null) return TypedResults.NotFound();
+        if (!TeamRoles.CanEdit(await db.CallerRoleAsync(project.TeamId, user.CallerId(), cancel))) return ProjectEndpoints.EditorsOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
 
         // Idempotent: archiving again keeps the original timestamp.

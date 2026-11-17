@@ -110,6 +110,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
+        if (!scope.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
         if (repository is null) return NoRepository();
@@ -200,6 +201,7 @@ internal static partial class EvidenceEndpoints
         switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
             case Recheck.NotFound: return new(null, null);
+            case Recheck.ReadOnly: return new(null, ProjectEndpoints.EditorsOnly());
             case Recheck.Archived: return new(null, ProjectEndpoints.Archived());
             case Recheck.Changed: return new(null, Changed());
         }
@@ -236,6 +238,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
+        if (!scope.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
         if (repository is null) return NoRepository();
@@ -284,6 +287,7 @@ internal static partial class EvidenceEndpoints
         switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
             case Recheck.NotFound: return TypedResults.NotFound();
+            case Recheck.ReadOnly: return ProjectEndpoints.EditorsOnly();
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }
@@ -309,6 +313,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.Archived) return ProjectEndpoints.Archived();
         var evidence = await db.RequirementEvidence.SingleOrDefaultAsync(e => e.Id == evidenceId && e.RequirementId == requirementId, cancel);
         if (evidence is null) return TypedResults.NotFound();
@@ -339,10 +344,12 @@ internal static partial class EvidenceEndpoints
     // Null when the requirement does not exist or the caller is not a member of its project.
     private static Task<Scope?> FindAsync(SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel) =>
         db.Requirements.AsNoTracking().Where(r => r.Id == requirementId)
-            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new Scope(p.Id, r.ArchivedAt != null || p.ArchivedAt != null))
+            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new Scope(p.Id, r.ArchivedAt != null || p.ArchivedAt != null,
+                db.Teams.Any(t => t.Id == p.TeamId && t.OwnerUserId == userId) ? TeamRoles.Owner
+                    : db.TeamMembers.Where(m => m.TeamId == p.TeamId && m.UserId == userId).Select(m => m.Role).First()))
             .SingleOrDefaultAsync(cancel);
 
-    private enum Recheck { Ready, NotFound, Archived, Changed }
+    private enum Recheck { Ready, NotFound, ReadOnly, Archived, Changed }
 
     // Call inside a transaction, after reading GitHub and before saving. Locks the project's team,
     // then confirms that what the reads relied on still holds: the caller is a member, nothing is
@@ -352,6 +359,7 @@ internal static partial class EvidenceEndpoints
     {
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return Recheck.NotFound;
+        if (!found.CanEdit) return Recheck.ReadOnly;
         if (found.Archived) return Recheck.Archived;
         var connected = await db.ProjectRepositories.AnyAsync(r => r.ProjectId == found.Requirement.ProjectId &&
             r.InstallationId == repository.InstallationId && r.RepositoryId == repository.RepositoryId, cancel);
@@ -586,7 +594,11 @@ internal static partial class EvidenceEndpoints
         e.Contains is null ? null : JsonSerializer.Deserialize<Dictionary<Guid, bool>>(e.Contains, CommitJson),
         e.Source, e.LinkedBy, e.LinkedAt, e.RefreshedAt);
 
-    private sealed record Scope(Guid ProjectId, bool Archived);
+    // `Role` is the caller's team role when read, before any lock; writes check it again under the lock.
+    private sealed record Scope(Guid ProjectId, bool Archived, string Role)
+    {
+        public bool CanEdit => TeamRoles.CanEdit(Role);
+    }
 
     private sealed record SavedLink(RequirementEvidence? Evidence, ProblemHttpResult? Problem);
 }

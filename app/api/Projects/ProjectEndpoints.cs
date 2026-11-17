@@ -127,6 +127,7 @@ internal static class ProjectEndpoints
 
     internal static ProblemHttpResult Archived() => TypedResults.Problem("Archived items cannot be changed.", statusCode: StatusCodes.Status409Conflict);
     internal static ProblemHttpResult ManagersOnly() => TypedResults.Problem("Only the team Owner or an Admin can do this.", statusCode: StatusCodes.Status403Forbidden);
+    internal static ProblemHttpResult EditorsOnly() => TypedResults.Problem("Your role on this team can read this project but not change it.", statusCode: StatusCodes.Status403Forbidden);
 
     private static Task<ProjectResponse> Response(SpecThreadDbContext db, Guid projectId, string userId, CancellationToken cancel) =>
         Responses(db.ProjectsFor(userId).Where(p => p.Id == projectId), db, userId).SingleAsync(cancel);

@@ -3,8 +3,9 @@ import { addTestTeamMember, createTestSession, createTestTeam, expect, runTestSq
 import { clearApiFaults, failApi } from "../support/api-faults";
 import { clearGitHubFaults, githubId, setGitHubItems, setGitHubUser, type FakeItem } from "../support/github";
 
-// Recording a person's decision on a requirement (ADR-038). The author creates the requirement;
-// a second member, added in the database, reviews it in their own browser context.
+// Recording a person's decision on a requirement (ADR-038, ADR-058). The author creates the
+// requirement and may decide on it; a second member, added in the database, reviews it in their
+// own browser context.
 let author: Awaited<ReturnType<typeof createTestSession>>;
 let reviewer: Awaited<ReturnType<typeof createTestSession>>;
 const contexts: BrowserContext[] = [];
@@ -61,21 +62,26 @@ async function record(page: Page, choice: "Accept" | "Reject" | "Request more ev
   await expect(recordButton(page)).toBeEnabled();
 }
 
-test("the author is told another member has to review, and lists show the requirement as not reviewed", async ({ page }, testInfo) => {
-  const { projectId } = await createRequirement(page);
+test("the author approves or denies their own requirement, and lists show it as not reviewed until then", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Review", exact: true })).toBeVisible();
   await expect(page.getByText("No decision has been recorded yet.")).toBeVisible();
-  await expect(page.getByText("You created this requirement, so another member has to review it.")).toBeVisible();
-  await expect(recordButton(page)).toHaveCount(0);
-  await expect(page.getByRole("radio")).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath("review-author.png"), fullPage: true });
-
+  await expect(page.getByText(/another member has to review/)).toHaveCount(0);
   await page.goto(`/projects/${projectId}/requirements`);
   await expect(page.getByRole("list", { name: "Requirements" }).getByRole("listitem")).toContainText("Not reviewed");
+
+  // ADR-058: the creator records the decision on their own requirement.
+  await page.goto(url);
+  await record(page, "Reject", "Out of scope for this release.");
+  await expect(current(page)).toContainText("Rejected");
+  await expect(current(page)).toContainText("by Ada Lovelace");
+  await record(page, "Accept");
+  await expect(current(page)).toContainText("Accepted");
+  await page.screenshot({ path: testInfo.outputPath("review-author.png"), fullPage: true });
 });
 
-test("an author alone in the team is pointed to inviting a teammate, and the hint goes once someone joins", async ({ page }) => {
+test("an author alone in the team records a decision without a teammate", async ({ page }) => {
   await page.goto("/projects/new");
   await page.getByLabel("Project name").fill("Solo");
   await page.getByRole("button", { name: "Create project" }).click();
@@ -87,24 +93,37 @@ test("an author alone in the team is pointed to inviting a teammate, and the hin
   await page.getByRole("button", { name: "Create requirement" }).click();
   await expect(page).toHaveURL(/\/requirements\/[0-9a-f-]{36}$/);
   await page.reload();
-  const invite = page.getByRole("link", { name: "Invite a teammate" });
-  await expect(page.getByText("You are the only member of Test team.")).toBeVisible();
-  await expect(invite).toHaveAttribute("href", /^\/teams\/[0-9a-f-]{36}\/invitations$/);
-  await invite.click();
-  await expect(page.getByRole("heading", { name: "Invitations", level: 1 })).toBeVisible();
-
-  await addTestTeamMember(projectId, reviewer.userId);
-  await page.goBack();
-  await page.reload();
-  await expect(page.getByText("You created this requirement, so another member has to review it.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Invite a teammate" })).toHaveCount(0);
+  await record(page, "Accept");
+  await expect(current(page)).toContainText("Accepted");
+});
+
+test("a Reviewer records decisions but sees no edit controls; an Observer only reads", async ({ page, browser }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  await runTestSql(`UPDATE public.team_members SET role = 'reviewer' WHERE user_id = '${reviewer.userId}'`);
+  const review = await asReviewer(browser, url);
+  await expect(review.getByRole("link", { name: "Edit" })).toHaveCount(0);
+  await expect(review.getByRole("button", { name: "Archive requirement" })).toHaveCount(0);
+  await record(review, "Request more evidence", "Show the test run.");
+  await expect(current(review)).toContainText("More evidence requested");
+  await review.goto(`/projects/${projectId}/requirements`);
+  await expect(review.getByRole("link", { name: "New requirement" })).toHaveCount(0);
+  await review.goto(`/projects/${projectId}/requirements/new`);
+  await expect(review.getByText("Your role on this team can read this project but not change it.")).toBeVisible();
+  await expect(review.getByRole("button", { name: "Create requirement" })).toHaveCount(0);
+
+  await runTestSql(`UPDATE public.team_members SET role = 'observer' WHERE user_id = '${reviewer.userId}'`);
+  await review.goto(url);
+  await expect(current(review)).toContainText("More evidence requested");
+  await expect(review.getByRole("form", { name: "Record a decision" })).toHaveCount(0);
+  await expect(review.getByRole("link", { name: "Edit" })).toHaveCount(0);
+  await review.screenshot({ path: testInfo.outputPath("review-observer.png"), fullPage: true });
 });
 
 test("another member records each decision, a reason is required to reject, and earlier decisions stay readable", async ({ page, browser }, testInfo) => {
   const { projectId, url } = await createRequirement(page);
   const review = await asReviewer(browser, url);
   await expect(review.getByText("No decision has been recorded yet.")).toBeVisible();
-  await expect(review.getByText("You created this requirement")).toHaveCount(0);
 
   // Rejecting without a reason is refused, and the choice is kept.
   await record(review, "Reject");
@@ -280,7 +299,7 @@ test("a decision the API does not accept says why, keeps what was entered, and c
     [{ status: 404 }, failed],
     [{ status: 201, body: { id: 1 } }, failed],
     [{ status: 400, body: { errors: { version: ["Send the version you reviewed."] } } }, failed],
-    [{ status: 403, body: { detail: "You created this requirement, so another project member has to review it." } }, "You created this requirement, so another project member has to review it."],
+    [{ status: 403, body: { detail: "Observers can read decisions but not record them." } }, "Observers can read decisions but not record them."],
     [{ status: 400, body: { errors: { note: ["Use at most 2000 characters."] } } }, "Use at most 2000 characters."],
     [{ status: 400, body: { errors: { decision: ["Choose accept, reject, or request more evidence."] } } }, "Choose accept, reject, or request more evidence."],
   ] as const) {

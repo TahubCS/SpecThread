@@ -43,6 +43,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
+        if (!scope.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var repository = await db.ProjectRepositories.AsNoTracking().SingleOrDefaultAsync(r => r.ProjectId == scope.ProjectId, cancel);
         if (repository is null) return NoRepository();
@@ -57,6 +58,7 @@ internal static partial class EvidenceEndpoints
         switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
             case Recheck.NotFound: return TypedResults.NotFound();
+            case Recheck.ReadOnly: return ProjectEndpoints.EditorsOnly();
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }
@@ -73,6 +75,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
+        if (!scope.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var suggestion = await db.RequirementEvidenceSuggestions.AsNoTracking()
             .SingleOrDefaultAsync(s => s.Id == suggestionId && s.RequirementId == requirementId, cancel);
@@ -115,6 +118,7 @@ internal static partial class EvidenceEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.Archived) return ProjectEndpoints.Archived();
         var suggestion = await db.RequirementEvidenceSuggestions.SingleOrDefaultAsync(s => s.Id == suggestionId && s.RequirementId == requirementId, cancel);
         if (suggestion is null) return TypedResults.NotFound();
@@ -152,6 +156,7 @@ internal static partial class EvidenceEndpoints
         var userId = user.CallerId();
         var scope = await FindAsync(db, userId, requirementId, cancel);
         if (scope is null) return TypedResults.NotFound();
+        if (!scope.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (scope.Archived) return ProjectEndpoints.Archived();
         var evidence = await db.RequirementEvidence.SingleOrDefaultAsync(e => e.Id == evidenceId && e.RequirementId == requirementId, cancel);
         if (evidence is null) return TypedResults.NotFound();
@@ -181,6 +186,7 @@ internal static partial class EvidenceEndpoints
         switch (await LockAndRecheckAsync(db, userId, requirementId, repository, cancel))
         {
             case Recheck.NotFound: return TypedResults.NotFound();
+            case Recheck.ReadOnly: return ProjectEndpoints.EditorsOnly();
             case Recheck.Archived: return ProjectEndpoints.Archived();
             case Recheck.Changed: return Changed();
         }

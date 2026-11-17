@@ -3,7 +3,7 @@ import Link from "next/link";
 import { FileText, Upload } from "lucide-react";
 import { documentTypeLabel, formatFileSize } from "@/lib/documents";
 import { listDocuments, requireProject } from "@/lib/project-data";
-import { formatDate } from "@/lib/projects";
+import { canEditProject, formatDate } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Documentation" };
 
@@ -17,7 +17,7 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       <header className="project-page-heading">
         <h1 id="page-title">Documentation</h1>
         <span className="count">{documents.length}</span>
-        {!project.archivedAt && (
+        {!project.archivedAt && canEditProject(project) && (
           <Link className="button" href={`/projects/${project.id}/documents/new`}><Upload size={16} aria-hidden="true" /> Upload document</Link>
         )}
       </header>

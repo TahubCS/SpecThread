@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Archive, ArrowLeft, Plus } from "lucide-react";
 import { RequirementRows } from "@/components/requirement-rows";
 import { listMilestones, listRequirements, requireProject } from "@/lib/project-data";
-import { requirementCounts } from "@/lib/projects";
+import { canEditProject, requirementCounts } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Requirements" };
 
@@ -36,7 +36,7 @@ export default async function Page({ params, searchParams }: PageProps<"/project
         {!archived && (
           <Link className="button secondary" href={archivedHref}><Archive size={15} aria-hidden="true" /> Archived</Link>
         )}
-        {!archived && !project.archivedAt && (
+        {!archived && !project.archivedAt && canEditProject(project) && (
           <Link className="button" href={`${base}/new`}><Plus size={16} aria-hidden="true" /> New requirement</Link>
         )}
       </header>

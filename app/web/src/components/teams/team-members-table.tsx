@@ -2,13 +2,13 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { saveMemberRole, removeTeamMember } from "@/app/teams/[teamId]/actions";
-import { teamRoleLabels, type Team, type TeamMember } from "@/lib/team-types";
+import { assignableRoles, canManageTeam, teamRoleLabels, type AssignableRole, type Team, type TeamMember } from "@/lib/team-types";
 import { initialsOf } from "@/lib/app-navigation";
 import { TeamConfirmation } from "./team-confirmation";
 import styles from "./teams.module.css";
 
 export function TeamMembersTable({ members, team, callerId }: { members: TeamMember[]; team: Team; callerId: string }) {
-  const managing = team.role !== "member";
+  const managing = canManageTeam(team.role);
   return <div className={styles.tableScroll}><table className={styles.membersTable}>
     <caption className={styles.tableCaption}>Team members</caption>
     <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Joined</th>{managing && <th scope="col">Actions</th>}</tr></thead>
@@ -24,7 +24,7 @@ function MemberRow({ member, team, callerId }: { member: TeamMember; team: Team;
   const [removed, remove, removing] = useActionState(removeTeamMember.bind(null, team.id, member.userId), { errors: {} });
   const canChangeRole = team.role === "owner" && member.role !== "owner";
   const canRemove = member.userId !== callerId && member.role !== "owner" &&
-    (team.role === "owner" || team.role === "admin" && member.role === "member");
+    (team.role === "owner" || team.role === "admin" && member.role !== "admin");
   useEffect(() => {
     if (saved.success || removed.success) {
       window.dispatchEvent(new Event("specthread:teams-changed"));
@@ -35,14 +35,14 @@ function MemberRow({ member, team, callerId }: { member: TeamMember; team: Team;
     <td><span className={styles.memberName}><span className={styles.memberAvatar} aria-hidden="true">{initialsOf(member.name, member.email)}</span>{member.name}</span></td>
     <td>{member.email}</td>
     <td>{canChangeRole ? <form action={save} className={styles.roleForm} aria-busy={saving} onReset={event => event.preventDefault()}>
-      <select name="role" aria-label={`Role for ${member.name}`} value={role} onChange={event => setRole(event.target.value as "admin" | "member")} disabled={saving}>
-        <option value="member">Member</option><option value="admin">Admin</option>
+      <select name="role" aria-label={`Role for ${member.name}`} value={role} onChange={event => setRole(event.target.value as AssignableRole)} disabled={saving}>
+        {assignableRoles.map(value => <option key={value} value={value}>{teamRoleLabels[value]}</option>)}
       </select>
       <button className={styles.secondary} type="submit" disabled={saving || role === member.role}>{saving ? "Saving…" : "Save"}</button>
       {saved.message && <span className={styles.error} role="alert">{saved.message}</span>}
     </form> : teamRoleLabels[member.role]}</td>
     <td><time dateTime={member.joinedAt}>{new Date(member.joinedAt).toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" })}</time></td>
-    {team.role !== "member" && <td>{canRemove && <>
+    {canManageTeam(team.role) && <td>{canRemove && <>
       <button type="button" className={styles.secondary} aria-label={`Remove ${member.name}`} onClick={() => setOpen(true)}>Remove</button>
       <TeamConfirmation open={open} onClose={() => setOpen(false)} title={`Remove ${member.name}?`}
         action={remove} pending={removing} message={removed.message} confirmLabel="Remove member">

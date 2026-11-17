@@ -2,6 +2,7 @@ import { getTeam, getTeamMembers } from "@/lib/teams";
 import { TeamSettingsForm, TeamOwnershipForm } from "@/components/teams/team-settings-form";
 import { LeaveTeamButton } from "@/components/teams/leave-team-button";
 import styles from "@/components/teams/teams.module.css";
+import { canManageTeam } from "@/lib/team-types";
 
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
@@ -9,7 +10,7 @@ export default async function Page({ params }: { params: Promise<{ teamId: strin
   const owner = members.find(member => member.role === "owner");
   return <div className={`${styles.sectionContent} ${styles.page}`}>
     <header className={styles.header}><h1>Team settings</h1></header>
-    {team.role === "member" ? <section className={styles.settingsSection}>
+    {!canManageTeam(team.role) ? <section className={styles.settingsSection}>
       <h2>General</h2><p className={styles.hint}>The Owner and Admins manage these details.</p>
       <dl className={styles.readOnlySettings}><dt>Team name</dt><dd>{team.name}</dd><dt>Description</dt><dd>{team.description || "No description"}</dd></dl>
     </section> : <TeamSettingsForm team={team} />}

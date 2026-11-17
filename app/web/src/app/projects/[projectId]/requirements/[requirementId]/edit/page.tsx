@@ -4,6 +4,7 @@ import { updateRequirement } from "@/app/projects/requirement-actions";
 import { RequirementForm } from "@/components/requirement-form";
 import { listDocuments, listMembers, listReviews, requireProject, requireRequirement } from "@/lib/project-data";
 import { documentChoices } from "@/lib/requirements";
+import { canEditProject } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Edit requirement" };
 
@@ -37,6 +38,8 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
         ? <p className="notice">This requirement is archived and can no longer be changed.</p>
         : requirement.archivedAt
         ? <p className="notice">This requirement is archived. <Link href={detail}>Restore it</Link> to edit it again.</p>
+        : !canEditProject(project)
+        ? <p className="notice">Your role on this team can read this project but not change it. <Link href={detail}>Back to the requirement</Link></p>
         : <RequirementForm key={requirement.version}
             action={updateRequirement.bind(null, project.id, requirement.id, requirement.version)}
             initial={{

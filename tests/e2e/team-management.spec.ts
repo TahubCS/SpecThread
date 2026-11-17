@@ -35,6 +35,13 @@ test.describe("team membership and settings", () => {
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.reload();
     await expect(row.getByLabel("Role for Regular member")).toHaveValue("admin");
+    // ADR-058: the Owner can also make someone a Reviewer or an Observer.
+    await expect(row.getByLabel("Role for Regular member").locator("option")).toHaveText(["Admin", "Member", "Reviewer", "Observer"]);
+    await row.getByLabel("Role for Regular member").selectOption("reviewer");
+    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await page.reload();
+    await expect(row.getByLabel("Role for Regular member")).toHaveValue("reviewer");
     await row.getByLabel("Role for Regular member").selectOption("member");
     await row.getByRole("button", { name: "Save", exact: true }).click();
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();

@@ -54,7 +54,7 @@ export async function createTestTeam(ownerId: string, name = "Test team") {
 }
 
 /** Adds a user to the team of a project, which is how a user gets access to the project. */
-export async function addTestTeamMember(projectId: string, userId: string, role: "member" | "admin" = "member") {
+export async function addTestTeamMember(projectId: string, userId: string, role: "member" | "admin" | "reviewer" | "observer" = "member") {
   await runTestSql(`INSERT INTO public.team_members (team_id,user_id,role)
     SELECT team_id,'${userId}','${role}' FROM public.projects WHERE id = '${projectId}' ON CONFLICT DO NOTHING`);
 }

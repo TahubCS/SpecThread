@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ProjectForm } from "@/components/project-form";
 import { getTeams } from "@/lib/teams";
+import { canManageTeam } from "@/lib/team-types";
 
 export const metadata: Metadata = { title: "Create a project" };
 
@@ -11,7 +12,7 @@ export const metadata: Metadata = { title: "Create a project" };
  */
 export default async function Page({ searchParams }: PageProps<"/projects/new">) {
   const requested = (await searchParams).team;
-  const teams = (await getTeams()).filter(team => team.role !== "member").sort((a, b) => a.name.localeCompare(b.name));
+  const teams = (await getTeams()).filter(team => canManageTeam(team.role)).sort((a, b) => a.name.localeCompare(b.name));
   const initial = teams.find(team => team.id === requested) ?? teams[0];
 
   return (

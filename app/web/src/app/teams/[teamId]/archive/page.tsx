@@ -3,6 +3,7 @@ import { getTeamProjects } from "@/lib/team-projects";
 import { getTeam } from "@/lib/teams";
 import { TeamProjectTable } from "@/components/teams/team-project-table";
 import styles from "@/components/teams/teams.module.css";
+import { canManageTeam } from "@/lib/team-types";
 
 export default async function Page({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
@@ -13,7 +14,7 @@ export default async function Page({ params }: { params: Promise<{ teamId: strin
         <h1>Archived projects</h1>
         <Link href={`/teams/${teamId}/projects`} className={styles.secondary}>Back to projects</Link>
       </header>
-      <TeamProjectTable projects={projects} teamName={team.name} archived canRestore={team.role !== "member"} />
+      <TeamProjectTable projects={projects} teamName={team.name} archived canRestore={canManageTeam(team.role)} />
     </div>
   );
 }

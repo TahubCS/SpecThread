@@ -108,14 +108,14 @@ test("members who did not write the requirement record decisions, each with what
   expect(await (await reviewer.get(path)).json()).toEqual(listed);
 });
 
-test("the author, people outside the project, and anonymous callers cannot record a decision", async ({ request }) => {
+test("the author records a decision on their own requirement; people outside the project and anonymous callers cannot", async ({ request }) => {
   const { requirementId, path } = await setUp(request);
   const body = { decision: "accepted", version: 1 };
 
-  const refused = await (await as(request, "author")).post(path, body);
-  expect(refused.status()).toBe(403);
-  expect((await refused.json()).detail).toBe("You created this requirement, so another project member has to review it.");
-  expect((await (await as(request, "author")).get(path)).status()).toBe(200);
+  // ADR-058 replaces the second-person rule of ADR-038: the author may approve or deny.
+  const own = await (await as(request, "author")).post(path, body);
+  expect(own.status()).toBe(201);
+  expect(await own.json()).toMatchObject({ decision: "accepted", decidedBy: "author" });
 
   const outsider = await as(request, "outsider");
   expect((await outsider.get(path)).status()).toBe(404);
@@ -126,7 +126,8 @@ test("the author, people outside the project, and anonymous callers cannot recor
   expect((await request.get(`${api.baseURL}${path}`)).status()).toBe(401);
   expect((await request.post(`${api.baseURL}${path}`, { data: body })).status()).toBe(401);
 
-  expect((await database.pool.query("SELECT count(*)::int AS count FROM public.requirement_reviews WHERE requirement_id = $1", [requirementId])).rows[0].count).toBe(0);
+  // Only the author's own decision was saved.
+  expect((await database.pool.query("SELECT count(*)::int AS count FROM public.requirement_reviews WHERE requirement_id = $1", [requirementId])).rows[0].count).toBe(1);
 });
 
 test("a decision needs a known choice, the version reviewed, and a reason unless it accepts", async ({ request }) => {
@@ -301,5 +302,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(21); // Every migration through RequirementEvidenceSuggestions.
+  expect(history).toBe(22); // Every migration through TeamReviewerObserverRoles.
 });

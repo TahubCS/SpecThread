@@ -28,6 +28,13 @@ test.describe("team invitations", () => {
     await page.getByRole("button", { name: "Invite people", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Invite people", exact: true });
     await expect(dialog.getByLabel("Email", { exact: true })).toBeFocused();
+    // ADR-058: the Owner chooses any role, and the dialog says what the chosen role can do.
+    const role = dialog.getByRole("combobox", { name: "Role", exact: true });
+    await expect(role.locator("option")).toHaveText(["Member", "Reviewer", "Observer", "Admin"]);
+    await role.selectOption("reviewer");
+    await expect(dialog.getByText("Reads everything and records decisions, but can't edit requirements or links.")).toBeVisible();
+    await role.selectOption("observer");
+    await expect(dialog.getByText("Reads everything, but can't change anything or record decisions.")).toBeVisible();
     await dialog.getByLabel("Email", { exact: true }).fill(`${recipient.userId}@example.invalid`);
     await dialog.getByRole("combobox", { name: "Role", exact: true }).selectOption("member");
     await page.screenshot({ path: testInfo.outputPath("invite-people-desktop.png"), fullPage: true });
@@ -122,12 +129,12 @@ test.describe("team invitations", () => {
     await expect(page).toHaveURL(/\/onboarding$/);
   });
 
-  test("Admins invite Members only; permission loss blocks joining and wrong accounts can switch without bypassing onboarding", async ({ page, context }) => {
+  test("Admins invite Members, Reviewers, and Observers but not Admins; permission loss blocks joining and wrong accounts can switch without bypassing onboarding", async ({ page, context }) => {
     await context.clearCookies(); await context.addCookies([admin.cookie]);
     await page.goto(`/teams/${teamId}/members`);
     await page.getByRole("button", { name: "Invite people", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Invite people", exact: true });
-    await expect(dialog.getByRole("combobox", { name: "Role", exact: true }).locator("option")).toHaveText(["Member"]);
+    await expect(dialog.getByRole("combobox", { name: "Role", exact: true }).locator("option")).toHaveText(["Member", "Reviewer", "Observer"]);
     await dialog.getByLabel("Email", { exact: true }).fill(`${recipient.userId}@example.invalid`);
     await dialog.getByRole("button", { name: "Send invitation" }).click();
     await expect(dialog.getByLabel("Invitation link")).toBeVisible();

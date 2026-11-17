@@ -39,7 +39,7 @@ internal static class InvitationEndpoints
                 Invitation = i,
                 Inviter = db.Set<AuthUser>().Where(u => u.Id == i.InvitedBy).Select(u => u.Name).First(),
                 Permitted = db.TeamMembers.Any(m => m.TeamId == teamId && m.UserId == i.InvitedBy &&
-                    (i.InvitedBy == team.OwnerUserId || i.Role == "member" && m.Role == "admin")),
+                    (i.InvitedBy == team.OwnerUserId || i.Role != TeamRoles.Admin && m.Role == TeamRoles.Admin)),
             }).ToListAsync(cancel);
         return TypedResults.Ok(rows.Select(row => Describe(row.Invitation, row.Inviter, row.Permitted, now)).ToList());
     }
@@ -55,7 +55,7 @@ internal static class InvitationEndpoints
         var errors = new InputErrors();
         var email = errors.Required("email", request.Email, InputErrors.MaxEmailLength)?.ToLowerInvariant();
         if (email is not null && (!MailAddress.TryCreate(email, out var address) || address.Address != email)) errors.Add("email", "Enter a valid email address.");
-        if (request.Role is not ("member" or "admin")) errors.Add("role", "Choose Admin or Member.");
+        if (request.Role is null || !TeamRoles.Assignable.Contains(request.Role)) errors.Add("role", "Choose Admin, Member, Reviewer, or Observer.");
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
         if (!await CanIssue(db, team, caller, request.Role!, cancel)) return AdminInvitesOwnerOnly();
         if (await db.TeamMembers.Where(m => m.TeamId == teamId).Join(db.Set<AuthUser>(), m => m.UserId, u => u.Id, (m, u) => u.Email)
@@ -165,9 +165,10 @@ internal static class InvitationEndpoints
         return TypedResults.Ok(response);
     }
 
+    // The Owner invites any role; Admins invite every role except Admin (ADR-058).
     private static Task<bool> CanIssue(SpecThreadDbContext db, Team team, string userId, string role, CancellationToken cancel) =>
         db.TeamMembers.AnyAsync(m => m.TeamId == team.Id && m.UserId == userId &&
-            (team.OwnerUserId == userId || role == "member" && m.Role == "admin"), cancel);
+            (team.OwnerUserId == userId || role != TeamRoles.Admin && m.Role == TeamRoles.Admin), cancel);
     private static string Issue(TeamInvitation invitation, DateTime now)
     {
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();

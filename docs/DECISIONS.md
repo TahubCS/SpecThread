@@ -813,7 +813,8 @@ reads the full list of decisions. On screen "Accepted" means a person approved t
 requirement; nothing says verified or proven.
 
 Consequences: A project whose team has one member cannot record any decision; a
-second person joins the team by invitation (ADR-040, ADR-041). The author rule
+second person joins the team by invitation (ADR-040, ADR-041). ADR-058 later lets the
+author decide, so this no longer holds. The author rule
 looks only at who created the requirement, not at who edited it last. A decision
 can be made with no evidence linked. Nothing is locked after acceptance: an edit or
 a changed link marks the decision outdated and waits for a new one. There is no
@@ -1536,6 +1537,49 @@ as its state and merge commit are a snapshot (ADR-033, ADR-037). Check results a
 read the previous API, whose list sends `evidenceComplete` under ADR-053's rule and no
 `evidenceMissing`: the web then shows no evidence status rather than the old claim. The rule
 is still fixed; a configurable policy per project would be a later decision. No migration.
+
+ADR-058: Reviewer and Observer team roles, and authors may decide on their own requirements
+
+Status: Accepted
+
+Context: Two user stories need read-mostly access. A tech lead wants a client to read
+requirements and record review decisions without editing requirements or links, so the
+client can sign off a contract milestone safely. An instructor wants to check student
+teams without being able to change their work or their decisions. A third story asks for
+one combined projects view grouped by team. Separately, the user decided that the person
+who created a requirement may approve or deny it: ADR-038 made a second member review it,
+which blocked teams where the author is also the one accountable for the decision.
+
+Decision: Team memberships and invitations gain two roles, `reviewer` and `observer`,
+beside `admin` and `member`; Owner stays derived from `teams.owner_user_id` (ADR-039).
+Every member in any role reads the team's projects, requirements, criteria versions,
+follow-ups, evidence and its history and suggestions, documents, members, and decisions.
+Owners, Admins, and Members ("editors") create, edit, archive, and restore requirements,
+set milestones, add and remove follow-ups, link, refresh, unlink, and move evidence, scan,
+confirm, and reject suggestions, and upload and archive documents. Reviewers and Observers
+get 403 "Your role on this team can read this project but not change it." on all of those.
+Owners, Admins, Members, and Reviewers record decisions; Observers get 403 "Observers can
+read decisions but not record them." The requirement's author may record a decision,
+replacing ADR-038's author rule. The API checks the role under the same team lock as
+membership (ADR-040), and writes that read GitHub first check it again under the lock.
+Managing the team and its projects stays with the Owner and Admins (ADR-040, ADR-041).
+The Owner invites and assigns any of the four roles; Admins invite Members, Reviewers, and
+Observers but not Admins, and remove any of those three. The web hides controls a role
+cannot use, and says why on the new-requirement, edit, and upload pages; the API stays
+the authority. The invitation dialog describes what the chosen role can do. The combined
+projects view at /projects groups projects by team (by name, then ID), shows the caller's
+role per team, and links each team heading to /teams/{id}/projects. Migration
+TeamReviewerObserverRoles widens `ck_team_members_role` and `ck_team_invitations_role`.
+
+Consequences: One person can now create and accept a requirement, so "Accepted" no longer
+proves that a second person looked; the decision history still says who decided and when.
+A team that wants a second reviewer must agree that among themselves. A Reviewer can make
+a decision outdated only indirectly, never by editing. Rolling the migration back removes
+Reviewer and Observer memberships and invitations rather than turning them into Members,
+which would let them edit; those people lose access until re-invited. Roles are per team,
+not per project. Ownership can still be transferred to a Reviewer or Observer, who then
+becomes Owner with full rights, as with any member (ADR-040). There is no audit of role
+changes.
 
 ADR-NNN: Title
 

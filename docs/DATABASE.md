@@ -17,7 +17,7 @@ dotnet build app/api --configuration Release
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, and RequirementEvidenceSuggestions. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only. Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
@@ -330,7 +330,7 @@ that come later in time. scripts/test-database.mjs applies the teams scripts fir
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, and RequirementEvidenceSuggestions.
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles.
 
 ## Project documents migration
 
@@ -529,6 +529,31 @@ the merge; the running API only writes `added` and `removed`, which stay valid. 
 script. It drops the table, losing every suggestion and which were rejected. Events stay
 in the older form: `moved_out` becomes `removed`, `moved_in` and `confirmed` become
 `added`, and `rejected` events are deleted. Links stay.
+
+## Reviewer and Observer roles migration
+
+TeamReviewerObserverRoles (ADR-058) widens two check constraints so team memberships and
+invitations can hold `reviewer` and `observer` as well as `admin` and `member`:
+`ck_team_members_role` and `ck_team_invitations_role` become
+`role IN ('admin', 'member', 'reviewer', 'observer')`. No column, table, or index changes,
+and existing rows are untouched.
+
+```sh
+dotnet ef migrations add TeamReviewerObserverRoles --project app/api --configuration Release
+node scripts/generate-team-reviewer-observer-roles.mjs
+```
+
+The second command adds the rollback statements and generates
+docs/schema/team-reviewer-observer-roles.sql and -rollback.sql offline. Apply it with the
+API stopped, then deploy the API before the web; the previous API never writes the new
+roles, so the order only matters for inviting them. Rollback: `dotnet ef database update
+RequirementEvidenceSuggestions --project app/api`, or the rollback script. Because the
+older constraints reject the new roles, rollback deletes every Reviewer and Observer
+membership and every invitation with those roles, accepted or not, rather than turning them
+into Members, who can edit. Those people lose access until re-invited; their past review
+decisions stay. An Owner's own row, which the API keeps as `member`, would be reset to
+`member` if it ever held one of the new roles. Back up `team_members` and
+`team_invitations` first if they need restoring.
 
 ## Supabase tooling
 

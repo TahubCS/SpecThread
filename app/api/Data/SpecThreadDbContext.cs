@@ -69,7 +69,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         team.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.OwnerUserId).OnDelete(DeleteBehavior.Restrict);
 
         var teamMember = model.Entity<TeamMember>();
-        teamMember.ToTable("team_members", table => table.HasCheckConstraint("ck_team_members_role", "role IN ('admin', 'member')"));
+        teamMember.ToTable("team_members", table => table.HasCheckConstraint("ck_team_members_role", "role IN ('admin', 'member', 'reviewer', 'observer')"));
         teamMember.HasKey(x => new { x.TeamId, x.UserId });
         teamMember.Property(x => x.TeamId).HasColumnName("team_id");
         teamMember.Property(x => x.UserId).HasColumnName("user_id");
@@ -91,7 +91,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         var invitation = model.Entity<TeamInvitation>();
         invitation.ToTable("team_invitations", table =>
         {
-            table.HasCheckConstraint("ck_team_invitations_role", "role IN ('admin', 'member')");
+            table.HasCheckConstraint("ck_team_invitations_role", "role IN ('admin', 'member', 'reviewer', 'observer')");
             table.HasCheckConstraint("ck_team_invitations_expiry", "expires_at > issued_at");
             table.HasCheckConstraint("ck_team_invitations_resolution", "accepted_at IS NULL OR revoked_at IS NULL");
         });

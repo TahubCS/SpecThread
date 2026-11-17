@@ -44,7 +44,7 @@ test("a new user sees no projects, creates one, and lands on its overview", asyn
 
   await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Projects" }).click();
   await expect(page).toHaveURL(/\/projects$/);
-  await expect(page.getByRole("list", { name: "Your projects" }).getByRole("link", { name: /Checkout redesign/ })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Test team projects" }).getByRole("link", { name: /Checkout redesign/ })).toBeVisible();
   await expect(page.getByText("1 project", { exact: true })).toBeVisible();
 });
 
@@ -52,7 +52,7 @@ test("projects are listed by name, and other users cannot see or open them", asy
   const billing = await createProject(page, "Billing");
   await createProject(page, "Accounts");
   await page.goto("/projects");
-  await expect(page.getByRole("list", { name: "Your projects" }).getByRole("link")).toHaveText([/^Accounts/, /^Billing/]);
+  await expect(page.getByRole("list", { name: "Test team projects" }).getByRole("link")).toHaveText([/^Accounts/, /^Billing/]);
 
   const other = await browser.newContext();
   await other.addCookies([(await createTestSession("Other user")).cookie]);
@@ -186,7 +186,7 @@ test("a member who is not the owner can read the project but not change it", asy
   await context.close();
 });
 
-test("a project is created in the chosen team, and only teams the user manages are offered", async ({ page }, testInfo) => {
+test("a project is created in the chosen team, only teams the user manages are offered, and projects are grouped by team", async ({ page }, testInfo) => {
   const second = await createTestTeam(owner.userId, "Payments team");
   // A team where this user is only a member is not offered.
   const other = await createTestSession("Other owner");
@@ -216,8 +216,18 @@ test("a project is created in the chosen team, and only teams the user manages a
   await expect(page.getByRole("complementary", { name: "Project details" }).getByRole("link", { name: "Payments team" })).toHaveAttribute("href", `/teams/${second}`);
   await page.goto(`/teams/${second}/projects`);
   await expect(page.getByRole("table").getByRole("link", { name: "Refunds" })).toBeVisible();
+  // The combined view lists every project the user can reach, grouped by team, including teams
+  // they only belong to; each group opens only that team's projects.
+  await runTestSql(`INSERT INTO public.projects (name,owner_user_id,team_id) VALUES ('Ledger','${other.userId}','${foreign}')`);
   await page.goto("/projects");
-  await expect(page.getByRole("list", { name: "Your projects" }).getByRole("listitem")).toContainText("Payments team");
+  await expect(page.getByText("2 projects in 2 teams", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Another owner team", "Payments team"]);
+  await expect(page.getByRole("list", { name: "Payments team projects" }).getByRole("link")).toHaveText([/^Refunds/]);
+  await expect(page.getByRole("list", { name: "Another owner team projects" }).getByRole("link")).toHaveText([/^Ledger/]);
+  await page.screenshot({ path: testInfo.outputPath("projects-grouped.png"), fullPage: true });
+  await page.getByRole("link", { name: "Open Payments team" }).click();
+  await expect(page).toHaveURL(new RegExp(`/teams/${second}/projects$`));
+  await expect(page.getByRole("table").getByRole("link")).toHaveText(["Refunds"]);
 });
 
 test("a user who manages no team is told why they cannot create a project", async ({ page, browser }) => {
