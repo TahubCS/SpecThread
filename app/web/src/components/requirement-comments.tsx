@@ -26,6 +26,13 @@ const initial: CommentState = { error: null, changed: 0 };
  */
 export function RequirementComments({ comments, ...context }: Context & { comments: Comments | null }) {
   const [added, add, adding] = useActionState(addComment.bind(null, context.projectId, context.requirementId), initial);
+  // Controlled, because React resets a form's uncontrolled fields after every action, even a failed one.
+  const [draft, setDraft] = useState("");
+  const [posted, setPosted] = useState(0);
+  if (added.changed !== posted) {
+    setPosted(added.changed);
+    setDraft("");
+  }
   if (comments === null) return <p className="notice" role="status">Comments can&apos;t be shown right now. Try again in a few minutes.</p>;
   const threads = threadComments(comments.comments);
 
@@ -48,10 +55,11 @@ export function RequirementComments({ comments, ...context }: Context & { commen
           </ol>
         )}
       {context.open ? (
-        <form key={added.changed} className="comment-form" action={add} aria-label="New comment">
+        <form className="comment-form" action={add} aria-label="New comment">
           <div className="field">
             <label htmlFor="new-comment">Add a comment</label>
             <textarea id="new-comment" name="body" required maxLength={COMMENT_MAX} rows={3}
+              value={draft} onChange={event => setDraft(event.target.value)}
               aria-invalid={added.error ? true : undefined} aria-describedby="new-comment-hint" />
             <p id="new-comment-hint" className="muted">Comments don&apos;t change the requirement, its evidence, or its review status.</p>
             {added.error && <p role="alert" className="notice notice-error">{added.error}</p>}
@@ -76,9 +84,12 @@ function CommentItem({ comment, context }: { comment: Comment; context: Context 
   const [deleted, remove, deleting] = useActionState(bind(deleteComment), initial);
   const [replied, reply, replying] = useActionState(bind(addComment), initial);
   const [mode, setMode] = useState<"view" | "edit" | "reply" | "delete">("view");
+  const [editText, setEditText] = useState(comment.body);
+  const [replyText, setReplyText] = useState("");
   // A successful save closes the form it came from.
   const [seen, setSeen] = useState({ edited: 0, replied: 0 });
   if (edited.changed !== seen.edited || replied.changed !== seen.replied) {
+    if (replied.changed !== seen.replied) setReplyText("");
     setSeen({ edited: edited.changed, replied: replied.changed });
     setMode("view");
   }
@@ -104,8 +115,8 @@ function CommentItem({ comment, context }: { comment: Comment; context: Context 
           <input type="hidden" name="commentId" value={comment.id} />
           <div className="field">
             <label htmlFor={`edit-${comment.id}`}>Edit {label}</label>
-            <textarea id={`edit-${comment.id}`} name="body" required maxLength={COMMENT_MAX} rows={3} defaultValue={comment.body}
-              aria-invalid={edited.error ? true : undefined} />
+            <textarea id={`edit-${comment.id}`} name="body" required maxLength={COMMENT_MAX} rows={3}
+              value={editText} onChange={event => setEditText(event.target.value)} aria-invalid={edited.error ? true : undefined} />
             {edited.error && <p role="alert" className="notice notice-error">{edited.error}</p>}
           </div>
           <div className="form-actions">
@@ -121,7 +132,7 @@ function CommentItem({ comment, context }: { comment: Comment; context: Context 
               onClick={() => setMode(mode === "reply" ? "view" : "reply")}>Reply</button>
           )}
           {canEditComment(comment, context.viewerId) && (
-            <button className="link-button" type="button" onClick={() => setMode("edit")}>Edit</button>
+            <button className="link-button" type="button" onClick={() => { setEditText(comment.body); setMode("edit"); }}>Edit</button>
           )}
           {canDeleteComment(comment, context.viewerId, context.role) && (
             <button className="link-button" type="button" onClick={() => setMode("delete")}>Delete</button>
@@ -143,7 +154,7 @@ function CommentItem({ comment, context }: { comment: Comment; context: Context 
           <div className="field">
             <label htmlFor={`reply-${comment.id}`}>Reply to {author}</label>
             <textarea id={`reply-${comment.id}`} name="body" required maxLength={COMMENT_MAX} rows={2}
-              aria-invalid={replied.error ? true : undefined} />
+              value={replyText} onChange={event => setReplyText(event.target.value)} aria-invalid={replied.error ? true : undefined} />
             {replied.error && <p role="alert" className="notice notice-error">{replied.error}</p>}
           </div>
           <div className="form-actions">

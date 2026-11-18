@@ -2,7 +2,7 @@
 
 ## Current task: Requirement comments (2026-11-18)
 
-- Branch: `feature/requirement-comments`, from `main` at `0c727ed`. Not committed yet; no PR.
+- Branch: `feature/requirement-comments`, from `main` at `0c727ed`. PR #30.
 - Scope: a comments area on the requirement page; any member, Observers and Reviewers
   included, adds comments and one level of replies without changing status, evidence, or
   decisions; author and time shown, oldest first; authors edit; authors, the Owner, and
@@ -43,12 +43,13 @@
   Resend delivery (tests use `EMAIL_DELIVERY=log`) and the shared Supabase database.
 - Known issues and risks: no in-app inbox, opt-out, or rate limit on notifications; a busy
   thread emails every participant on each comment. Rolling back the migration drops all
-  comments. The shared database has not been migrated; apply RequirementComments before
-  deploying this API.
+  comments. The shared database has not been migrated: apply TeamReviewerObserverRoles
+  (if not already applied), then RequirementComments, then deploy the API.
 - Unrelated work: Kanban WIP remains in `git stash` ("feature/kanban-board WIP (stashed
   before teams-and-roles)").
-- Next step: team review of the assumptions above; commit, open a PR to `main`, and apply
-  the migration to the shared database before deploying.
+- Next step: team review of the assumptions above and PR #30; apply
+  TeamReviewerObserverRoles, then RequirementComments, to the shared database before
+  deploying the API.
 
 ## Previous task: Reviewer and Observer roles, self-review, projects grouped by team (2026-11-17)
 

@@ -163,24 +163,34 @@ test("an archived requirement's discussion is read-only", async ({ request }) =>
   expect((await (await member.get(path)).json()).comments).toHaveLength(1);
 });
 
-test("the migration protects and constrains both tables, and its rollback removes only them", async () => {
-  const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
+test("the migration protects and constrains both tables, and its rollback removes only them", async ({ request }) => {
+  const count = async (sql: string, values: unknown[] = []) => (await database.pool.query(sql, values)).rows[0].count;
   for (const table of ["requirement_comments", "requirement_comment_events"]) {
-    expect(await count(`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='${table}' AND rowsecurity`)).toBe(1);
-    expect(await count(`SELECT count(*)::int AS count FROM information_schema.role_table_grants WHERE table_name='${table}' AND grantee IN ('anon','authenticated','PUBLIC')`)).toBe(0);
+    expect(await count(`SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename=$1 AND rowsecurity`, [table])).toBe(1);
+    expect(await count(`SELECT count(*)::int AS count FROM information_schema.table_privileges
+      WHERE table_schema='public' AND table_name=$1 AND grantee IN ('anon','authenticated','PUBLIC')`, [table])).toBe(0);
   }
-  const { rows: [requirement] } = await database.pool.query("SELECT id FROM public.requirements ORDER BY created_at LIMIT 1");
-  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body) VALUES ($1,'owner',$2)", [requirement.id, "x".repeat(5_001)]))
-    .rejects.toThrow(/check constraint/);
-  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body,deleted_at,deleted_by) VALUES ($1,'owner','kept',now(),'owner')", [requirement.id]))
-    .rejects.toThrow(/check constraint/);
-  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body) VALUES ($1,'nobody','Hi')", [requirement.id]))
-    .rejects.toThrow(/foreign key/);
-  const { rows: [comment] } = await database.pool.query("SELECT id FROM public.requirement_comments LIMIT 1");
-  await expect(database.pool.query("INSERT INTO public.requirement_comment_events (requirement_id,comment_id,action,actor) VALUES ($1,$2,'renamed','owner')", [requirement.id, comment.id]))
-    .rejects.toThrow(/check constraint/);
-  const { rows: [commented] } = await database.pool.query("SELECT requirement_id AS id FROM public.requirement_comments LIMIT 1");
-  await expect(database.pool.query("DELETE FROM public.requirements WHERE id = $1", [commented.id])).rejects.toThrow(/foreign key/);
+  // Two bare requirements of this test's own, with nothing else referring to them: one gets a
+  // comment row only and one an event row only, so each foreign key is checked on its own.
+  const { projectId } = await setUp(request);
+  const { rows: [{ id: commented }, { id: logged }] } = await database.pool.query(`INSERT INTO public.requirements
+    (id,project_id,title,description,created_by) VALUES (gen_random_uuid(),$1,'Commented','','member'),(gen_random_uuid(),$1,'Logged','','member')
+    RETURNING id`, [projectId]);
+  const { rows: [comment] } = await database.pool.query(
+    "INSERT INTO public.requirement_comments (requirement_id,author_id,body) VALUES ($1,'member','Direct') RETURNING id", [commented]);
+  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body) VALUES ($1,'owner',$2)", [commented, "x".repeat(5_001)]))
+    .rejects.toThrow(/ck_requirement_comments_body/);
+  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body,deleted_at,deleted_by) VALUES ($1,'owner','kept',now(),'owner')", [commented]))
+    .rejects.toThrow(/ck_requirement_comments_deleted/);
+  await expect(database.pool.query("INSERT INTO public.requirement_comments (requirement_id,author_id,body) VALUES ($1,'nobody','Hi')", [commented]))
+    .rejects.toThrow(/FK_requirement_comments_user_author_id/);
+  await expect(database.pool.query("INSERT INTO public.requirement_comment_events (requirement_id,comment_id,action,actor) VALUES ($1,$2,'renamed','owner')", [logged, comment.id]))
+    .rejects.toThrow(/ck_requirement_comment_events_action/);
+  await database.pool.query("INSERT INTO public.requirement_comment_events (requirement_id,comment_id,action,actor) VALUES ($1,$2,'created','member')", [logged, comment.id]);
+  await expect(database.pool.query("DELETE FROM public.requirements WHERE id = $1", [commented]))
+    .rejects.toThrow(/FK_requirement_comments_requirements_requirement_id/);
+  await expect(database.pool.query("DELETE FROM public.requirements WHERE id = $1", [logged]))
+    .rejects.toThrow(/FK_requirement_comment_events_requirements_requirement_id/);
 
   const history = await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`);
   const requirements = await count("SELECT count(*)::int AS count FROM public.requirements");

@@ -54,6 +54,11 @@ test("an Observer comments without changing the review; the author replies, edit
   await expect(angela.getByText("Comments don't change the requirement, its evidence, or its review status.")).toBeVisible();
   const review = angela.getByRole("region", { name: "Review", exact: true });
   await expect(review).toContainText("No decision has been recorded yet.");
+  // A refused comment keeps the draft.
+  await angela.getByLabel("Add a comment").fill("   ");
+  await angela.getByRole("button", { name: "Post comment" }).click();
+  await expect(angela.getByRole("form", { name: "New comment" }).getByRole("alert")).toHaveText("Write a comment first.");
+  await expect(angela.getByLabel("Add a comment")).toHaveValue("   ");
   await angela.getByLabel("Add a comment").fill("Will this be demoed\nat sprint review?");
   await angela.getByRole("button", { name: "Post comment" }).click();
   const question = comments(angela).getByRole("article", { name: "Comment by You" });
@@ -80,6 +85,11 @@ test("an Observer comments without changing the review; the author replies, edit
   await expect(page.getByLabel("Reply to Angela Instructor")).toHaveCount(0);
 
   await reply.getByRole("button", { name: "Edit" }).click();
+  // A refused edit keeps the editor open with the typed text.
+  await page.getByLabel("Edit reply").fill("  ");
+  await reply.getByRole("button", { name: "Save reply", exact: true }).click();
+  await expect(reply.getByRole("alert")).toHaveText("A comment can’t be empty. Delete it instead.");
+  await expect(page.getByLabel("Edit reply")).toHaveValue("  ");
   await page.getByLabel("Edit reply").fill("Yes, in the first demo.");
   await reply.getByRole("button", { name: "Save reply", exact: true }).click();
   await expect(reply).toContainText("Yes, in the first demo.");
