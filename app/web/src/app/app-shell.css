@@ -507,3 +507,21 @@ a.row:focus-visible { outline-offset: -2px; }
 .suggestion-actions { display: flex; flex: none; gap: 6px; }
 .evidence-rows li > .evidence-move { margin: 8px 14px 10px 44px; }
 .evidence-move .muted { margin: 6px 0 0; font-size: 13px; }
+
+/* Requirement comments (ADR-059) */
+.comment-list, .comment-replies { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.comment-list { margin-bottom: 14px; }
+.comment-replies { margin-top: 10px; padding-left: 18px; border-left: 2px solid var(--app-line); }
+.comment { display: grid; gap: 6px; padding: 10px 14px; border: 1px solid var(--app-line); border-radius: 10px; background: var(--app-surface); }
+.comment.is-deleted { border-style: dashed; background: none; }
+.comment p { margin: 0; }
+.comment-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 13px; color: var(--app-text-2); }
+.comment-meta strong { color: var(--app-text); }
+.comment-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.comment-actions { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.comment form { display: grid; gap: 8px; }
+.comment-form { display: grid; gap: 8px; justify-items: start; }
+.comment-form .field { width: 100%; }
+.app-main .link-button { padding: 0; border: 0; background: none; color: var(--app-text-2); font: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.app-main .link-button:hover { color: var(--app-text); }
+.app-main .link-button:focus-visible { outline: 2px solid #ffffff80; outline-offset: 2px; border-radius: 2px; }

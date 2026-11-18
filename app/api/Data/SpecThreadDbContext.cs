@@ -24,6 +24,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<RequirementDocument> RequirementDocuments => Set<RequirementDocument>();
     public DbSet<RequirementFollowUp> RequirementFollowUps => Set<RequirementFollowUp>();
     public DbSet<RequirementFollowUpEvent> RequirementFollowUpEvents => Set<RequirementFollowUpEvent>();
+    public DbSet<RequirementComment> RequirementComments => Set<RequirementComment>();
+    public DbSet<RequirementCommentEvent> RequirementCommentEvents => Set<RequirementCommentEvent>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -413,5 +415,45 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         followUpEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         followUpEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.OriginalRequirementId).OnDelete(DeleteBehavior.Restrict);
         followUpEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
+
+        var comment = model.Entity<RequirementComment>();
+        comment.ToTable("requirement_comments", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_comments_body", "char_length(body) <= 5000");
+            table.HasCheckConstraint("ck_requirement_comments_deleted", "(deleted_at IS NULL) = (deleted_by IS NULL) AND (deleted_at IS NULL OR body = '')");
+            table.HasCheckConstraint("ck_requirement_comments_parent", "parent_id IS NULL OR parent_id <> id");
+        });
+        comment.HasKey(x => x.Id);
+        comment.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        comment.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        comment.Property(x => x.ParentId).HasColumnName("parent_id");
+        comment.Property(x => x.AuthorId).HasColumnName("author_id");
+        comment.Property(x => x.Body).HasColumnName("body");
+        comment.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("now()");
+        comment.Property(x => x.EditedAt).HasColumnName("edited_at");
+        comment.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+        comment.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+        comment.HasIndex(x => new { x.RequirementId, x.CreatedAt });
+        comment.HasIndex(x => x.ParentId);
+        comment.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        comment.HasOne<RequirementComment>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Restrict);
+        comment.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Restrict);
+        comment.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.DeletedBy).OnDelete(DeleteBehavior.Restrict);
+
+        var commentEvent = model.Entity<RequirementCommentEvent>();
+        commentEvent.ToTable("requirement_comment_events", table =>
+            table.HasCheckConstraint("ck_requirement_comment_events_action", "action IN ('created', 'edited', 'deleted')"));
+        commentEvent.HasKey(x => x.Id);
+        commentEvent.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        commentEvent.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        commentEvent.Property(x => x.CommentId).HasColumnName("comment_id");
+        commentEvent.Property(x => x.Action).HasColumnName("action");
+        commentEvent.Property(x => x.Actor).HasColumnName("actor");
+        commentEvent.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasDefaultValueSql("now()");
+        commentEvent.HasIndex(x => x.RequirementId);
+        commentEvent.HasIndex(x => x.CommentId);
+        commentEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        commentEvent.HasOne<RequirementComment>().WithMany().HasForeignKey(x => x.CommentId).OnDelete(DeleteBehavior.Restrict);
+        commentEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
     }
 }

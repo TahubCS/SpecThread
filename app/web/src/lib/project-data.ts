@@ -7,6 +7,7 @@ import {
 } from "./projects";
 import { parseCriteriaVersion, parseCriteriaVersions, type CriteriaVersion } from "./criteria-versions";
 import { parseFollowUps, type FollowUps } from "./follow-ups";
+import { parseComments, type Comments } from "./comments";
 import { parseDocument, parseDocuments, type ProjectDocument } from "./documents";
 import {
   parseEvidenceHistory, parseEvidenceList, parseEvidenceSuggestions, type Evidence, type EvidenceEvent, type EvidenceSuggestion,
@@ -132,6 +133,15 @@ export const requireCriteriaVersion = cache(async (requirementId: string, number
 export const listFollowUps = cache(async (requirementId: string): Promise<FollowUps> => {
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/follow-ups`) : null;
   return body === null ? { followUpOf: [], followedUpBy: [], history: [] } : parseFollowUps(body);
+});
+
+/**
+ * Loads a requirement's comments and their history (ADR-059). Call after `requireRequirement`.
+ * Returns null when they can't be read: the previous API (ADR-044) answers 404.
+ */
+export const listComments = cache(async (requirementId: string): Promise<Comments | null> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/comments`) : null;
+  return body === null ? null : parseComments(body);
 });
 
 /** Lists a project's active documents, newest first. Call after `requireProject`. */

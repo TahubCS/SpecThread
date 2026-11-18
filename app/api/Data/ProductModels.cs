@@ -115,6 +115,35 @@ public sealed class RequirementEvidence
     public DateTime RefreshedAt { get; set; }
 }
 
+// A comment on a requirement, or a reply to one (ADR-059). Comments are discussion: they never
+// change the requirement, its version, its evidence, or its review status. ParentId is null for a
+// top-level comment; a reply's parent is always top-level. Deleting keeps the row, so replies stay
+// in place, but clears Body: removed text is not kept.
+public sealed class RequirementComment
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public Guid? ParentId { get; set; }
+    public required string AuthorId { get; set; }
+    public required string Body { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? EditedAt { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
+}
+
+// Who created, edited, or deleted a comment, and when (ADR-059). Action is "created", "edited",
+// or "deleted". Earlier text is not recorded. Rows are only ever added.
+public sealed class RequirementCommentEvent
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public Guid CommentId { get; set; }
+    public required string Action { get; set; }
+    public required string Actor { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
 // One requirement marked as a follow-up of another in the same project (ADR-052). Linking does
 // not change either requirement's version.
 public sealed class RequirementFollowUp

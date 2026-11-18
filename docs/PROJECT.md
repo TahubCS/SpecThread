@@ -26,7 +26,10 @@ heading opens that team's projects view, which shows only that team's projects.
 Every team member can read its projects, requirements, evidence, and decisions.
 Owners, Admins, and Members work on requirements and links. A Reviewer, such as a
 client signing off a milestone, also records review decisions but cannot edit
-requirements or links. An Observer, such as an instructor, only reads (ADR-058).
+requirements or links. An Observer, such as an instructor, only reads (ADR-058), except
+that every member, Observers included, can discuss a requirement in its comments without
+changing its status or decision; the requirement's author and thread participants are
+emailed about new comments and replies (ADR-059).
 Only the team's Owner and Admins create projects or manage their names, settings,
 and archive/restore actions (ADR-040).
 

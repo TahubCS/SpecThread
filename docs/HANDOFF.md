@@ -1,8 +1,58 @@
 # Shared handoff
 
-## Current task: Reviewer and Observer roles, self-review, projects grouped by team (2026-11-17)
+## Current task: Requirement comments (2026-11-18)
 
-- Branch: `feature/teams-and-roles`, from `main` at `72a67bf`. Not committed yet; no PR.
+- Branch: `feature/requirement-comments`, from `main` at `0c727ed`. Not committed yet; no PR.
+- Scope: a comments area on the requirement page; any member, Observers and Reviewers
+  included, adds comments and one level of replies without changing status, evidence, or
+  decisions; author and time shown, oldest first; authors edit; authors, the Owner, and
+  Admins delete; create/edit/delete recorded on the History page; email notifications for
+  new comments and replies. User story: an Observer or Reviewer raises a question before
+  sprint review (persona Angela, instructor). Recorded as ADR-059.
+- Completed:
+  - API: `Requirements/CommentEndpoints.cs` (GET/POST `/requirements/{id}/comments`,
+    PATCH/DELETE `/requirements/{id}/comments/{commentId}`), writes under the team lock via
+    `LockForMember`; `TeamRoles.CanManage`; `InputErrors.MaxCommentLength` (5,000).
+  - Migration `RequirementComments` (tables `requirement_comments`,
+    `requirement_comment_events`), generator `scripts/generate-requirement-comments.mjs`
+    (adds RLS) emitting `docs/schema/requirement-comments{,-rollback}.sql`;
+    `scripts/test-database.mjs` applies it.
+  - Web: `lib/comments.ts` (parsing, `threadComments`, `canEditComment`, `canDeleteComment`,
+    `commentEventText`, `commentRecipients`, `commentNotificationEmail`), `listComments` in
+    `lib/project-data.ts`, `formatDateTime` in `lib/projects.ts`, server actions
+    `app/projects/comment-actions.ts` (add sends best-effort emails after saving),
+    `components/requirement-comments.tsx`, a Comments section (`#comments`) on the
+    requirement page, a Comments section on the History page, styles in `app-shell.css`.
+- Changed files: API `Requirements/CommentEndpoints.cs` (new), `Projects/ProjectAccess.cs`,
+  `Data/{ProductModels,SpecThreadDbContext}.cs`, `Program.cs`, migration + designer + snapshot;
+  `scripts/{generate-requirement-comments,test-database}.mjs`, `docs/schema/requirement-comments{,-rollback}.sql`;
+  web files above plus the requirement and history pages; tests new
+  `tests/{schema,api,e2e}/comments.spec.ts`, migration counts bumped in
+  `tests/schema/{evidence,github-repository,reviews}.spec.ts`; docs DECISIONS (ADR-059),
+  API, DATABASE, PROJECT, ARCHITECTURE, TESTING, this file.
+- Decisions and assumptions (user-chosen): email the thread (requirement author, all
+  commenters, the parent's author for a reply; current members only; never the writer);
+  author + Owner/Admin delete with a placeholder that keeps replies; events only, earlier
+  text discarded. Own assumptions to confirm: Observers may also edit/delete their own
+  comments; archived requirements make the discussion read-only; emails omit the comment
+  text; deleted comments with no remaining replies are hidden from the page (still on
+  History); times are shown in UTC. The stashed Kanban work needs ADR-060 or later.
+- Checks (2026-11-18, local): `npm test` 431 passed (api, schema, chromium);
+  `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `npm run build:api` (0 warnings), and `git diff --check` passed. Not exercised: real
+  Resend delivery (tests use `EMAIL_DELIVERY=log`) and the shared Supabase database.
+- Known issues and risks: no in-app inbox, opt-out, or rate limit on notifications; a busy
+  thread emails every participant on each comment. Rolling back the migration drops all
+  comments. The shared database has not been migrated; apply RequirementComments before
+  deploying this API.
+- Unrelated work: Kanban WIP remains in `git stash` ("feature/kanban-board WIP (stashed
+  before teams-and-roles)").
+- Next step: team review of the assumptions above; commit, open a PR to `main`, and apply
+  the migration to the shared database before deploying.
+
+## Previous task: Reviewer and Observer roles, self-review, projects grouped by team (2026-11-17)
+
+- Branch: `feature/teams-and-roles`, from `main` at `72a67bf`. Merged to `main` through PR #29 (`0c727ed`).
 - Scope: three user stories and one rule change, on one branch at the user's request.
   (1) Reviewer role: reads every project of the team and records decisions; cannot create,
   edit, or archive requirements or add or remove links; selectable when inviting.

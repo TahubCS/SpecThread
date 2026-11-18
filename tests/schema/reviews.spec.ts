@@ -302,5 +302,5 @@ test("the migration protects the new table, constrains its rows, and its rollbac
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename='requirement_reviews'")).toBe(0);
   expect(await count("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public' AND tablename IN ('requirements','requirement_evidence','project_repositories')")).toBe(3);
   expect(await count(`SELECT count(*)::int AS count FROM "__EFMigrationsHistory"`)).toBe(history - 1);
-  expect(history).toBe(22); // Every migration through TeamReviewerObserverRoles.
+  expect(history).toBe(23); // Every migration through RequirementComments.
 });

@@ -3,10 +3,11 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { EvidenceHistory } from "@/components/evidence-panel";
 import { FollowUpHistory } from "@/components/requirement-follow-ups";
+import { commentEventText } from "@/lib/comments";
 import {
-  listCriteriaVersions, listEvidenceHistory, listFollowUps, listMembers, listReviews, requireProject, requireRequirement,
+  listComments, listCriteriaVersions, listEvidenceHistory, listFollowUps, listMembers, listReviews, requireProject, requireRequirement,
 } from "@/lib/project-data";
-import { formatDate } from "@/lib/projects";
+import { formatDate, formatDateTime } from "@/lib/projects";
 import { decisionText } from "@/lib/reviews";
 
 export const metadata: Metadata = { title: "Requirement history" };
@@ -14,13 +15,15 @@ export const metadata: Metadata = { title: "Requirement history" };
 /**
  * Shows how a requirement changed: every version of its acceptance criteria with who saved it,
  * when, and the decisions made against it (ADR-051), every follow-up link added or removed
- * (ADR-052), and every evidence link added or removed (ADR-054). Earlier versions open read-only.
+ * (ADR-052), every evidence link added or removed (ADR-054), and every comment posted, edited, or
+ * deleted (ADR-059). Earlier versions open read-only.
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements/[requirementId]/history">) {
   const { projectId, requirementId } = await params;
-  const [project, requirement, versions, followUps, reviews, members, evidenceHistory] = await Promise.all([
+  const [project, requirement, versions, followUps, reviews, members, evidenceHistory, comments] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listCriteriaVersions(requirementId),
     listFollowUps(requirementId), listReviews(requirementId), listMembers(projectId), listEvidenceHistory(requirementId),
+    listComments(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -81,6 +84,25 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
         {followUps.history.length === 0
           ? <p className="muted">No follow-up links have been added or removed.</p>
           : <div className="review-history"><FollowUpHistory requirementId={requirement.id} history={followUps.history} people={people} /></div>}
+      </section>
+      <section className="requirement-section" aria-labelledby="comment-history-heading">
+        <h2 id="comment-history-heading">Comments</h2>
+        {comments === null
+          ? <p className="notice" role="status">Comment changes can&apos;t be shown right now. Try again in a few minutes.</p>
+          : comments.history.length === 0
+          ? <p className="muted">No comments have been posted.</p>
+          : (
+            <div className="review-history">
+              <ol className="follow-up-history" aria-label="Comment changes">
+                {comments.history.map(event => (
+                  <li key={event.id}>
+                    <span>{commentEventText(event, userId => people[userId] ?? "A former member")}</span>{" "}
+                    <span className="muted">on <time dateTime={event.occurredAt}>{formatDateTime(event.occurredAt)}</time></span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
       </section>
     </article>
   );

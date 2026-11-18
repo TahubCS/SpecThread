@@ -70,6 +70,7 @@ app.MapEvidenceEndpoints();
 app.MapReviewEndpoints();
 app.MapCriteriaVersionEndpoints();
 app.MapFollowUpEndpoints();
+app.MapCommentEndpoints();
 app.MapMilestoneEndpoints();
 app.MapTeamEndpoints();
 app.MapTeamManagementEndpoints();

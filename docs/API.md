@@ -56,6 +56,10 @@ Observers get 403 with "Your role on this team can read this project but not cha
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
 | POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
 | DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| GET | `/requirements/{requirementId}/comments` | member | | 200 `Comments` |
+| POST | `/requirements/{requirementId}/comments` | member, any role | `{ body, parentId? }` | 201 `Comment` (409 when archived or the parent was deleted) |
+| PATCH | `/requirements/{requirementId}/comments/{commentId}` | the comment's author | `{ body }` | 200 `Comment` (409 when archived or deleted) |
+| DELETE | `/requirements/{requirementId}/comments/{commentId}` | the author, team Owner/Admin | | 204 (404 once deleted; 409 when archived) |
 | POST | `/requirements/{requirementId}/archive` | editor | | 200 `Requirement` (idempotent) |
 | POST | `/requirements/{requirementId}/restore` | editor | | 200 `Requirement` (idempotent; 409 in an archived project) |
 | GET | `/projects/{projectId}/members` | member | | 200 `ProjectMember[]` (owner first, then by name) |
@@ -220,6 +224,17 @@ type FollowUps = {
   // Every link added or removed that touches this requirement, newest first. requirementId is the follow-up.
   history: { id: string; requirementId: string; requirementTitle: string; originalRequirementId: string;
     originalTitle: string; action: "added" | "removed"; actor: string; occurredAt: string }[];
+};
+// A comment, or a reply when parentId is set; replies are one level deep (ADR-059). body is
+// trimmed, 1 to 5,000 characters, and "" once deleted. Comments never change the requirement.
+type Comment = { id: string; parentId: string | null; authorId: string; body: string; createdAt: string;
+  editedAt: string | null; deletedAt: string | null; deletedBy: string | null };
+type Comments = {
+  comments: Comment[]; // oldest first, deleted ones included
+  // Every comment created, edited, or deleted, newest first; earlier text is not kept.
+  // parentId and authorId describe the comment, actor who made the change.
+  history: { id: string; commentId: string; parentId: string | null; authorId: string;
+    action: "created" | "edited" | "deleted"; actor: string; occurredAt: string }[];
 };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {
@@ -386,9 +401,9 @@ from protected pages to /onboarding, and POST /projects returns 409 with
 `code: "onboarding_required"` for an incomplete existing account. Anonymous requests
 remain 401, and an account without a user row remains 403. Project access follows the containing team as described above.
 
-Not yet available: activity and audit history. The only change histories kept are
-criteria versions (ADR-051), follow-up link changes (ADR-052), and evidence link
-changes (ADR-054, ADR-056).
+Not yet available: a general activity and audit history. The only change histories kept
+are criteria versions (ADR-051), follow-up link changes (ADR-052), evidence link changes
+(ADR-054, ADR-056), and comment changes (ADR-059).
 
 
 Team management uses authenticated server actions. Role changes require explicit

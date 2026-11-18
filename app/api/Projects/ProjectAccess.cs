@@ -47,6 +47,9 @@ internal static class TeamRoles
 
     // Recording a review decision. Reviewers decide without editing; Observers only read.
     public static bool CanReview(string? role) => role is Owner or Admin or Member or Reviewer;
+
+    // Managing the team, including removing anyone's comment (ADR-059).
+    public static bool CanManage(string? role) => role is Owner or Admin;
 }
 
 // Boundary validation for user-supplied text. Limits are recorded in ADR-024.
@@ -59,6 +62,7 @@ internal sealed class InputErrors
     public const int MaxRequirementDocuments = 20; // ADR-049
     public const int MaxEmailLength = 254;
     public const int MaxMilestoneLength = 100; // ADR-053
+    public const int MaxCommentLength = 5_000; // ADR-059
 
     private readonly Dictionary<string, string[]> errors = [];
 
