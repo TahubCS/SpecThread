@@ -1603,7 +1603,8 @@ top-level comment on the same requirement that is not deleted. Only the author e
 comment. The author, the team Owner, and Admins delete it; deletion keeps the row with an
 empty body, so replies stay under a "This comment was deleted." placeholder. Every
 create, edit, and delete adds an event with the actor and time, and edits and deletions
-discard earlier text. Saving the same text records nothing. While the requirement or its
+discard earlier text. The list reads comments and events in one repeatable-read snapshot,
+so both agree. Bodies containing a NUL character are refused with 400. Saving the same text records nothing. While the requirement or its
 project is archived, the discussion is read-only (409). Writes take the team lock like
 other requirement writes (ADR-040). The requirement page shows a Comments section (oldest
 first, author and UTC date and time, Edited marker); the History page lists comment
@@ -1612,7 +1613,8 @@ everyone who has commented on it, and for a reply the parent's author, limited t
 team members and never the writer, one email each through the existing sender (ADR-016).
 The email names the writer, requirement, and project and links to the comments; it does
 not contain the comment text. Delivery is best effort: a failure leaves the comment saved,
-shows a notice, and logs only counts.
+shows a notice, and logs only counts or fixed messages. A 201 whose body can't be read is
+still reported as posted (no notifications are sent), so nobody posts a duplicate.
 
 Consequences: Observers are no longer strictly read-only (ADR-058 is narrowed): they can
 post, edit, and delete their own comments. Deleted and edited text cannot be recovered,

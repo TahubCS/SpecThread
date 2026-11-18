@@ -31,6 +31,8 @@ internal static class CommentEndpoints
             .Join(db.ProjectsFor(user.CallerId()), r => r.ProjectId, p => p.Id, (r, p) => r.Id).AnyAsync(cancel);
         if (!member) return TypedResults.NotFound();
 
+        // One snapshot for both reads, so a deletion in between can't show in one list and not the other.
+        await using var snapshot = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancel);
         var comments = await db.RequirementComments.AsNoTracking().Where(c => c.RequirementId == requirementId)
             .OrderBy(c => c.CreatedAt).ThenBy(c => c.Id)
             .Select(c => new CommentResponse(c.Id, c.ParentId, c.AuthorId, c.Body, c.CreatedAt, c.EditedAt, c.DeletedAt, c.DeletedBy))
@@ -47,7 +49,7 @@ internal static class CommentEndpoints
         Guid requirementId, AddCommentRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         var errors = new InputErrors();
-        var body = errors.Required("body", request.Body, InputErrors.MaxCommentLength);
+        var body = Body(errors, request.Body);
         if (request.ParentId == Guid.Empty) errors.Add("parentId", "Choose a comment to reply to.");
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
@@ -93,7 +95,7 @@ internal static class CommentEndpoints
         Guid requirementId, Guid commentId, EditCommentRequest request, ClaimsPrincipal user, SpecThreadDbContext db, CancellationToken cancel)
     {
         var errors = new InputErrors();
-        var body = errors.Required("body", request.Body, InputErrors.MaxCommentLength);
+        var body = Body(errors, request.Body);
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
 
         var userId = user.CallerId();
@@ -145,6 +147,10 @@ internal static class CommentEndpoints
         await transaction.CommitAsync(cancel);
         return TypedResults.NoContent();
     }
+
+    // PostgreSQL text can't hold a NUL character, so it is refused here rather than failing the save.
+    private static string? Body(InputErrors errors, string? value) =>
+        value?.Contains('\0') == true ? errors.Add("body", "Remove the invalid character.") : errors.Required("body", value, InputErrors.MaxCommentLength);
 
     private static void Record(SpecThreadDbContext db, RequirementComment comment, string action, string userId, DateTime at) =>
         db.RequirementCommentEvents.Add(new RequirementCommentEvent

@@ -1,5 +1,6 @@
 import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { addTestTeamMember, createTestSession, createTestTeam, expect, test } from "./fixtures";
+import { clearApiFaults, failApi } from "../support/api-faults";
 
 // Requirement discussion (ADR-059). The Owner writes a requirement; an Observer, signed in in a
 // separate browser context, raises a question without changing the review status.
@@ -15,6 +16,7 @@ test.beforeEach(async ({ context }) => {
 });
 test.afterEach(async () => {
   for (const context of contexts.splice(0)) await context.close();
+  await clearApiFaults(owner.userId);
 });
 
 async function createRequirement(page: Page) {
@@ -128,4 +130,14 @@ test("the discussion stays readable and usable on a phone", async ({ page, brows
   await expect(angela.getByLabel("Reply to You")).toBeVisible();
   expect(await angela.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await angela.screenshot({ path: testInfo.outputPath("comments-mobile.png"), fullPage: true });
+});
+
+test("a saved comment whose reply can't be read is still reported as posted, not as a failure to retry", async ({ page }) => {
+  await createRequirement(page);
+  await failApi(owner.userId, { method: "POST", path: "/comments$", status: 201, body: { unexpected: true }, times: 1 });
+  await page.getByLabel("Add a comment").fill("Saved, but the answer is garbled");
+  await page.getByRole("button", { name: "Post comment" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Your comment was posted, but notification emails couldn’t be sent." })).toBeVisible();
+  await expect(page.getByLabel("Add a comment")).toHaveValue("");
+  await expect(page.getByRole("form", { name: "New comment" }).getByRole("alert")).toHaveCount(0);
 });

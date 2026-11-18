@@ -47,8 +47,9 @@ async function notify(projectId: string, requirementId: string, comment: Comment
     // Counts only: addresses and comment text stay out of logs.
     if (failed > 0) console.error(`Comment notification: ${failed} of ${results.length} emails failed.`);
     return failed === 0;
-  } catch (error) {
-    console.error("Comment notification failed", error instanceof Error ? error.message : "unknown error");
+  } catch {
+    // A fixed message: error text could carry provider responses or addresses.
+    console.error("Comment notification: the recipients could not be looked up.");
     return false;
   }
 }
@@ -64,9 +65,9 @@ export async function addComment(
   const parentId = String(formData.get("parentId") ?? "") || null;
   if (!body.trim()) return fail("Write a comment first.");
   if (!isUuid(projectId) || !isUuid(requirementId) || (parentId !== null && !isUuid(parentId))) return fail(failed);
-  let comment: Comment;
+  let response: Response;
   try {
-    const response = await apiFetch(`/requirements/${requirementId}/comments`, { method: "POST", body: JSON.stringify({ body, parentId }) });
+    response = await apiFetch(`/requirements/${requirementId}/comments`, { method: "POST", body: JSON.stringify({ body, parentId }) });
     if (response.status === 400) {
       const problem = await response.json();
       return fail(fieldError(problem, "body") ?? fieldError(problem, "parentId") ?? failed);
@@ -74,12 +75,15 @@ export async function addComment(
     // 409 explains itself: archived, or the comment being answered was deleted.
     if (response.status === 409) return fail(problemDetail(await response.json()) ?? failed);
     if (!response.ok) throw new Error(`Add comment returned ${response.status}.`);
-    comment = parseComment(await response.json());
   } catch (error) {
     console.error("Add comment failed", error);
     return fail(failed);
   }
-  const delivered = await notify(projectId, requirementId, comment);
+  // The comment is saved from here on, so nothing below may report it as failed, which would invite a duplicate.
+  let comment: Comment | null = null;
+  try { comment = parseComment(await response.json()); }
+  catch { console.error("Add comment: the saved comment could not be read back."); }
+  const delivered = comment !== null && await notify(projectId, requirementId, comment);
   revalidatePath(detailPath(projectId, requirementId), "layout");
   return {
     error: null, changed: previous.changed + 1,

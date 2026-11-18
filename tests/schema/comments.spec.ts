@@ -94,6 +94,10 @@ test("comments are validated, replies stay one level deep, and non-members see n
   expect((await member.post(path, { body: "   " })).status()).toBe(400);
   expect((await member.post(path, { body: "x".repeat(5_001) })).status()).toBe(400);
   expect((await member.post(path, { body: "x".repeat(5_000) })).status()).toBe(201);
+  // PostgreSQL text can't store NUL, so it is refused as invalid input rather than failing with 500.
+  const nul = await member.post(path, { body: "a\u0000b" });
+  expect(nul.status()).toBe(400);
+  expect((await nul.json()).errors.body).toEqual(["Remove the invalid character."]);
   expect((await member.post(path, { body: "Hi", parentId: "00000000-0000-4000-8000-000000000000" })).status()).toBe(400);
   const top = await (await member.post(path, { body: "Topic" })).json();
   const reply = await (await member.post(path, { body: "Answer", parentId: top.id })).json();
@@ -125,6 +129,7 @@ test("only authors edit; authors, the Owner, and Admins delete; each change is r
   // Saving the same text again is not an edit.
   expect((await reviewer.patch(`${path}/${comment.id}`, { body: "Second draft" })).status()).toBe(200);
   expect((await reviewer.patch(`${path}/${comment.id}`, { body: " " })).status()).toBe(400);
+  expect((await reviewer.patch(`${path}/${comment.id}`, { body: "a\u0000b" })).status()).toBe(400);
 
   for (const other of [member, observer]) {
     const response = await other.delete(`${path}/${comment.id}`);

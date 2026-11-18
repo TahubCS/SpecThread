@@ -226,7 +226,7 @@ type FollowUps = {
     originalTitle: string; action: "added" | "removed"; actor: string; occurredAt: string }[];
 };
 // A comment, or a reply when parentId is set; replies are one level deep (ADR-059). body is
-// trimmed, 1 to 5,000 characters, and "" once deleted. Comments never change the requirement.
+// trimmed, 1 to 5,000 characters, without NUL characters (400), and "" once deleted. Comments never change the requirement.
 type Comment = { id: string; parentId: string | null; authorId: string; body: string; createdAt: string;
   editedAt: string | null; deletedAt: string | null; deletedBy: string | null };
 type Comments = {
