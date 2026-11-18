@@ -336,6 +336,22 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- Requirement comments (ADR-059). tests/schema/comments.spec.ts (API on 5134): every
+  role, Observers included, comments and replies, and the requirement and its decisions
+  stay identical; validation (empty, 5,001 characters, NUL on create and edit, unknown
+  parent, reply to a reply),
+  404 for non-members; only the author edits, the author, Owner, and Admins delete,
+  Members and Observers get 403; a deleted comment keeps its place with no text, can't be
+  edited or replied to, and the event list records each change newest first without old
+  text; archived requirements refuse every write; and the migration's RLS, constraints,
+  and rollback. tests/api/comments.spec.ts checks parsing, threading, permissions,
+  notification recipients and email, event text, and the date-time format without a
+  browser. tests/e2e/comments.spec.ts: an Observer posts a multi-line question with no
+  review change, the Owner replies, edits, cancels and then confirms deleting the
+  Observer's comment (the reply stays), the History page lists the four events without
+  the deleted text, refused posts and edits keep the typed text, a 201 with an unreadable
+  body still reads as posted, and the thread stays usable by keyboard at 390 px without
+  overflow.
 - Follow-ups (ADR-052). tests/schema/follow-ups.spec.ts (API on 5122): links shown both
   ways with their history, no version change, removal recorded; refusals for no
   requirement, itself, another project, an unknown ID, a duplicate, the reverse link,

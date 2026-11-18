@@ -1581,6 +1581,50 @@ not per project. Ownership can still be transferred to a Reviewer or Observer, w
 becomes Owner with full rights, as with any member (ADR-040). There is no audit of role
 changes.
 
+ADR-059: Requirement comments, with replies, audit events, and email notifications
+
+Status: Accepted
+
+Context: A user story asks that an Observer or Reviewer can raise a question on a
+requirement before a meeting without changing its review status (persona: an instructor
+checking student team progress before sprint review). Further specs ask for a comments
+area on the requirement page, replies, author edits and deletion with permissions and
+audit, comment events in the requirement's timeline, and notifications. The user chose
+email notifications to the thread, deletion by the author or the Owner/Admins, and audit
+events without keeping earlier text.
+
+Decision: New tables `requirement_comments` and `requirement_comment_events` (migration
+RequirementComments, RLS on, no anon/authenticated grants). Every team member in any
+role, Observers included, reads and adds comments and replies; this is the one write
+Observers may make, because comments are discussion, not requirement content, and they
+never change the requirement, its version, its evidence, or its decisions. Bodies are
+trimmed and 1 to 5,000 characters. Replies are one level deep: a reply's parent is a
+top-level comment on the same requirement that is not deleted. Only the author edits a
+comment. The author, the team Owner, and Admins delete it; deletion keeps the row with an
+empty body, so replies stay under a "This comment was deleted." placeholder. Every
+create, edit, and delete adds an event with the actor and time, and edits and deletions
+discard earlier text. The list reads comments and events in one repeatable-read snapshot,
+so both agree. Bodies containing a NUL character are refused with 400. Saving the same text records nothing. While the requirement or its
+project is archived, the discussion is read-only (409). Writes take the team lock like
+other requirement writes (ADR-040). The requirement page shows a Comments section (oldest
+first, author and UTC date and time, Edited marker); the History page lists comment
+events. After a comment is saved, the web server action emails the requirement's author,
+everyone who has commented on it, and for a reply the parent's author, limited to current
+team members and never the writer, one email each through the existing sender (ADR-016).
+The email names the writer, requirement, and project and links to the comments; it does
+not contain the comment text. Delivery is best effort: a failure leaves the comment saved,
+shows a notice, and logs only counts or fixed messages. A 201 whose body can't be read is
+still reported as posted (no notifications are sent), so nobody posts a duplicate.
+
+Consequences: Observers are no longer strictly read-only (ADR-058 is narrowed): they can
+post, edit, and delete their own comments. Deleted and edited text cannot be recovered,
+so the record shows that a change happened but not what was said; moderators can remove
+others' comments, and the History page names who did. There is no in-app notification
+inbox, no per-user opt-out, and no mention syntax; emails depend on email delivery being
+configured. A user who has authored comments or comment events cannot be hard-deleted
+(foreign keys restrict), as with other recorded actions. Rolling back the migration drops
+both tables and every comment.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

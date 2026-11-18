@@ -555,6 +555,29 @@ decisions stay. An Owner's own row, which the API keeps as `member`, would be re
 `member` if it ever held one of the new roles. Back up `team_members` and
 `team_invitations` first if they need restoring.
 
+## Requirement comments migration
+
+RequirementComments (ADR-059) adds `requirement_comments` (id, requirement_id, parent_id
+for a reply, author_id, body, created_at, edited_at, deleted_at, deleted_by) and
+`requirement_comment_events` (id, requirement_id, comment_id, action, actor,
+occurred_at). Check constraints keep a body at most 5,000 characters, require
+deleted_at and deleted_by together with an empty body once deleted, stop a comment being
+its own parent, and limit actions to `created`, `edited`, and `deleted`. Foreign keys
+to requirements, comments, and users restrict deletes. Both tables have RLS on and no
+anon/authenticated grants.
+
+```sh
+dotnet ef migrations add RequirementComments --project app/api --configuration Release
+node scripts/generate-requirement-comments.mjs
+```
+
+The second command adds the RLS statements and generates docs/schema/requirement-comments.sql
+and -rollback.sql offline. Apply it before deploying the API; the previous API never reads
+the tables, and the web treats the previous API's 404 as "comments can't be shown".
+Rollback: `dotnet ef database update TeamReviewerObserverRoles --project app/api`, or the
+rollback script, drops both tables and every comment and comment event. Back them up
+first if they need restoring.
+
 ## Supabase tooling
 
 ```sh

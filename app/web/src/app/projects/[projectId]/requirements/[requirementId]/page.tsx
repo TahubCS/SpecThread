@@ -4,15 +4,18 @@ import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { EvidenceStatus } from "@/components/evidence-status";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
+import { RequirementComments } from "@/components/requirement-comments";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
 import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement,
+  listComments, listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews,
+  requireProject, requireRequirement,
 } from "@/lib/project-data";
 import { canEditProject, canReviewProject, formatDate } from "@/lib/projects";
+import { requireTeamSession } from "@/lib/teams";
 
 type Props = PageProps<"/projects/[projectId]/requirements/[requirementId]">;
 
@@ -27,18 +30,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 /**
  * Shows who created a requirement and when, its description, ordered acceptance criteria and their
  * version, milestone, linked documents, follow-up links, evidence and its Evidence complete status,
- * and review decisions, with
+ * review decisions, and the discussion (ADR-059), with
  * edit and archive while it can change and the viewer's team role allows it (ADR-058).
  */
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, followUps, requirements, milestones, evidenceHistory, suggestions] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, followUps, requirements, milestones, evidenceHistory, suggestions, comments, session] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId),
     listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
-    listEvidenceSuggestions(requirementId),
+    listEvidenceSuggestions(requirementId), listComments(requirementId),
+    requireTeamSession(`/projects/${projectId}/requirements/${requirementId}`),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -152,6 +156,11 @@ export default async function Page({ params }: Props) {
           criteriaVersion={requirement.criteriaVersion} reviews={reviews}
           evidenceIds={evidence.map(link => link.id)} people={people}
           canReview={changeable && canReviewProject(project)} />
+      </section>
+      <section className="requirement-section" id="comments" aria-labelledby="comments-heading">
+        <h2 id="comments-heading">Comments</h2>
+        <RequirementComments projectId={project.id} requirementId={requirement.id} comments={comments}
+          viewerId={session.user.id} role={project.teamRole} people={people} open={changeable} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
       {requirement.archivedAt && !project.archivedAt && canEditProject(project) && <RequirementRestore projectId={project.id} requirementId={requirement.id} />}

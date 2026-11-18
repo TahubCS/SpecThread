@@ -214,3 +214,10 @@ const mediumDate = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone
 export function formatDate(value: string): string {
   return mediumDate.format(new Date(value));
 }
+
+const mediumDateTime = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+
+/** Formats an API timestamp as a UTC date and time, such as "Oct 8, 2026, 2:05 PM UTC", for discussion where order within a day matters. */
+export function formatDateTime(value: string): string {
+  return `${mediumDateTime.format(new Date(value))} UTC`;
+}
