@@ -164,7 +164,7 @@ for (const [label, failure, message] of [
     await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/settings$`));
     await clearApiFaults(owner.userId);
     await page.goto("/projects");
-    await expect(page.getByRole("list", { name: "Your projects" }).getByRole("link", { name: /Keep me/ })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Test team projects" }).getByRole("link", { name: /Keep me/ })).toBeVisible();
   });
 }
 
@@ -173,7 +173,7 @@ test("slow API calls show a loading message, and a project keeps its frame while
   await failApi(owner.userId, { method: "GET", path: "^/projects$", delayMs: 2500 });
   await page.goto("/projects", { waitUntil: "commit" });
   await expect(page.getByRole("status").filter({ hasText: "Loading..." })).toBeVisible();
-  await expect(page.getByRole("list", { name: "Your projects" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "Test team projects" })).toBeVisible();
 
   await page.goto(`/projects/${projectId}`);
   await failApi(owner.userId, { method: "GET", path: `^/projects/${projectId}/requirements$`, delayMs: 2500 });

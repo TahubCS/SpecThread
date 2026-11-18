@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { getInvitationPreview } from "@/lib/invitations";
 import { AcceptInvitation, InvitationSwitchAccount } from "@/components/teams/accept-invitation";
 import styles from "@/components/teams/teams.module.css";
+import { teamRoleLabels } from "@/lib/team-types";
 
 export const metadata = { title: "Team invitation · SpecThread", referrer: "no-referrer", robots: { index: false, follow: false } };
 
@@ -25,7 +26,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
     <h1>{joined ? "You’ve joined this team" : invitation?.status === "pending" ? "You’re invited to a team" : "Invitation unavailable"}</h1>
     {invitation ? <><dl className={styles.invitationFacts}>
       <div><dt>Team</dt><dd>{invitation.teamName}</dd></div><div><dt>Invited by</dt><dd>{invitation.inviterName}</dd></div>
-      <div><dt>Invited email</dt><dd>{invitation.email}</dd></div><div><dt>Role</dt><dd>{invitation.role === "admin" ? "Admin" : "Member"}</dd></div>
+      <div><dt>Invited email</dt><dd>{invitation.email}</dd></div><div><dt>Role</dt><dd>{teamRoleLabels[invitation.role]}</dd></div>
       <div><dt>Expires</dt><dd><time dateTime={invitation.expiresAt}>{new Date(invitation.expiresAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC</time></dd></div>
     </dl>
       {joined ? <Link className={styles.primary} href={`/teams/${invitation.teamId}`}>Open team</Link> : invitation.status !== "pending" ?

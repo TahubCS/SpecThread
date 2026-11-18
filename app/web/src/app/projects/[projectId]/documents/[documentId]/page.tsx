@@ -4,7 +4,7 @@ import { ArrowLeft, Download } from "lucide-react";
 import { DocumentArchive } from "@/components/document-archive";
 import { documentTypeLabel, formatFileSize } from "@/lib/documents";
 import { requireDocument, requireProject } from "@/lib/project-data";
-import { formatDate } from "@/lib/projects";
+import { canEditProject, formatDate } from "@/lib/projects";
 
 type Props = PageProps<"/projects/[projectId]/documents/[documentId]">;
 
@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function Page({ params }: Props) {
   const { projectId, documentId } = await params;
   const [project, document] = await Promise.all([requireProject(projectId), requireDocument(projectId, documentId)]);
-  const editable = !project.archivedAt && !document.archivedAt;
+  const editable = !project.archivedAt && !document.archivedAt && canEditProject(project);
   const base = `/projects/${project.id}/documents`;
 
   return (

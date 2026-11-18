@@ -1,6 +1,6 @@
 import "server-only";
 import { notFound, redirect } from "next/navigation";
-import type { TeamRole } from "./team-types";
+import { isTeamRole, type TeamRole } from "./team-types";
 import { readWithTeam } from "./teams";
 
 export type TeamProject = {
@@ -30,8 +30,7 @@ export function parseTeamProject(item: unknown, teamId: string, archived: boolea
   const project = item as Record<string, unknown>;
   if (typeof project.id !== "string" || !/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(project.id) ||
       project.teamId !== teamId || typeof project.name !== "string" || !project.name ||
-      typeof project.teamName !== "string" || !project.teamName || typeof project.teamRole !== "string" ||
-      !["owner", "admin", "member"].includes(project.teamRole) ||
+      typeof project.teamName !== "string" || !project.teamName || !isTeamRole(project.teamRole) ||
       typeof project.requirementCount !== "number" || !Number.isSafeInteger(project.requirementCount) || project.requirementCount < 0 ||
       typeof project.createdAt !== "string" || !Number.isFinite(Date.parse(project.createdAt)) ||
       (archived ? typeof project.archivedAt !== "string" || !Number.isFinite(Date.parse(project.archivedAt)) : project.archivedAt !== null))

@@ -247,14 +247,15 @@ currently require network access during the web build.
 - Review decisions (ADR-038). tests/schema/reviews.spec.ts calls the API on port 5115
   against Docker Postgres, with evidence links inserted as rows: decisions by two
   members read newest first, the stored evidence snapshot staying as it was after
-  links change, no update or delete, 403 for the author, 404 for non-members and
+  links change, no update or delete, the author recording their own decision (ADR-058), 404 for non-members and
   unknown requirements, 401 anonymous, validation of the choice, note, and version,
   409 for a stale or future version and for an archived requirement or project, the
   latest decision and `outdated` on the requirement list (edit, link added, link
   removed, different link, link re-read, other requirements), and the migration's
   RLS, grants, constraints, foreign keys, and rollback. tests/e2e/reviews.spec.ts
   uses two users in separate browser contexts, the second added to the project in
-  the database: the author's message and missing form, each of the three decisions,
+  the database: the author deciding on their own requirement (also alone in a team),
+  a Reviewer deciding without edit controls and an Observer seeing no form, each of the three decisions,
   the required reason, history, the decision on both lists, outdated after an edit
   and after a link is added but not after a removal that restores the reviewed set
   or a refresh from the fake GitHub, a requirement changed or archived while the
@@ -320,6 +321,21 @@ currently require network access during the web build.
   title change saving without it, confirming to "Needs review" on the page and the list,
   the read-only version page with its decision, the Requirement history page, and an
   acceptance recorded while the form was open caught on save.
+- Reviewer and Observer roles (ADR-058). tests/schema/team-roles.spec.ts (API on 5133,
+  evidence inserted as rows, so no GitHub): both roles read projects, requirements,
+  evidence, history, follow-ups, documents, members, and decisions; both get 403 with the
+  read-only message on every requirement, milestone, follow-up, evidence, suggestion, and
+  document write, and nothing changes; a Reviewer decides, an Observer gets 403, and the
+  author decides on their own requirement; the Owner and an Admin invite each role and
+  acceptance grants it, Reviewers and Observers cannot invite or create projects, the
+  Owner changes roles (a Reviewer made Member can create, then as Observer cannot), Admins
+  cannot change roles but remove both new roles; and the migration's constraint and
+  rollback (removes those memberships and invitations, keeps the others). tests/e2e:
+  reviews.spec.ts (Reviewer and Observer views), team-invitations.spec.ts (role options per
+  inviter and their descriptions), team-management.spec.ts (assigning Reviewer), and
+  projects.spec.ts (the combined view grouped by team, including a team the user only
+  belongs to, and a team heading opening only that team's projects).
+  tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
 - Follow-ups (ADR-052). tests/schema/follow-ups.spec.ts (API on 5122): links shown both
   ways with their history, no version change, removal recorded; refusals for no
   requirement, itself, another project, an unknown ID, a duplicate, the reverse link,

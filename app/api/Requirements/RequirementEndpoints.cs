@@ -77,6 +77,7 @@ internal static class RequirementEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var project = await ProjectEndpoints.LockProjectForCaller(db, projectId, userId, cancel);
         if (project is null) return TypedResults.NotFound();
+        if (!TeamRoles.CanEdit(await db.CallerRoleAsync(project.TeamId, userId, cancel))) return ProjectEndpoints.EditorsOnly();
         if (project.ArchivedAt is not null) return ProjectEndpoints.Archived();
         var refused = await CheckDocuments(db, projectId, input.DocumentIds, new HashSet<Guid>(), cancel);
         if (refused is not null) return refused;
@@ -135,6 +136,7 @@ internal static class RequirementEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         var requirement = found.Requirement;
         if (found.ProjectArchived || requirement.ArchivedAt is not null) return ProjectEndpoints.Archived();
         if (requirement.Version != request.Version) return Stale();
@@ -197,6 +199,7 @@ internal static class RequirementEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await LockForMember(db, user.CallerId(), requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.ProjectArchived) return ProjectEndpoints.Archived();
 
         // Idempotent: archiving again keeps the original timestamp, and restoring an active one changes nothing.
@@ -230,14 +233,15 @@ internal static class RequirementEndpoints
         var project = await ProjectEndpoints.LockProjectForCaller(db, projectId.Value, userId, cancel);
         if (project is null) return null;
         var requirement = await db.Requirements.SingleAsync(r => r.Id == requirementId, cancel);
-        return new MemberRequirement(requirement, project.ArchivedAt != null);
+        var role = await db.CallerRoleAsync(project.TeamId, userId, cancel);
+        return new MemberRequirement(requirement, project.ArchivedAt != null, role!);
     }
 
     // Null when the requirement does not exist or the caller is not a member of its project.
     private static Task<MemberRequirement?> FindForMember(
         IQueryable<Requirement> requirements, SpecThreadDbContext db, string userId, Guid requirementId, CancellationToken cancel) =>
         requirements.Where(r => r.Id == requirementId)
-            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new MemberRequirement(r, p.ArchivedAt != null))
+            .Join(db.ProjectsFor(userId), r => r.ProjectId, p => p.Id, (r, p) => new MemberRequirement(r, p.ArchivedAt != null, ""))
             .SingleOrDefaultAsync(cancel);
 
     private static ValidInput? Validate(
@@ -326,9 +330,11 @@ internal static class RequirementEndpoints
         EvidencePolicy.Missing(await db.RequirementEvidence.AsNoTracking().Where(e => e.RequirementId == requirementId)
             .Select(e => new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains)).ToListAsync(cancel));
 
-    internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived)
+    // `Role` is the caller's team role as of the lock (ADR-058); reads that do not lock leave it empty.
+    internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived, string Role)
     {
         public bool Archived => ProjectArchived || Requirement.ArchivedAt is not null;
+        public bool CanEdit => TeamRoles.CanEdit(Role);
     }
 
     private sealed record ValidInput(string Title, string Description, List<string> Criteria, List<Guid> DocumentIds);

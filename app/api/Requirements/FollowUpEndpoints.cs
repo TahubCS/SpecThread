@@ -62,6 +62,7 @@ internal static class FollowUpEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.Archived) return ProjectEndpoints.Archived();
         if (originalId == requirementId) return Invalid("A requirement can't be a follow-up of itself.");
         var original = await db.Requirements.AsNoTracking()
@@ -107,6 +108,7 @@ internal static class FollowUpEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await RequirementEndpoints.LockForMember(db, userId, requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         var link = await db.RequirementFollowUps
             .SingleOrDefaultAsync(f => f.RequirementId == requirementId && f.OriginalRequirementId == originalRequirementId, cancel);
         if (link is null) return TypedResults.NotFound();

@@ -243,6 +243,11 @@ a.row:focus-visible { outline-offset: -2px; }
 .app-shell .scaffold-page > .notice { margin-top: 20px; }
 .app-shell .page-loading { margin: 0; color: var(--app-text-3); }
 .project-count { margin: 20px 0 8px; color: var(--app-text-3); font-size: 13px; }
+.project-group + .project-group { margin-top: 24px; }
+.project-group-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.project-group-heading h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.project-group-link { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; color: var(--app-text-2); font-size: 13px; text-decoration: none; }
+.project-group-link:hover { color: var(--app-text); text-decoration: underline; }
 .settings-block { max-width: 460px; margin-top: 24px; }
 .settings-block > * + * { margin-top: 16px; }
 .settings-block p { margin-bottom: 0; color: var(--app-text-2); }

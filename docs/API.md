@@ -31,7 +31,10 @@ the web origin (`http://localhost:3000`) and `ConnectionStrings__Database` confi
 ## Endpoints
 
 All endpoints require a signed-in user (401 otherwise). "Member" means the user belongs
-to the project's team; non-members get 404 as if the project did not exist.
+to the project's team in any role; non-members get 404 as if the project did not exist.
+"Editor" means a member whose team role is Owner, Admin, or Member; Reviewers and
+Observers get 403 with "Your role on this team can read this project but not change it."
+(ADR-058). Recording a decision needs any role except Observer.
 
 | Method | Path | Who | Body | Success |
 |---|---|---|---|---|
@@ -43,18 +46,18 @@ to the project's team; non-members get 404 as if the project did not exist.
 | POST | `/projects/{projectId}/restore` | team Owner/Admin | | 200 `Project` (idempotent) |
 | GET | `/teams/{teamId}/projects` | team member | query `archived=true` for archive; default false | 200 `Project[]`, by name then ID |
 | GET | `/projects/{projectId}/requirements` | member | query `archived=true` for archived only; default active only; `milestone=` for one label | 200 `RequirementSummary[]` (oldest first) |
-| POST | `/projects/{projectId}/requirements` | member | `{ title, description?, acceptanceCriteria, documentIds?, milestone? }` | 201 `Requirement` |
+| POST | `/projects/{projectId}/requirements` | editor | `{ title, description?, acceptanceCriteria, documentIds?, milestone? }` | 201 `Requirement` |
 | GET | `/requirements/{requirementId}` | member | | 200 `Requirement` |
-| PUT | `/requirements/{requirementId}` | member | `{ title, description?, acceptanceCriteria, documentIds?, version, confirmCriteriaChange? }` | 200 `Requirement` (409 `accepted_criteria_change`) |
+| PUT | `/requirements/{requirementId}` | editor | `{ title, description?, acceptanceCriteria, documentIds?, version, confirmCriteriaChange? }` | 200 `Requirement` (409 `accepted_criteria_change`) |
 | GET | `/requirements/{requirementId}/criteria-versions` | member | | 200 `CriteriaVersion[]` (newest first) |
 | GET | `/requirements/{requirementId}/criteria-versions/{number}` | member | | 200 `CriteriaVersion` |
-| PUT | `/requirements/{requirementId}/milestone` | member | `{ milestone }` (null or empty clears) | 200 `{ milestone }` |
+| PUT | `/requirements/{requirementId}/milestone` | editor | `{ milestone }` (null or empty clears) | 200 `{ milestone }` |
 | GET | `/projects/{projectId}/milestones` | member | | 200 `string[]` (labels on active requirements, in order) |
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
-| POST | `/requirements/{requirementId}/follow-ups` | member | `{ originalRequirementId }` | 201 `FollowUpLink` |
-| DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | member | | 204 |
-| POST | `/requirements/{requirementId}/archive` | member | | 200 `Requirement` (idempotent) |
-| POST | `/requirements/{requirementId}/restore` | member | | 200 `Requirement` (idempotent; 409 in an archived project) |
+| POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
+| DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| POST | `/requirements/{requirementId}/archive` | editor | | 200 `Requirement` (idempotent) |
+| POST | `/requirements/{requirementId}/restore` | editor | | 200 `Requirement` (idempotent; 409 in an archived project) |
 | GET | `/projects/{projectId}/members` | member | | 200 `ProjectMember[]` (owner first, then by name) |
 | POST | `/projects/{projectId}/members` | member | | 410 (retired) |
 | DELETE | `/projects/{projectId}/members/{userId}` | member | | 410 (retired) |
@@ -68,20 +71,20 @@ to the project's team; non-members get 404 as if the project did not exist.
 | GET | `/requirements/{requirementId}/evidence/search` | member | query `q`: words from a title | 200 `{ items: EvidenceSearchItem[] }` (at most 20) |
 | GET | `/requirements/{requirementId}/evidence/history` | member | | 200 `EvidenceEvent[]` (newest first) |
 | GET | `/requirements/{requirementId}/evidence/suggestions` | member | | 200 `EvidenceSuggestion[]` (undecided, by number) |
-| POST | `/requirements/{requirementId}/evidence/suggestions/scan` | member | | 200 `EvidenceSuggestion[]` |
-| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/confirm` | member | | 201 `Evidence` (`source: "suggested"`) |
-| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/reject` | member | | 204 |
-| POST | `/requirements/{requirementId}/evidence/{evidenceId}/move` | member | `{ targetRequirementId }` | 200 `Evidence` |
-| POST | `/requirements/{requirementId}/evidence` | member | `{ reference }` | 201 `Evidence` |
-| POST | `/requirements/{requirementId}/evidence/refresh` | member | | 200 `Evidence[]` |
-| DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | member | | 204 |
+| POST | `/requirements/{requirementId}/evidence/suggestions/scan` | editor | | 200 `EvidenceSuggestion[]` |
+| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/confirm` | editor | | 201 `Evidence` (`source: "suggested"`) |
+| POST | `/requirements/{requirementId}/evidence/suggestions/{suggestionId}/reject` | editor | | 204 |
+| POST | `/requirements/{requirementId}/evidence/{evidenceId}/move` | editor | `{ targetRequirementId }` | 200 `Evidence` |
+| POST | `/requirements/{requirementId}/evidence` | editor | `{ reference }` | 201 `Evidence` |
+| POST | `/requirements/{requirementId}/evidence/refresh` | editor | | 200 `Evidence[]` |
+| DELETE | `/requirements/{requirementId}/evidence/{evidenceId}` | editor | | 204 |
 | GET | `/requirements/{requirementId}/reviews` | member | | 200 `Review[]` (newest first) |
-| POST | `/requirements/{requirementId}/reviews` | member, not the requirement's author | `{ decision, note?, version }` | 201 `Review` |
+| POST | `/requirements/{requirementId}/reviews` | member except Observer | `{ decision, note?, version }` | 201 `Review` |
 | GET | `/projects/{projectId}/documents` | member | | 200 `Document[]` (active only, newest first) |
-| POST | `/projects/{projectId}/documents` | member | multipart: `file`, optional `title` | 201 `Document` |
+| POST | `/projects/{projectId}/documents` | editor | multipart: `file`, optional `title` | 201 `Document` |
 | GET | `/documents/{documentId}` | member | | 200 `Document` (archived included) |
 | GET | `/documents/{documentId}/content` | member | | 200 file bytes, as an attachment |
-| POST | `/documents/{documentId}/archive` | member | | 200 `Document` (idempotent) |
+| POST | `/documents/{documentId}/archive` | editor | | 200 `Document` (idempotent) |
 
 Documents (ADR-047) are PDF, DOC, or DOCX files of at most 4 MiB. The API checks the
 file's leading bytes against its extension and stores the content type for that
@@ -147,10 +150,11 @@ that installation is 400 on `repositoryId`; an installation the app can no longe
 on is 400 on `installationId`. GitHub being unreachable is 502. Missing or rejected
 app credentials are 503.
 
-Every team member can read every project and edit its requirements. Only the team
-Owner/Admin manage projects. `teamId` is required on creation and immutable on
+Every team member can read every project. Owners, Admins, and Members edit its
+requirements, documents, and links; Reviewers also record decisions; Observers only
+read (ADR-058). Only the team Owner/Admin manage projects. `teamId` is required on creation and immutable on
 rename. Missing/empty IDs return 400 field errors; unknown/inaccessible teams return
-404, and a regular team Member receives 403. Project membership reads reflect team
+404, and a Member, Reviewer, or Observer receives 403. Project membership reads reflect team
 members. Legacy POST/DELETE membership routes return 410 with
 `code: "team_membership_required"` after membership checking; outsiders still receive
 404. These routes never add or remove a team member. Joins require invitation acceptance.
@@ -190,7 +194,7 @@ restore is possible while the project is archived (409).
 ```ts
 type Project = {
   id: string; name: string; ownerUserId: string; createdAt: string; archivedAt: string | null;
-  teamId: string; teamName: string; teamRole: "owner" | "admin" | "member"; requirementCount: number;
+  teamId: string; teamName: string; teamRole: "owner" | "admin" | "member" | "reviewer" | "observer"; requirementCount: number;
 };
 type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
@@ -238,7 +242,7 @@ type Document = {
   id: string; projectId: string; title: string; fileName: string; contentType: string; sizeBytes: number;
   uploadedBy: string; uploadedByName: string; uploadedAt: string; archivedAt: string | null;
 };
-type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean; role: "owner" | "admin" | "member" };
+type ProjectMember = { userId: string; name: string; email: string; joinedAt: string; isOwner: boolean; role: "owner" | "admin" | "member" | "reviewer" | "observer" };
 type AvailableRepository = {
   installationId: number; repositoryId: number; owner: string; name: string; fullName: string; isPrivate: boolean;
 };
@@ -291,7 +295,9 @@ type EvidenceSuggestion = {
 Review decisions (ADR-038): `note` may have up to 2,000 characters and is required
 for `rejected` and `more_evidence`. `version` is the requirement version the
 reviewer was shown; any other current version is refused with 409. The requirement's
-author gets 403, and an archived requirement or project 409. Decisions are only
+author may record a decision (ADR-058 replaces ADR-038's author rule); an Observer gets
+403 with "Observers can read decisions but not record them.", and an archived
+requirement or project 409. Decisions are only
 added: there is no update or delete. A decision is `outdated` when the requirement's
 version, or the set of its evidence link IDs, differs from what was reviewed;
 refreshing evidence does not change that.
@@ -329,7 +335,7 @@ document titles up to 200 characters, and file names up to 255. An upload body w
 | GET | `/teams/{teamId}` | team member | | 200 `Team`; missing and inaccessible teams both return 404 |
 | PATCH | `/teams/{teamId}` | Owner/Admin | `{ name, description? }` | 200 `Team` |
 | GET | `/teams/{teamId}/members` | team member | | 200 `TeamMember[]`, Owner first, then name and user ID |
-| PATCH | `/teams/{teamId}/members/{userId}` | Owner | `{ role: "admin" \| "member" }` | 200 `TeamMember` |
+| PATCH | `/teams/{teamId}/members/{userId}` | Owner | `{ role: "admin" \| "member" \| "reviewer" \| "observer" }` | 200 `TeamMember` |
 | DELETE | `/teams/{teamId}/members/{userId}` | permitted manager, or that user leaving | | 204 |
 | POST | `/teams/{teamId}/ownership` | Owner | `{ userId }` existing other member | 200 `Team`; previous Owner is now Admin |
 | PATCH | `/teams/{teamId}/preferences` | team member | `{ isFavorite?, isExpanded? }` | 200 `Team`; affects only the caller's membership |
@@ -339,12 +345,12 @@ document titles up to 200 characters, and file names up to 255. An upload body w
 ```ts
 type Team = {
   id: string; name: string; description: string; ownerUserId: string;
-  createdAt: string; role: "owner" | "admin" | "member"; memberCount: number;
+  createdAt: string; role: "owner" | "admin" | "member" | "reviewer" | "observer"; memberCount: number;
   isFavorite: boolean; isExpanded: boolean;
 };
 type TeamMember = {
   userId: string; name: string; email: string;
-  role: "owner" | "admin" | "member"; joinedAt: string;
+  role: "owner" | "admin" | "member" | "reviewer" | "observer"; joinedAt: string;
 };
 ```
 
@@ -357,7 +363,7 @@ Validation uses the same 400 field-error format as projects. Timestamps retain t
 PostgreSQL precision used by the other write endpoints.
 
 `role` is relative to the caller. A single `ownerUserId` determines ownership;
-non-owner membership roles are `admin` or `member`. Only the Owner appoints or demotes Admins. Admins remove regular Members; only the
+non-owner membership roles are `admin`, `member`, `reviewer`, or `observer` (ADR-058). Only the Owner changes roles. Admins remove Members, Reviewers, and Observers; only the
 Owner removes Admins. Any non-owner can leave voluntarily. Nobody removes the Owner
 or changes their membership role (409); transfer ownership first. Transfer selects
 any existing other member and makes the previous Owner an Admin. These mutations
@@ -402,7 +408,7 @@ and active-project lists.
 | Method | Path | Who | Body | Success |
 |---|---|---|---|---|
 | GET | `/teams/{teamId}/invitations` | Owner/Admin | | 200 `Invitation[]`, all statuses, newest first |
-| POST | `/teams/{teamId}/invitations` | permitted manager | `{ email, role: "admin" \| "member" }` | 201 `{ invitation, token, teamName }` |
+| POST | `/teams/{teamId}/invitations` | permitted manager | `{ email, role: "admin" \| "member" \| "reviewer" \| "observer" }` | 201 `{ invitation, token, teamName }` |
 | POST | `/teams/{teamId}/invitations/{invitationId}/resend` | permitted manager | | 200 `{ invitation, token, teamName }`, fresh link |
 | DELETE | `/teams/{teamId}/invitations/{invitationId}` | permitted manager | | 204, idempotent revocation |
 | GET | `/invites/{token}` | public | | 200 `InvitationPreview`; invalid/replaced/unknown token 404 |
@@ -411,18 +417,18 @@ and active-project lists.
 ```ts
 type InvitationStatus = "pending" | "accepted" | "revoked" | "expired" | "unavailable";
 type Invitation = {
-  id: string; teamId: string; email: string; role: "admin" | "member";
+  id: string; teamId: string; email: string; role: "admin" | "member" | "reviewer" | "observer";
   inviterName: string; createdAt: string; issuedAt: string; expiresAt: string;
   status: InvitationStatus;
 };
 type InvitationPreview = {
   teamId: string; teamName: string; inviterName: string; email: string;
-  role: "admin" | "member"; expiresAt: string; status: InvitationStatus;
+  role: "admin" | "member" | "reviewer" | "observer"; expiresAt: string; status: InvitationStatus;
 };
 ```
 
-Owners manage Admin and Member invitations; Admins manage Member invitations only.
-Members receive 403 on management; inaccessible teams and cross-team invitation IDs
+Owners manage invitations for every role; Admins manage Member, Reviewer, and Observer
+invitations, not Admin ones (ADR-058). Members, Reviewers, and Observers receive 403 on management; inaccessible teams and cross-team invitation IDs
 return 404. Email is trimmed/lowercased and limited to 254 characters. Existing
 members and duplicate unresolved invitations receive 409; resend an expired one.
 Creating an invitation adds no membership. The secret is 32 random bytes, returned

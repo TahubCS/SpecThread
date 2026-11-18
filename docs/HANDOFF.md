@@ -1,6 +1,73 @@
 # Shared handoff
 
-## Current task: US-14, the team's Evidence complete rule (2026-11-04)
+## Current task: Reviewer and Observer roles, self-review, projects grouped by team (2026-11-17)
+
+- Branch: `feature/teams-and-roles`, from `main` at `72a67bf`. Not committed yet; no PR.
+- Scope: three user stories and one rule change, on one branch at the user's request.
+  (1) Reviewer role: reads every project of the team and records decisions; cannot create,
+  edit, or archive requirements or add or remove links; selectable when inviting.
+  (2) Observer role: reads projects, requirements, and evidence; cannot edit anything or
+  record decisions. (3) One combined projects view grouped by team; opening a team shows
+  only its projects. (4) The creator of a requirement may approve or deny it (replaces
+  ADR-038's second-person rule). Recorded as ADR-058.
+- Completed:
+  - API: `TeamRoles` in `Projects/ProjectAccess.cs` (`CanEdit`, `CanReview`, `Assignable`)
+    and `CallerRoleAsync`. `LockForMember` returns the caller's role under the team lock.
+    Every requirement, milestone, follow-up, evidence, suggestion, move, and document write
+    answers 403 `EditorsOnly` for Reviewers and Observers; GitHub-reading writes check
+    before reading GitHub and again under the lock (`Recheck.ReadOnly`). Reviews: the
+    author rule is gone; Observers get 403. Invitations and role changes accept all four
+    roles; Admins invite and remove every role except Admin.
+  - Migration `TeamReviewerObserverRoles` widens both role check constraints; generator
+    `scripts/generate-team-reviewer-observer-roles.mjs` adds a least-privilege rollback
+    (removes Reviewer/Observer memberships and invitations) and emits
+    `docs/schema/team-reviewer-observer-roles{,-rollback}.sql`; `scripts/test-database.mjs`
+    applies it.
+  - Web: role types, parsers, labels, and `canManageTeam`/`canEdit`/`canReview` helpers in
+    `lib/team-types.ts`; every `role !== "member"` check (which would have given the new
+    roles manager controls) now uses `canManageTeam`. Edit, archive, restore, new
+    requirement, upload, milestone, follow-up, and evidence controls are hidden for
+    Reviewers and Observers, with a read-only notice on the new/edit/upload pages; the
+    review form is hidden for Observers; the author sees the form. Invite dialog offers
+    Member/Reviewer/Observer (+Admin for the Owner) with a description of the chosen role;
+    the members table offers all four roles. `/projects` groups projects by team
+    (`groupProjectsByTeam`) with the caller's role and an "Open team" link per team.
+- Changed files: API `Projects/ProjectAccess.cs`, `Projects/ProjectEndpoints.cs`,
+  `Requirements/{RequirementEndpoints,ReviewEndpoints,MilestoneEndpoints,FollowUpEndpoints}.cs`,
+  `GitHub/{EvidenceEndpoints,EvidenceChangeEndpoints}.cs`, `Documents/DocumentEndpoints.cs`,
+  `Teams/{InvitationEndpoints,TeamManagementEndpoints}.cs`, `Data/{SpecThreadDbContext,TeamModels}.cs`,
+  migration + snapshot; web `lib/{team-types,projects,team-projects,invitation-types,invitations,email,project-data}.ts`,
+  `components/review-panel.tsx`, `components/teams/{invitation-controls,team-members-table}.tsx`,
+  `app/projects/page.tsx`, project requirement/document pages, team settings/archive/members/
+  projects/invitations pages, invite preview, `/projects/new`, `app-shell.css`; tests new
+  `tests/schema/team-roles.spec.ts`, updated `tests/schema/reviews.spec.ts`,
+  `tests/e2e/{reviews,projects,project-failures,team-invitations,team-management}.spec.ts`,
+  `tests/e2e/fixtures.ts`, `tests/api/project-data.spec.ts`; docs DECISIONS (ADR-058, note on
+  ADR-038), PROJECT, API, ARCHITECTURE, DATABASE, TESTING, this file.
+- Decisions and assumptions (confirm with the team): Reviewers and Observers can download
+  documents and see project members (both are reads). Admins may invite Reviewers and
+  Observers. Roles are per team, not per project. This is ADR-058; the stashed Kanban
+  work also used an ADR number main has taken (057) and needs renumbering to 059 or later.
+- Checks (2026-11-17, local): `npm test` 417 passed (api, schema, chromium);
+  `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  `npm run build:api` (0 warnings), and `git diff --check` passed. The new migration
+  raised the hard-coded `__EFMigrationsHistory` counts in `tests/schema/evidence.spec.ts`,
+  `github-repository.spec.ts`, and `reviews.spec.ts` by one. A stray test API left
+  running on port 5116 since 2026-11-06 made `teams-api.spec.ts` fail with 401/500 until
+  it was stopped; if a schema spec fails on its first request, check for leftover
+  `dotnet ... SpecThread.Api.dll` listeners on 51xx ports. Not exercised: the real
+  GitHub and the shared Supabase database.
+- Known issues and risks: one person can now create and accept the same requirement, so
+  "Accepted" no longer implies a second reviewer. Rolling back the migration removes
+  Reviewer/Observer access. The shared database has not been migrated; apply
+  TeamReviewerObserverRoles before deploying this API.
+- Unrelated work: the uncommitted Kanban board work from `feature/kanban-board` is kept in
+  `git stash` as "feature/kanban-board WIP (stashed before teams-and-roles)"; restore it on
+  that branch with `git stash pop`.
+- Next step: team review of the ADR-058 assumptions above; commit, open a PR to `main`,
+  and apply the migration to the shared database before deploying.
+
+## Previous task: US-14, the team's Evidence complete rule (2026-11-04)
 
 - Branch: `feature/us-14-evidence-policy`, from `main` at `031dd88`, with `main` merged in at
   `fd89908` (PR #26 and #27). PR #28.

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { uploadDocument } from "@/app/projects/document-actions";
 import { DocumentUploadForm } from "@/components/document-upload-form";
 import { requireProject } from "@/lib/project-data";
+import { canEditProject } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Upload document" };
 
@@ -16,6 +17,8 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       </header>
       {project.archivedAt
         ? <p className="notice">This project is archived, so documents can&apos;t be added.</p>
+        : !canEditProject(project)
+        ? <p className="notice">Your role on this team can read this project but not change it.</p>
         : (
           <>
             <p className="document-intro">Everyone in {project.teamName} can open and download the documents in this project.</p>

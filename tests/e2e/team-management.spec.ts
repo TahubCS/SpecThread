@@ -1,7 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import type { Locator, Page } from "@playwright/test";
 import { createTestSession, expect, test } from "./fixtures";
+
+/** Clicks a button that submits a server action and waits for that action's response, so a reload cannot cut it off. */
+async function clickAndAwaitAction(page: Page, button: Locator) {
+  const response = page.waitForResponse(r => r.request().method() === "POST" && r.request().headers()["next-action"] !== undefined);
+  await button.click();
+  expect((await response).ok()).toBe(true);
+}
 
 test.describe("team membership and settings", () => {
   let owner: Awaited<ReturnType<typeof createTestSession>>;
@@ -30,13 +38,20 @@ test.describe("team membership and settings", () => {
     const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "Regular member", exact: true }) });
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await row.getByLabel("Role for Regular member").selectOption("admin");
-    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await clickAndAwaitAction(page, row.getByRole("button", { name: "Save", exact: true }));
     await expect(row.getByLabel("Role for Regular member")).toHaveValue("admin");
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.reload();
     await expect(row.getByLabel("Role for Regular member")).toHaveValue("admin");
+    // ADR-058: the Owner can also make someone a Reviewer or an Observer.
+    await expect(row.getByLabel("Role for Regular member").locator("option")).toHaveText(["Admin", "Member", "Reviewer", "Observer"]);
+    await row.getByLabel("Role for Regular member").selectOption("reviewer");
+    await clickAndAwaitAction(page, row.getByRole("button", { name: "Save", exact: true }));
+    await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await page.reload();
+    await expect(row.getByLabel("Role for Regular member")).toHaveValue("reviewer");
     await row.getByLabel("Role for Regular member").selectOption("member");
-    await row.getByRole("button", { name: "Save", exact: true }).click();
+    await clickAndAwaitAction(page, row.getByRole("button", { name: "Save", exact: true }));
     await expect(row.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.screenshot({ path: testInfo.outputPath("team-members-desktop.png"), fullPage: true });
     const trigger = page.getByRole("button", { name: "Remove Team admin", exact: true });

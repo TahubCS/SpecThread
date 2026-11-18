@@ -1261,7 +1261,7 @@ namespace SpecThread.Api.Migrations
 
                             t.HasCheckConstraint("ck_team_invitations_resolution", "accepted_at IS NULL OR revoked_at IS NULL");
 
-                            t.HasCheckConstraint("ck_team_invitations_role", "role IN ('admin', 'member')");
+                            t.HasCheckConstraint("ck_team_invitations_role", "role IN ('admin', 'member', 'reviewer', 'observer')");
                         });
                 });
 
@@ -1306,7 +1306,7 @@ namespace SpecThread.Api.Migrations
 
                     b.ToTable("team_members", "public", t =>
                         {
-                            t.HasCheckConstraint("ck_team_members_role", "role IN ('admin', 'member')");
+                            t.HasCheckConstraint("ck_team_members_role", "role IN ('admin', 'member', 'reviewer', 'observer')");
                         });
                 });
 

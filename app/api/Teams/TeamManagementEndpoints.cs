@@ -60,7 +60,7 @@ internal static class TeamManagementEndpoints
         if (target is null) return TypedResults.NotFound();
         if (userId == team.OwnerUserId) return OwnerStays();
         var errors = new InputErrors();
-        if (request.Role is not ("admin" or "member")) errors.Add("role", "Choose Admin or Member.");
+        if (request.Role is null || !TeamRoles.Assignable.Contains(request.Role)) errors.Add("role", "Choose Admin, Member, Reviewer, or Observer.");
         if (errors.Any) return TypedResults.ValidationProblem(errors.ToDictionary());
         target.Role = request.Role!;
         await db.SaveChangesAsync(cancel);
@@ -82,8 +82,8 @@ internal static class TeamManagementEndpoints
         if (userId != callerId && team.OwnerUserId != callerId)
         {
             var caller = await db.TeamMembers.SingleAsync(m => m.TeamId == teamId && m.UserId == callerId, cancel);
-            if (caller.Role != "admin" || target.Role != "member")
-                return TypedResults.Problem("Admins can remove regular Members; only the Owner can remove an Admin.", statusCode: StatusCodes.Status403Forbidden);
+            if (caller.Role != TeamRoles.Admin || target.Role == TeamRoles.Admin)
+                return TypedResults.Problem("Admins can remove Members, Reviewers, and Observers; only the Owner can remove an Admin.", statusCode: StatusCodes.Status403Forbidden);
         }
         db.TeamMembers.Remove(target);
         await db.SaveChangesAsync(cancel);

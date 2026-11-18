@@ -12,13 +12,13 @@ const choiceText = { accepted: "Accept", rejected: "Reject", more_evidence: "Req
 /**
  * Renders the decisions recorded on a requirement: the current one with who made it, their note,
  * and what they reviewed; a notice when the requirement or its evidence has changed since; and
- * earlier decisions on demand. `canReview` is "yes" for a member who may decide, "author" for the
- * person who wrote the requirement, and "read-only" when nothing can change. `soloTeam` is set when the
- * project's team has one member, so the author learns that a review needs a teammate first (ADR-038).
+ * earlier decisions on demand. `canReview` is true when the viewer may record a decision: the
+ * requirement and project are active and their team role is not Observer. The requirement's author
+ * may decide too (ADR-058).
  * Each decision names the acceptance-criteria version it was made against and links to it, and a
  * decision on earlier criteria than `criteriaVersion` says that the requirement needs review (ADR-051).
  */
-export function ReviewPanel({ projectId, requirementId, version, criteriaVersion, reviews, evidenceIds, people, canReview, soloTeam = null }: {
+export function ReviewPanel({ projectId, requirementId, version, criteriaVersion, reviews, evidenceIds, people, canReview }: {
   projectId: string;
   requirementId: string;
   version: number;
@@ -28,8 +28,7 @@ export function ReviewPanel({ projectId, requirementId, version, criteriaVersion
   evidenceIds: string[];
   /** Names of the project's members by user ID. */
   people: Record<string, string>;
-  canReview: "yes" | "author" | "read-only";
-  soloTeam?: { name: string; invitations: string } | null;
+  canReview: boolean;
 }) {
   const [state, action, pending] = useActionState(recordReview.bind(null, projectId, requirementId, version), { errors: null, recorded: 0 });
   const [current, ...earlier] = reviews;
@@ -88,13 +87,7 @@ export function ReviewPanel({ projectId, requirementId, version, criteriaVersion
           </ol>
         </details>
       )}
-      {canReview === "author" && (
-        <p className="notice">
-          You created this requirement, so another member has to review it.
-          {soloTeam && <> You are the only member of {soloTeam.name}. <Link href={soloTeam.invitations}>Invite a teammate</Link> to review it.</>}
-        </p>
-      )}
-      {canReview === "yes" && <ReviewForm key={state.recorded} action={action} pending={pending} state={state} />}
+      {canReview && <ReviewForm key={state.recorded} action={action} pending={pending} state={state} />}
     </>
   );
 }

@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
-  fieldError, formatDate, isUuid, parseMembers, parseMilestones, parseProject, parseProjects, parseRequirementSummaries, projectNameError,
-  requirementCounts,
+  canEditProject, canManageProject, canReviewProject, fieldError, formatDate, groupProjectsByTeam, isUuid, parseMembers, parseMilestones,
+  parseProject, parseProjects, parseRequirementSummaries, projectNameError, requirementCounts,
 } from "../../app/web/src/lib/projects";
+import { invitableRoles } from "../../app/web/src/lib/team-types";
 import {
   criteriaChanged, documentChoices, milestoneError, moveItem, parseRequirement, readMilestoneInput, readRequirementInput, requirementErrors, requirementProblemErrors,
 } from "../../app/web/src/lib/requirements";
@@ -31,6 +32,37 @@ test("project responses are accepted only in the documented shape", () => {
   }
   expect(() => parseProjects({ items: [] })).toThrow("unexpected project list");
   expect(() => parseProjects([project, {}])).toThrow("unexpected project");
+});
+
+test("Reviewer and Observer projects parse, and each role allows only its own actions (ADR-058)", () => {
+  for (const teamRole of ["reviewer", "observer"]) expect(parseProject({ ...project, teamRole })).toMatchObject({ teamRole });
+  const allowed = (teamRole: string) => {
+    const p = parseProject({ ...project, teamRole });
+    return [canManageProject(p), canEditProject(p), canReviewProject(p)];
+  };
+  expect(allowed("owner")).toEqual([true, true, true]);
+  expect(allowed("admin")).toEqual([true, true, true]);
+  expect(allowed("member")).toEqual([false, true, true]);
+  expect(allowed("reviewer")).toEqual([false, false, true]);
+  expect(allowed("observer")).toEqual([false, false, false]);
+  expect(invitableRoles("owner")).toEqual(["admin", "member", "reviewer", "observer"]);
+  expect(invitableRoles("admin")).toEqual(["member", "reviewer", "observer"]);
+  for (const role of ["member", "reviewer", "observer"] as const) expect(invitableRoles(role)).toEqual([]);
+});
+
+test("the combined projects view groups projects by team name and keeps each team's order", () => {
+  const at = (id: string, name: string, teamId: string, teamName: string, teamRole = "member") =>
+    parseProject({ ...project, id, name, teamId, teamName, teamRole });
+  const groups = groupProjectsByTeam([
+    at("p1", "Accounts", "t2", "Payments"), at("p2", "Billing", "t1", "Course", "observer"),
+    at("p3", "Cards", "t2", "Payments"), at("p4", "Docs", "t3", "Course", "reviewer"),
+  ]);
+  expect(groups.map(g => [g.teamId, g.teamName, g.teamRole, g.projects.map(p => p.name)])).toEqual([
+    ["t1", "Course", "observer", ["Billing"]],
+    ["t3", "Course", "reviewer", ["Docs"]],
+    ["t2", "Payments", "member", ["Accounts", "Cards"]],
+  ]);
+  expect(groupProjectsByTeam([])).toEqual([]);
 });
 
 test("project names must be present and within the API limit", () => {

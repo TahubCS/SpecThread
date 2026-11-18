@@ -13,7 +13,7 @@ public sealed class TeamMember
 {
     public Guid TeamId { get; set; }
     public required string UserId { get; set; }
-    // Ownership comes from Team.OwnerUserId; other members are admins or members.
+    // Ownership comes from Team.OwnerUserId; other members are admins, members, reviewers, or observers (ADR-058).
     public string Role { get; set; } = "member";
     public DateTime JoinedAt { get; set; }
     public bool IsFavorite { get; set; }

@@ -1,8 +1,6 @@
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { apiFetch } from "./api";
-import { auth } from "./auth";
 import {
   isUuid, parseMembers, parseMilestones, parseProject, parseRequirementSummaries,
   type Project, type ProjectMember, type RequirementSummary,
@@ -63,12 +61,6 @@ export const listMembers = cache(async (projectId: string): Promise<ProjectMembe
   const body = isUuid(projectId) ? await read(`/projects/${projectId}/members`) : null;
   if (body === null) notFound();
   return parseMembers(body);
-});
-
-/** Returns the signed-in user's ID, or null when there is no session. */
-export const viewerId = cache(async (): Promise<string | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
-  return session?.user.id ?? null;
 });
 
 /**

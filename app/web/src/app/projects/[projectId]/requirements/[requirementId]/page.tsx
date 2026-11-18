@@ -10,9 +10,9 @@ import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement, viewerId,
+  listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews, requireProject, requireRequirement,
 } from "@/lib/project-data";
-import { formatDate } from "@/lib/projects";
+import { canEditProject, canReviewProject, formatDate } from "@/lib/projects";
 
 type Props = PageProps<"/projects/[projectId]/requirements/[requirementId]">;
 
@@ -28,21 +28,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
  * Shows who created a requirement and when, its description, ordered acceptance criteria and their
  * version, milestone, linked documents, follow-up links, evidence and its Evidence complete status,
  * and review decisions, with
- * edit and archive while it can change.
+ * edit and archive while it can change and the viewer's team role allows it (ADR-058).
  */
 export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, viewer, followUps, requirements, milestones, evidenceHistory, suggestions] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, followUps, requirements, milestones, evidenceHistory, suggestions] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
-    getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId), viewerId(),
+    getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId),
     listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
     listEvidenceSuggestions(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
-  const editable = !project.archivedAt && !requirement.archivedAt;
+  // Reviewers and Observers read everything; only Owners, Admins, and Members change it (ADR-058).
+  const changeable = !project.archivedAt && !requirement.archivedAt;
+  const editable = changeable && canEditProject(project);
   const base = `/projects/${project.id}/requirements`;
   // Requirements this one could follow up: not itself, and not already linked either way.
   const linked = new Set([requirement.id, ...[...followUps.followUpOf, ...followUps.followedUpBy].map(link => link.requirementId)]);
@@ -149,11 +151,10 @@ export default async function Page({ params }: Props) {
         <ReviewPanel projectId={project.id} requirementId={requirement.id} version={requirement.version}
           criteriaVersion={requirement.criteriaVersion} reviews={reviews}
           evidenceIds={evidence.map(link => link.id)} people={people}
-          canReview={!editable ? "read-only" : viewer === requirement.createdBy ? "author" : "yes"}
-          soloTeam={members.length === 1 ? { name: project.teamName, invitations: `/teams/${project.teamId}/invitations` } : null} />
+          canReview={changeable && canReviewProject(project)} />
       </section>
       {editable && <RequirementArchive projectId={project.id} requirementId={requirement.id} />}
-      {requirement.archivedAt && !project.archivedAt && <RequirementRestore projectId={project.id} requirementId={requirement.id} />}
+      {requirement.archivedAt && !project.archivedAt && canEditProject(project) && <RequirementRestore projectId={project.id} requirementId={requirement.id} />}
     </article>
   );
 }

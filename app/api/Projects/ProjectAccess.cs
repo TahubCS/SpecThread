@@ -19,7 +19,34 @@ internal static class ProjectAccess
 
     public static Task<bool> CanManageTeam(this SpecThreadDbContext db, Guid teamId, string userId, CancellationToken cancel) =>
         db.Teams.AnyAsync(t => t.Id == teamId && db.TeamMembers.Any(m => m.TeamId == t.Id && m.UserId == userId &&
-            (t.OwnerUserId == userId || m.Role == "admin")), cancel);
+            (t.OwnerUserId == userId || m.Role == TeamRoles.Admin)), cancel);
+
+    // The caller's role in a team: "owner" from the team's owner ID, otherwise the membership role,
+    // or null for a non-member. Call after locking the team when the answer guards a write.
+    public static Task<string?> CallerRoleAsync(this SpecThreadDbContext db, Guid teamId, string userId, CancellationToken cancel) =>
+        db.TeamMembers.Where(m => m.TeamId == teamId && m.UserId == userId)
+            .Select(m => db.Teams.Any(t => t.Id == teamId && t.OwnerUserId == userId) ? TeamRoles.Owner : m.Role)
+            .SingleOrDefaultAsync(cancel);
+}
+
+// What each team role may do (ADR-058). Every member reads the team's projects, requirements,
+// evidence, and decisions. Owners and Admins also manage the team and its projects.
+internal static class TeamRoles
+{
+    public const string Owner = "owner";
+    public const string Admin = "admin";
+    public const string Member = "member";
+    public const string Reviewer = "reviewer";
+    public const string Observer = "observer";
+
+    // Roles a membership or invitation can hold; Owner is derived from the team's owner ID.
+    public static readonly string[] Assignable = [Admin, Member, Reviewer, Observer];
+
+    // Creating, editing, archiving, and restoring requirements and documents, and changing links.
+    public static bool CanEdit(string? role) => role is Owner or Admin or Member;
+
+    // Recording a review decision. Reviewers decide without editing; Observers only read.
+    public static bool CanReview(string? role) => role is Owner or Admin or Member or Reviewer;
 }
 
 // Boundary validation for user-supplied text. Limits are recorded in ADR-024.

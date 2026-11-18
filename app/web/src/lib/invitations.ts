@@ -2,11 +2,12 @@ import "server-only";
 import { notFound, redirect } from "next/navigation";
 import { apiBaseUrl } from "./api-config";
 import { readWithTeam } from "./teams";
+import { canManageTeam } from "./team-types";
 import { invitationTokenPattern, parseInvitationPreview, parseInvitations } from "./invitation-types";
 
 export async function getTeamInvitations(teamId: string) {
   const { team, response } = await readWithTeam(teamId, `/teams/${teamId}/invitations`);
-  if (team.role === "member") notFound();
+  if (!canManageTeam(team.role)) notFound();
   if (response.status === 401) redirect("/login");
   if (response.status === 403 || response.status === 404) notFound();
   if (!response.ok) throw new Error("Invitations could not be loaded.");

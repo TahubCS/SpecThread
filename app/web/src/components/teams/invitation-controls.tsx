@@ -4,6 +4,7 @@ import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createInvitation, resendInvitation, revokeInvitation, type InvitationActionState } from "@/app/teams/[teamId]/invitation-actions";
 import type { Invitation } from "@/lib/invitation-types";
+import { roleDescriptions, teamRoleLabels } from "@/lib/team-types";
 import { TeamConfirmation } from "./team-confirmation";
 import styles from "./teams.module.css";
 
@@ -46,15 +47,26 @@ function InvitePeopleDialog({ teamId, owner, close }: { teamId: string; owner: b
         <label className={styles.field}>Email<input ref={email} name="email" type="email" required maxLength={254} autoComplete="email" defaultValue={state.values?.email ?? ""}
           disabled={pending} aria-invalid={Boolean(state.errors.email)} aria-describedby={state.errors.email ? `${heading}-email` : undefined} />
           {state.errors.email && <span id={`${heading}-email`} className={styles.error}>{state.errors.email.join(" ")}</span>}</label>
-        <label className={styles.field}>Role<select name="role" defaultValue={state.values?.role ?? "member"} disabled={pending} aria-invalid={Boolean(state.errors.role)}>
-          <option value="member">Member</option>{owner && <option value="admin">Admin</option>}</select>
-          {state.errors.role && <span className={styles.error}>{state.errors.role.join(" ")}</span>}</label>
+        <RoleField owner={owner} pending={pending} initialRole={state.values?.role} errors={state.errors.role} />
         <p className={styles.hint}>They’ll join after accepting with this verified email. The link expires in 7 days.</p>
         {state.message && <p role="alert" className={styles.error}>{state.message}</p>}
         <div className={styles.actions}><button type="button" className={styles.secondary} disabled={pending} onClick={() => dialog.current?.close()}>Cancel</button>
           <button type="submit" className={styles.primary} disabled={pending}>{pending ? "Sending…" : "Send invitation"}</button></div>
       </form>}
   </dialog>;
+}
+
+// Admins invite every role except Admin; the Owner invites any (ADR-058). The hint says what the chosen role can do.
+function RoleField({ owner, pending, initialRole, errors }: { owner: boolean; pending: boolean; initialRole?: string; errors?: string[] }) {
+  const roles = owner ? (["member", "reviewer", "observer", "admin"] as const) : (["member", "reviewer", "observer"] as const);
+  const [role, setRole] = useState<string>(initialRole && (roles as readonly string[]).includes(initialRole) ? initialRole : "member");
+  const hint = useId();
+  // The description sits outside the label so the select's accessible name stays "Role".
+  return <><label className={styles.field}>Role<select name="role" value={role} onChange={event => setRole(event.target.value)} disabled={pending}
+    aria-invalid={Boolean(errors)} aria-describedby={hint}>
+    {roles.map(value => <option key={value} value={value}>{teamRoleLabels[value]}</option>)}</select>
+    {errors && <span className={styles.error}>{errors.join(" ")}</span>}</label>
+    <p id={hint} className={styles.hint}>{roleDescriptions[role as keyof typeof roleDescriptions]}</p></>;
 }
 
 export function InvitationRowActions({ invitation, owner }: { invitation: Invitation; owner: boolean }) {

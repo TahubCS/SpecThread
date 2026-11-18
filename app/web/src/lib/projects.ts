@@ -1,4 +1,5 @@
 import { isAccepted, isVersion, parseReviewSummary, type ReviewSummary } from "./reviews";
+import { canEdit, canManageTeam, canReview, isTeamRole, type TeamRole } from "./team-types";
 
 /**
  * A project as returned by the SpecThread API (docs/API.md). It belongs to a team; `teamRole`
@@ -6,12 +7,39 @@ import { isAccepted, isVersion, parseReviewSummary, type ReviewSummary } from ".
  */
 export type Project = {
   id: string; name: string; ownerUserId: string; createdAt: string; archivedAt: string | null;
-  teamId: string; teamName: string; teamRole: "owner" | "admin" | "member";
+  teamId: string; teamName: string; teamRole: TeamRole;
 };
 
 /** Reports whether the signed-in user may rename or archive the project or change its repository: the team's Owner and Admins. */
 export function canManageProject(project: Pick<Project, "teamRole">): boolean {
-  return project.teamRole !== "member";
+  return canManageTeam(project.teamRole);
+}
+
+/** Reports whether the signed-in user may create, edit, or archive the project's requirements and documents and change links (ADR-058). */
+export function canEditProject(project: Pick<Project, "teamRole">): boolean {
+  return canEdit(project.teamRole);
+}
+
+/** Reports whether the signed-in user may record review decisions in the project: everyone but Observers (ADR-058). */
+export function canReviewProject(project: Pick<Project, "teamRole">): boolean {
+  return canReview(project.teamRole);
+}
+
+/** One team's projects in the combined projects view. */
+export type ProjectGroup = { teamId: string; teamName: string; teamRole: TeamRole; projects: Project[] };
+
+/**
+ * Groups projects by team for the combined projects view: teams by name (then ID, so teams with
+ * the same name stay apart), each keeping its projects in the order given.
+ */
+export function groupProjectsByTeam(projects: Project[]): ProjectGroup[] {
+  const groups = new Map<string, ProjectGroup>();
+  for (const project of projects) {
+    const group = groups.get(project.teamId);
+    if (group) group.projects.push(project);
+    else groups.set(project.teamId, { teamId: project.teamId, teamName: project.teamName, teamRole: project.teamRole, projects: [project] });
+  }
+  return [...groups.values()].sort((a, b) => a.teamName.localeCompare(b.teamName) || a.teamId.localeCompare(b.teamId));
 }
 
 export const PROJECT_NAME_MAX = 200;
@@ -22,7 +50,7 @@ export function parseProject(value: unknown): Project {
   if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.name !== "string" ||
       typeof item.ownerUserId !== "string" || typeof item.createdAt !== "string" || Number.isNaN(Date.parse(item.createdAt)) ||
       (item.archivedAt !== null && typeof item.archivedAt !== "string") || typeof item.teamId !== "string" ||
-      typeof item.teamName !== "string" || (item.teamRole !== "owner" && item.teamRole !== "admin" && item.teamRole !== "member")) {
+      typeof item.teamName !== "string" || !isTeamRole(item.teamRole)) {
     throw new Error("The API returned an unexpected project.");
   }
   return {

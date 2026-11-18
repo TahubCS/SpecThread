@@ -3,6 +3,7 @@ import { createRequirement } from "@/app/projects/requirement-actions";
 import { RequirementForm } from "@/components/requirement-form";
 import { listDocuments, listMilestones, requireProject } from "@/lib/project-data";
 import { documentChoices } from "@/lib/requirements";
+import { canEditProject } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "New requirement" };
 
@@ -19,6 +20,8 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       </header>
       {project.archivedAt
         ? <p className="notice">This project is archived, so requirements can&apos;t be added.</p>
+        : !canEditProject(project)
+        ? <p className="notice">Your role on this team can read this project but not change it.</p>
         : <RequirementForm action={createRequirement.bind(null, project.id)} initial={{ title: "", description: "", criteria: [], documentIds: [], milestone: "" }}
             milestones={milestones}
             documents={documentChoices(documents, [])} documentsHref={`/projects/${project.id}/documents`}

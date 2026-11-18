@@ -1,9 +1,11 @@
+import { isAssignableRole, type AssignableRole } from "./team-types";
+
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired" | "unavailable";
 export type Invitation = {
-  id: string; teamId: string; email: string; role: "admin" | "member"; inviterName: string;
+  id: string; teamId: string; email: string; role: AssignableRole; inviterName: string;
   createdAt: string; issuedAt: string; expiresAt: string; status: InvitationStatus;
 };
-export type InvitationPreview = { teamId: string; teamName: string; inviterName: string; email: string; role: "admin" | "member"; expiresAt: string; status: InvitationStatus };
+export type InvitationPreview = { teamId: string; teamName: string; inviterName: string; email: string; role: AssignableRole; expiresAt: string; status: InvitationStatus };
 export type IssuedInvitation = { invitation: Invitation; token: string; teamName: string };
 const uuid = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 export const invitationTokenPattern = /^[\da-f]{64}$/i;
@@ -14,7 +16,7 @@ function object(value: unknown): Record<string, unknown> {
 }
 function shared(value: Record<string, unknown>) {
   if (typeof value.teamId !== "string" || !uuid.test(value.teamId) || typeof value.email !== "string" || !value.email ||
-      typeof value.inviterName !== "string" || typeof value.role !== "string" || !["admin", "member"].includes(value.role) ||
+      typeof value.inviterName !== "string" || !isAssignableRole(value.role) ||
       typeof value.expiresAt !== "string" || !Number.isFinite(Date.parse(value.expiresAt)) ||
       typeof value.status !== "string" || !["pending", "accepted", "revoked", "expired", "unavailable"].includes(value.status))
     throw new Error("Invalid invitation response.");

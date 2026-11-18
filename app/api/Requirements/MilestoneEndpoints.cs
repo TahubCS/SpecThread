@@ -42,6 +42,7 @@ internal static class MilestoneEndpoints
         await using var transaction = await db.Database.BeginTransactionAsync(cancel);
         var found = await RequirementEndpoints.LockForMember(db, user.CallerId(), requirementId, cancel);
         if (found is null) return TypedResults.NotFound();
+        if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.Archived) return ProjectEndpoints.Archived();
         found.Requirement.Milestone = milestone;
         try

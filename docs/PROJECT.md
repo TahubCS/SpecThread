@@ -21,18 +21,22 @@ Developers and reviewers who need direct links to technical evidence.
 Project ownership
 
 A user may belong to multiple teams, and every project belongs to one team.
-The combined projects view groups accessible projects by team; a team's
-projects view shows only that team's projects. Every team member can access
-its projects and work on requirements. Only the team's Owner and Admins create
-projects or manage their names, settings, and archive/restore actions (ADR-040).
+The combined projects view groups accessible projects by team, and each team
+heading opens that team's projects view, which shows only that team's projects.
+Every team member can read its projects, requirements, evidence, and decisions.
+Owners, Admins, and Members work on requirements and links. A Reviewer, such as a
+client signing off a milestone, also records review decisions but cannot edit
+requirements or links. An Observer, such as an instructor, only reads (ADR-058).
+Only the team's Owner and Admins create projects or manage their names, settings,
+and archive/restore actions (ADR-040).
 
 After the first verified sign-in, required onboarding asks for the initial team's
 name and optional description. The creator becomes its Owner. Completion is saved
 on the server; leaving the browser or visiting another app page resumes incomplete
 onboarding. Verified users arriving through an invitation can instead accept it,
 join the invited team, and complete onboarding without naming a separate team.
-Every new membership requires acceptance; Owners invite Admins/Members, and Admins
-invite Members. Invitations use email plus copyable links and expire after seven days.
+Every new membership requires acceptance; Owners invite Admins, Members, Reviewers,
+and Observers, and Admins invite every role except Admin. Invitations use email plus copyable links and expire after seven days.
 
 Core workflow
 
