@@ -62,6 +62,12 @@ async function createProject(request: APIRequestContext, name = "Checkout") {
   return await response.json() as { id: string; teamId: string };
 }
 
+test("API readiness answers ok while the database is reachable, without a token", async ({ request }) => {
+  const response = await request.get(`${api.baseURL}/health/ready`);
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ status: "ok" });
+});
+
 test("owners create, list, rename, and archive projects", async ({ request }) => {
   const owner = await as(request, "owner");
   const team = await createTeam(request, "Billing team");

@@ -34,12 +34,16 @@ internal static class ObservabilitySetup
             .ConfigureResource(resource => resource
                 // Render sets RENDER_GIT_COMMIT to the deployed commit.
                 .AddService("specthread-api", serviceVersion: builder.Configuration["RENDER_GIT_COMMIT"])
-                .AddAttributes([new("deployment.environment.name", builder.Environment.EnvironmentName.ToLowerInvariant())]))
+                .AddAttributes([new("deployment.environment.name", builder.Environment.EnvironmentName.ToLowerInvariant())])
+                // Read last so OTEL_RESOURCE_ATTRIBUTES wins: a load-test run sets
+                // deployment.environment.name=loadtest without changing the ASP.NET environment.
+                .AddEnvironmentVariableDetector())
             .WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation(options =>
                 {
-                    // Render's health checks would outnumber real requests; metrics still count them.
-                    options.Filter = context => context.Request.Path != "/health";
+                    // Render's health checks and the uptime checks (/health/ready) would outnumber
+                    // real requests; metrics still count them. Their SQL spans are dropped with them.
+                    options.Filter = context => !context.Request.Path.StartsWithSegments("/health");
                     options.EnrichWithHttpResponse = RedactAndIdentify;
                 })
                 .AddHttpClientInstrumentation()

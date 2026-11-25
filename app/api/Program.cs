@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.JsonWebTokens;
 using SpecThread.Api.Auth;
@@ -35,7 +36,9 @@ builder.Services.AddDbContext<SpecThreadDbContext>(options =>
         connectionString = new Npgsql.NpgsqlConnectionStringBuilder(connectionString) { MaxPoolSize = 5 }.ConnectionString;
     }
 
-    options.UseNpgsql(connectionString);
+    // Telemetry labels the pool and SQL spans with this name. By default Npgsql uses the
+    // connection string, which holds the database host and username.
+    options.UseNpgsql(connectionString, npgsql => npgsql.ConfigureDataSource(dataSource => dataSource.Name = "specthread"));
 });
 
 builder.Services.AddHttpClient<IGitHubClient, GitHubClient>(GitHubClient.Configure);
@@ -53,6 +56,12 @@ if (app.Environment.IsDevelopment())
 // Liveness only: starting the API never connects to or changes the database.
 app.MapGet("/health", () => TypedResults.Ok(new HealthResponse("ok")))
     .WithName("GetHealth")
+    .AllowAnonymous();
+
+// Readiness for uptime checks: runs one query, so it fails while the database is unreachable.
+// Render keeps checking /health, so a database outage never restarts a healthy API.
+app.MapGet("/health/ready", CheckDatabase)
+    .WithName("GetReadiness")
     .AllowAnonymous();
 
 // Requires a valid Better Auth JWT; the fallback policy guarantees a subject.
@@ -77,6 +86,26 @@ app.MapTeamManagementEndpoints();
 app.MapInvitationEndpoints();
 
 app.Run();
+
+// Answers 503 with no detail, so the reason a check failed never reaches the caller.
+static async Task<Results<Ok<HealthResponse>, JsonHttpResult<HealthResponse>>> CheckDatabase(HttpContext context, ILoggerFactory loggers)
+{
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+    timeout.CancelAfter(TimeSpan.FromSeconds(5));
+    try
+    {
+        // Resolved here, not injected, because a missing connection string throws on resolve.
+        var database = context.RequestServices.GetRequiredService<SpecThreadDbContext>();
+        await database.Database.ExecuteSqlAsync($"SELECT 1", timeout.Token);
+        return TypedResults.Ok(new HealthResponse("ok"));
+    }
+    catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+    {
+        // The type only: Npgsql messages can name the database host.
+        loggers.CreateLogger("SpecThread.Api.Health").LogWarning("Database readiness check failed: {ExceptionType}", exception.GetType().Name);
+        return TypedResults.Json(new HealthResponse("unavailable"), statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+}
 
 internal sealed record HealthResponse(string Status);
 

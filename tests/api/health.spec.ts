@@ -6,6 +6,12 @@ test("API liveness works without database credentials", async ({ request }) => {
   expect(await response.json()).toEqual({ status: "ok" });
 });
 
+test("API readiness answers 503 with no detail when the database cannot be reached", async ({ request }) => {
+  const response = await request.get("/health/ready");
+  expect(response.status()).toBe(503);
+  expect(await response.json()).toEqual({ status: "unavailable" });
+});
+
 test("OpenAPI describes the health endpoint in development", async ({ request }) => {
   const response = await request.get("/openapi/v1.json");
   expect(response.status()).toBe(200);
