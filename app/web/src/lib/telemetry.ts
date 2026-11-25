@@ -1,4 +1,5 @@
-import type { AttributeValue, Attributes } from "@opentelemetry/api";
+import { createHmac } from "node:crypto";
+import type { AttributeValue, Attributes, TextMapGetter } from "@opentelemetry/api";
 import { BatchSpanProcessor, type ReadableSpan, type SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { OTLPHttpProtoTraceExporter, registerOTel } from "@vercel/otel";
 import { apiBaseUrl } from "./api-config";
@@ -8,16 +9,17 @@ import { apiBaseUrl } from "./api-config";
  * src/instrumentation.ts only when OTEL_EXPORTER_OTLP_ENDPOINT is set. Every span passes
  * through `redactSpan` before it leaves the process, so no URL path or query is ever sent.
  */
-export function startTelemetry(endpoint: string, headers: string | undefined) {
+export function startTelemetry(endpoint: string, headers: string | undefined, ipHashKey: string | undefined) {
   const exporter = new OTLPHttpProtoTraceExporter({ url: `${endpoint.replace(/\/+$/, "")}/v1/traces`, headers: parseHeaders(headers) });
   registerOTel({
     serviceName: "specthread-web",
     attributes: { "service.version": process.env.VERCEL_GIT_COMMIT_SHA },
     // The trace continues into the SpecThread API only; other services never receive its IDs.
     instrumentationConfig: { fetch: { propagateContextUrls: apiOrigin() } },
-    // The visitor's IP address, which Vercel sets and visitors cannot override. @vercel/otel
-    // reads headers only on Vercel, so a header sent to a local server is never recorded.
-    attributesFromHeaders: { "client.address": "x-real-ip" },
+    // A keyed hash of the visitor's IP address (ADR-060), from Vercel's x-real-ip, which visitors
+    // cannot override. @vercel/otel reads headers only on Vercel, so a header sent to a local
+    // server is never recorded.
+    attributesFromHeaders: clientAddressFromHeaders(ipHashKey),
     // Replaces the default processors, which would also export unredacted spans.
     spanProcessors: [new BatchSpanProcessor(new RedactingExporter(exporter))],
   });
@@ -25,6 +27,29 @@ export function startTelemetry(endpoint: string, headers: string | undefined) {
 
 function apiOrigin(): string[] {
   try { return [`${apiBaseUrl(process.env.SPECTHREAD_API_URL).origin}/`]; } catch { return []; }
+}
+
+/**
+ * HMAC-SHA256 of an IP address with TELEMETRY_IP_HASH_KEY, as its first 16 hex characters. The
+ * same IP always gives the same value, so requests can still be grouped by source, but the
+ * address cannot be worked out without the key. docs/OBSERVABILITY.md shows how to hash an IP
+ * to look it up.
+ */
+export function hashIp(ip: string, key: string) {
+  return createHmac("sha256", key).update(ip.trim()).digest("hex").slice(0, 16);
+}
+
+/**
+ * Sets `client.address` on the root span to the hashed IP, so the raw address never enters a
+ * span. Without a key no IP is recorded at all.
+ */
+export function clientAddressFromHeaders(key: string | undefined) {
+  const secret = key?.trim();
+  return <Carrier>(headers: Carrier, getter: TextMapGetter<Carrier>) => {
+    const value = getter.get(headers, "x-real-ip");
+    const ip = (Array.isArray(value) ? value[0] : value)?.trim();
+    return secret && ip ? { "client.address": hashIp(ip, secret) } : undefined;
+  };
 }
 
 /** Reads OTEL_EXPORTER_OTLP_HEADERS: comma-separated `name=value` pairs, percent-encoded. */

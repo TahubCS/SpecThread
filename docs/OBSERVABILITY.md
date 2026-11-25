@@ -9,7 +9,7 @@ if it did not exist.
 
 | Service | Signals | Highlights |
 |---|---|---|
-| `specthread-web` (Next.js, `@vercel/otel`) | Traces | One root span per request, named by route pattern (`GET /invites/[token]`); spans for outgoing `fetch` calls; `client.address` on Vercel; `user.id` on the page-gate span when signed in |
+| `specthread-web` (Next.js, `@vercel/otel`) | Traces | One root span per request, named by route pattern (`GET /invites/[token]`); spans for outgoing `fetch` calls; `client.address` (a keyed hash of the IP) on Vercel; `user.id` on the page-gate span when signed in |
 | `specthread-api` (ASP.NET Core, OpenTelemetry .NET) | Traces, metrics, logs | One span per request named by route template (`GET /projects/{projectId:guid}`) with `user.id`; a span per SQL statement (Npgsql) and per outgoing HTTP call (GitHub); request duration, Npgsql pool, Kestrel, HttpClient, and runtime metrics; `ILogger` warnings and errors from the framework, and every SpecThread log, linked to the trace |
 
 The web app passes the trace to the API in the `traceparent` header, so one page load is one
@@ -38,10 +38,13 @@ makes them fail, fix the redaction; do not loosen the test.
   time series, and the free tier allows 10,000. They belong on traces only.
 
 The caller is identified by `user.id`, the Better Auth user ID from the JWT `sub` (API) or the
-session (web). IP addresses appear only as `client.address` on web spans, from Vercel's
-`x-real-ip` header, which `@vercel/otel` reads only when running on Vercel. Both are personal
-data: they are kept as long as the backend's retention (14 days on Grafana Cloud's free tier)
-and the privacy page says so.
+session (web). Raw IP addresses are never sent (ADR-060). The web root span's `client.address`
+holds the first 16 hex characters of an HMAC-SHA256 of Vercel's `x-real-ip` header, keyed with
+`TELEMETRY_IP_HASH_KEY`. The same IP always gives the same value, so requests can still be
+grouped by source, but the address can't be read back without the key. `@vercel/otel` reads
+headers only when running on Vercel, and with no key set no IP value is recorded. User IDs and
+hashed IPs are still personal data: they are kept as long as the backend's retention (14 days
+on Grafana Cloud's free tier) and the privacy page says so.
 
 ## Local viewer
 
@@ -79,6 +82,7 @@ and Render. Rollback: delete `OTEL_EXPORTER_OTLP_ENDPOINT` on both platforms and
 |---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | The stack's OTLP endpoint, for example `https://otlp-gateway-prod-us-west-0.grafana.net/otlp`. Empty or unset turns telemetry off. On the API, any other value that is not an HTTP(S) URL stops startup |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic%20<base64 of instanceId:token>`. **Secret.** The space is written `%20` |
+| `TELEMETRY_IP_HASH_KEY` | Vercel only. Random key for hashing IPs (`openssl rand -hex 32`). **Secret.** Unset means no IP value is recorded |
 
 Nothing else is needed: the protocol is always OTLP over HTTP with protobuf, and service names
 and environment come from the code and the platform.
@@ -97,14 +101,24 @@ In Grafana, **Explore > Tempo**, query type TraceQL:
 
 ```text
 { span.user.id = "<user id>" }                                   # everything one user did
-{ span.client.address = "203.0.113.7" }                          # everything from one IP
+{ span.client.address = "<hashed ip>" }                          # everything from one IP
 { resource.service.name = "specthread-api" && span.http.response.status_code >= 500 }
 ```
+
+To look up an IP, hash it with the production key (kept in the team password manager) and
+search for the result:
+
+```sh
+node -e "console.log(require('crypto').createHmac('sha256', process.argv[1]).update(process.argv[2]).digest('hex').slice(0, 16))" "<TELEMETRY_IP_HASH_KEY>" 203.0.113.7
+```
+
+Going the other way, from a hash to an IP, isn't possible. Changing the key changes every
+hash, so traces from before and after a key change don't match.
 
 Traces hold only the user ID. To see whose it is, someone with database access runs, in the
 Supabase SQL editor, `select id, email, name from "user" where id = '<user id>';` (or
 `where email = '...'` to go the other way). Exports of traces (Grafana's Download as JSON)
-contain IDs and IP addresses: keep them team-only.
+contain IDs and hashed IPs: keep them team-only.
 
 ## Adding code
 

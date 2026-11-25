@@ -1403,7 +1403,7 @@ rollback drops the table and loses the history, including every removal.
 
 ADR-055: OpenTelemetry to Grafana Cloud, off unless configured, with redaction by design
 
-Status: Accepted
+Status: Accepted (IP handling amended by ADR-060)
 
 Context: The team could not see how requests behave in production or under load: which
 queries a page runs, where time goes between Vercel, Render, and Supabase, what fails, and
@@ -1624,6 +1624,33 @@ inbox, no per-user opt-out, and no mention syntax; emails depend on email delive
 configured. A user who has authored comments or comment events cannot be hard-deleted
 (foreign keys restrict), as with other recorded actions. Rolling back the migration drops
 both tables and every comment.
+
+ADR-060: Visitor IPs on web traces are sent as a keyed hash
+
+Status: Accepted
+
+Context: ADR-055 put the visitor's IP address on the web root span as `client.address`, so
+the team could see what one source was doing when abuse is suspected. The team now plans to
+let AI agents read Grafana through a read-only service account, which would hand raw IPs to
+another processor and mean changing the privacy page. Jacob chose to hash the IP instead, with
+a key only so that IP ranges are no longer visible, and to leave `user.id` as it is.
+
+Decision: The web app sets `client.address` to the first 16 hex characters of
+HMAC-SHA256(`TELEMETRY_IP_HASH_KEY`, the `x-real-ip` header), computed in the
+`attributesFromHeaders` function passed to `@vercel/otel`
+(`clientAddressFromHeaders` in `app/web/src/lib/telemetry.ts`), so the raw address never
+enters a span. The key is a Sensitive Vercel variable, Production only, with a copy in the
+team password manager. With no key, no IP value is recorded. The same IP gives the same value
+for as long as the key is unchanged, so grouping by source and the "everything from one IP"
+query still work: docs/OBSERVABILITY.md has the command that hashes an IP to search for.
+A plain SHA-256 was rejected because every IPv4 address can be hashed in minutes and matched.
+A second hash of the /24 prefix, to keep IP ranges, was not added.
+
+Consequences: Grafana, exports, and agents see only hashed IPs. A hashed IP is still personal
+data, so the privacy page wording stays. A value can't be turned back into an IP, only checked
+against a known one. Rotating the key breaks matching across the change (at most 14 days of
+traces). A leaked key lets someone confirm a guessed IP, nothing more. Rollback: revert the
+code change; deleting the key alone stops IP values being recorded.
 
 ADR-NNN: Title
 

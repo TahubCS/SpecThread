@@ -375,8 +375,9 @@ currently require network access during the web build.
   template with the caller's `user.id`; an invitation token in the path and query, a token
   in an unmatched path, and the bearer token never sent; the error log linked by trace ID;
   request metrics by route; `/health` not traced; the credentials header arriving decoded;
-  an endpoint that is not an HTTP(S) URL stopping startup; and the web redaction and header
-  parsing functions directly. tests/e2e/telemetry.spec.ts: an invitation link is one trace
+  an endpoint that is not an HTTP(S) URL stopping startup; and the web redaction, header
+  parsing, and IP hashing functions directly (ADR-060: a fixed HMAC value, different keys and
+  IPs giving different values, and no IP value without a key or header). tests/e2e/telemetry.spec.ts: an invitation link is one trace
   across web and API without its token; a signed-in page carries the user's ID on web and API
   spans, never their email, name, or session token. Each test starts its own trace with a
   `traceparent` header. Not exercised: Vercel's `x-real-ip` (read only on Vercel), real

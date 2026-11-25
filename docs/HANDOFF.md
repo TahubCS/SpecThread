@@ -1,6 +1,32 @@
 # Shared handoff
 
-## Current task: Requirement comments (2026-11-18)
+## Current task: Hash visitor IPs on web traces (2026-11-25)
+
+- Branch: `feature/observability-ip-hashing`, from `main` at `c5e1509`.
+- Scope: the web root span's `client.address` becomes a keyed hash of the visitor's IP, so
+  raw IPs never reach Grafana or AI agents reading it, and the privacy page needn't change
+  (ADR-060). `user.id` is unchanged.
+- Completed: `hashIp` and `clientAddressFromHeaders` in `app/web/src/lib/telemetry.ts`
+  (HMAC-SHA256, first 16 hex characters; no key or no header means no value);
+  `src/instrumentation.ts` passes `TELEMETRY_IP_HASH_KEY`; a test in
+  tests/api/telemetry.spec.ts.
+- Changed files: `app/web/src/lib/telemetry.ts`, `app/web/src/instrumentation.ts`,
+  `tests/api/telemetry.spec.ts`; docs DECISIONS (ADR-060), OBSERVABILITY (what is recorded,
+  the new variable, the lookup command), DEPLOYMENT (the new variable, verification), TESTING,
+  this file.
+- Decisions and assumptions: keyed hash only, no /24 prefix hash (Jacob). Kept the attribute
+  name `client.address` so existing queries still work. Truncated to 16 hex characters
+  (64 bits), plenty at this traffic. The stashed Kanban work now needs ADR-061 or later.
+- Environment change: the platform owner adds `TELEMETRY_IP_HASH_KEY` on Vercel (Production,
+  Sensitive; `openssl rand -hex 32`), keeps a copy in the team password manager, and
+  redeploys. Until it is set, web traces carry no IP value at all.
+- Checks: see the PR.
+- Known issues and risks: hashing on Vercel isn't exercised by tests, because `@vercel/otel`
+  reads headers only there; DEPLOYMENT.md's verification covers it after deploy. Traces
+  already in Grafana (up to 14 days) still hold raw IPs until they expire.
+- Next step: review and PR; then set the variable on Vercel and run the DEPLOYMENT.md check.
+
+## Previous task: Requirement comments (2026-11-18)
 
 - Branch: `feature/requirement-comments`, from `main` at `0c727ed`. PR #30.
 - Scope: a comments area on the requirement page; any member, Observers and Reviewers
