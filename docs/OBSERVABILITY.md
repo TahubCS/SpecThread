@@ -15,10 +15,15 @@ if it did not exist.
 The web app passes the trace to the API in the `traceparent` header, so one page load is one
 trace: web route, API route, SQL. Only the API origin (`SPECTHREAD_API_URL`) receives that
 header. Every signal carries `service.version` (the deployed commit: `VERCEL_GIT_COMMIT_SHA`
-on Vercel, `RENDER_GIT_COMMIT` on Render) and `deployment.environment.name`.
+on Vercel, `RENDER_GIT_COMMIT` on Render) and `deployment.environment.name`. On the API that
+is the ASP.NET environment in lower case (`production`), unless `OTEL_RESOURCE_ATTRIBUTES`
+sets it: a load-test run uses `OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=loadtest`.
+The Npgsql pool metrics and SQL spans name the database `specthread`
+(`db.client.connection.pool.name`, `db.npgsql.data_source`), not the connection string.
 
-`/health` requests are counted in metrics but not traced, because Render checks it every few
-seconds. The web app sends traces only; its console output stays in Vercel's own logs, which
+`/health` and `/health/ready` (ADR-061) requests are counted in metrics but not traced,
+because Render checks `/health` every few seconds and the uptime checks call `/health/ready`.
+A failed readiness check logs a warning with the exception type only. The web app sends traces only; its console output stays in Vercel's own logs, which
 the Hobby plan keeps for about an hour.
 
 ## Never recorded

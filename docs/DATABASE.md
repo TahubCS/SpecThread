@@ -18,7 +18,8 @@ dotnet build app/api --configuration Release
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
 RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles. Startup never calls `EnsureCreated`, `Migrate`, or a database
-query. `/health` checks process liveness only. Resolving the context without
+query. `/health` checks process liveness only; `/health/ready` runs `SELECT 1` when
+called and answers 503 if the database can't be reached (ADR-061). Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
 and provider initialization with dummy credentials, without a database connection.
 

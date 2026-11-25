@@ -37,6 +37,8 @@ npm run dev:api   # API: http://127.0.0.1:5100
 ```
 
 `GET /health` returns `{ "status": "ok" }` without accessing the database.
+`GET /health/ready` runs one query and returns 503 `{ "status": "unavailable" }` when the
+database can't be reached.
 `GET /me` requires a Better Auth JWT. For local development, point the API at the
 local web app, e.g. `dotnet user-secrets set Auth:Issuer http://localhost:3000 --project app/api`
 (ADR-015).

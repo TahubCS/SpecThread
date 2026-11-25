@@ -374,7 +374,10 @@ currently require network access during the web build.
 - Telemetry (ADR-055). tests/api/telemetry.spec.ts (API on 5127): spans named by route
   template with the caller's `user.id`; an invitation token in the path and query, a token
   in an unmatched path, and the bearer token never sent; the error log linked by trace ID;
-  request metrics by route; `/health` not traced; the credentials header arriving decoded;
+  request metrics by route; `/health` and `/health/ready` not traced, the failed readiness
+  check's warning naming only the exception type; `deployment.environment.name` defaulting to
+  the ASP.NET environment and set by `OTEL_RESOURCE_ATTRIBUTES` (API on 5129); the Npgsql pool
+  metrics never carrying the connection string's username; the credentials header arriving decoded;
   an endpoint that is not an HTTP(S) URL stopping startup; and the web redaction, header
   parsing, and IP hashing functions directly (ADR-060: a fixed HMAC value, different keys and
   IPs giving different values, and no IP value without a key or header). tests/e2e/telemetry.spec.ts: an invitation link is one trace
@@ -453,8 +456,9 @@ currently require network access during the web build.
 
 Live OAuth and deployed TLS connectivity are not tested. Teams, onboarding, and
 team Projects/archive have browser coverage against the disposable database;
-global project flows remain API or scaffold checks owned by Claude. The health endpoint is liveness, not database
-readiness. EF initialization is not proof that live database credentials work.
+global project flows remain API or scaffold checks owned by Claude. `/health` is liveness, not database
+readiness. `/health/ready` (ADR-061) answers 503 with no detail without a database
+(tests/api/health.spec.ts) and 200 with one (tests/schema/product-api.spec.ts). EF initialization is not proof that live database credentials work.
 
 ## Conventions
 

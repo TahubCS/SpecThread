@@ -219,7 +219,8 @@ migration and deploy wait for approval. To deploy by hand, apply the migrations 
    * **Docker Build Context Directory**: `.` (root directory)
    * **Instance Type**: `Free` or higher
 4. Under **Advanced Settings**:
-   * **Health Check Path**: `/health` (returns `{"status":"ok"}`)
+   * **Health Check Path**: `/health` (returns `{"status":"ok"}`). Not `/health/ready`: a
+     database outage would then make Render restart a healthy API (ADR-061)
    * **Environment Variables**:
      * `ASPNETCORE_ENVIRONMENT`: `Production`
      * `Auth__Issuer`: The web app's exact origin, matching Vercel's `BETTER_AUTH_URL` (e.g. `https://spec-thread.com`). Required for authenticated endpoints; see ADR-015.
@@ -344,6 +345,12 @@ check rather than failing the page (ADR-045).
   curl https://your-render-service.onrender.com/health
   ```
   Expected: `{"status":"ok"}`.
+- Test database readiness:
+  ```sh
+  curl https://your-render-service.onrender.com/health/ready
+  ```
+  Expected: `{"status":"ok"}`. A 503 with `{"status":"unavailable"}` means the API can't reach
+  Supabase; its reason is in the API's warning logs.
 - Test token validation: sign in on the web app, request a token from
   `https://your-app.vercel.app/api/auth/token` in the same browser session, then:
   ```sh

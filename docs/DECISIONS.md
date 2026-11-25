@@ -1652,6 +1652,26 @@ against a known one. Rotating the key breaks matching across the change (at most
 traces). A leaked key lets someone confirm a guessed IP, nothing more. Rollback: revert the
 code change; deleting the key alone stops IP values being recorded.
 
+ADR-061: The API has a database readiness endpoint separate from liveness
+
+Status: Accepted
+
+Context: `/health` answers without touching the database (ADR-010, ADR-044), and Render
+restarts the API when it fails. The service-health dashboard needs an uptime check that turns
+red while the database is unreachable. Pointing Render at a database check would restart a
+healthy API during every Supabase outage.
+
+Decision: Anonymous `GET /health/ready` runs `SELECT 1` through `SpecThreadDbContext`, with a
+5-second limit. It answers 200 `{ "status": "ok" }`, or 503 `{ "status": "unavailable" }` with
+no detail when the query fails or no connection string is set. The API logs a warning naming
+only the exception type. Render, CI's deploy check, and the `api-image` job keep using
+`/health`. Neither path is traced, though both are counted in request metrics.
+
+Consequences: Grafana's uptime check can tell a database outage from an API outage. Each call
+uses one pooled connection briefly, and a full pool (5 connections) shows as unavailable. The
+endpoint is public, so anyone can learn whether the database is reachable, nothing more.
+Rollback: remove the endpoint and its uptime check.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

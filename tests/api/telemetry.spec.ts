@@ -29,17 +29,20 @@ test("requests are traced by route with the caller's ID, and secrets in the path
   const userId = `telemetry-${randomUUID()}`;
   const token = await mint(request, userId);
   const health = newTrace();
+  const ready = newTrace();
   const me = newTrace();
   const invite = newTrace();
   const unknown = newTrace();
 
   expect((await request.get(`${api.baseURL}/health`, { headers: { traceparent: health.header } })).status()).toBe(200);
+  expect((await request.get(`${api.baseURL}/health/ready`, { headers: { traceparent: ready.header } })).status()).toBe(503);
   expect((await request.get(`${api.baseURL}/me`, { headers: { authorization: `Bearer ${token}`, traceparent: me.header } })).status()).toBe(200);
   expect((await request.get(`${api.baseURL}/invites/${secret}?token=${secret}`, { headers: { traceparent: invite.header } })).status()).toBe(500);
   expect((await request.get(`${api.baseURL}/unknown/${secret}`, { headers: { traceparent: unknown.header } })).status()).toBe(401);
 
   // Each span is named by its route and carries the route template, never the raw path.
-  await expect.poll(async () => (await received(me.bytes, "GET /me", "user.id", userId, "specthread-api")).length).toBeGreaterThan(0);
+  // Without OTEL_RESOURCE_ATTRIBUTES the environment name is the ASP.NET environment's.
+  await expect.poll(async () => (await received(me.bytes, "GET /me", "user.id", userId, "specthread-api", "development")).length).toBeGreaterThan(0);
   await expect.poll(async () => (await received(invite.bytes, "GET /invites/{token}")).length).toBeGreaterThan(0);
   await expect.poll(async () => (await received(unknown.bytes, "specthread-api")).length).toBeGreaterThan(0);
   // The failure's error log carries the same trace ID, so it links to the span.
@@ -50,10 +53,33 @@ test("requests are traced by route with the caller's ID, and secrets in the path
   expect(await received(secret)).toEqual([]);
   expect(await received(token)).toEqual([]);
   expect(await received(token.split(".")[2])).toEqual([]);
-  // Health checks are counted in metrics but not traced.
+  // Health and readiness checks are counted in metrics but not traced. A failed readiness
+  // check logs a warning naming only the exception type.
   expect(await received(health.bytes)).toEqual([]);
+  expect((await received(ready.bytes)).map(({ path }) => path)).toEqual(["/v1/logs"]);
+  expect(await received(ready.bytes, "Database readiness check failed", "InvalidOperationException")).toHaveLength(1);
   // OTEL_EXPORTER_OTLP_HEADERS reaches the backend, percent-decoded.
   for (const { authorization } of await received(invite.bytes)) expect(authorization).toBe(testAuthorization);
+});
+
+test("OTEL_RESOURCE_ATTRIBUTES sets the environment name, and the database pool is named without its host or username", async ({ request }) => {
+  const environment = `loadtest-${randomUUID()}`;
+  const username = `pool-user-${randomUUID()}`;
+  // Nothing listens on port 1, so the readiness query fails, but it still creates the pool.
+  const loadtest = await startApi(5129, {
+    ...telemetry,
+    OTEL_RESOURCE_ATTRIBUTES: `deployment.environment.name=${environment}`,
+    ConnectionStrings__Database: `Host=127.0.0.1;Port=1;Database=offline;Username=${username};Password=placeholder`,
+  });
+  try {
+    const response = await request.get(`${loadtest.baseURL}/health/ready`);
+    expect(response.status()).toBe(503);
+    expect(await response.json()).toEqual({ status: "unavailable" });
+    await expect.poll(async () => (await received(environment, "db.client.connection.pool.name", "specthread")).length).toBeGreaterThan(0);
+    expect(await received(username)).toEqual([]);
+  } finally {
+    loadtest.stop();
+  }
 });
 
 test("web spans keep only the scheme and host of URLs and drop raw paths and queries", () => {

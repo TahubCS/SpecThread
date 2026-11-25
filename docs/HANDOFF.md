@@ -1,8 +1,35 @@
 # Shared handoff
 
-## Current task: Hash visitor IPs on web traces (2026-11-25)
+## Current task: API readiness endpoint and telemetry labels (2026-11-25)
 
-- Branch: `feature/observability-ip-hashing`, from `main` at `c5e1509`.
+- Branch: `feature/observability-api-health`, from `main` at `f2631fb` (after PR #31).
+- Scope: step 5 of the observability plan, before the service-health dashboard. A database
+  readiness endpoint for uptime checks; the Npgsql pool and SQL spans no longer labelled
+  with the connection string; `deployment.environment.name` settable for load-test runs.
+- Completed: anonymous `GET /health/ready` in `app/api/Program.cs` (`SELECT 1`, 5 s limit,
+  200 `ok` or 503 `unavailable` with no detail, warning log with the exception type only);
+  the Npgsql data source named `specthread`; `OTEL_RESOURCE_ATTRIBUTES` read last in
+  `ObservabilitySetup.cs` so it overrides the environment name; both health paths untraced.
+- Changed files: `app/api/Program.cs`, `app/api/Observability/ObservabilitySetup.cs`,
+  `tests/api/health.spec.ts`, `tests/api/telemetry.spec.ts`, `tests/schema/product-api.spec.ts`;
+  docs DECISIONS (ADR-061), OBSERVABILITY, ARCHITECTURE, DATABASE, DEPLOYMENT, TESTING,
+  README, this file.
+- Decisions and assumptions: Render keeps `/health`, so a Supabase outage never restarts the
+  API. The override uses the standard `OTEL_RESOURCE_ATTRIBUTES`, not `ASPNETCORE_ENVIRONMENT`,
+  which would also change which settings load. The stashed Kanban work now needs ADR-062 or later.
+- Environment change: none. Render needs no new variable; the uptime check comes with the
+  dashboard PR.
+- Checks: `dotnet build -c Release` (no warnings); tests/api/health.spec.ts,
+  tests/api/telemetry.spec.ts, tests/schema/product-api.spec.ts pass. The pool-name test was
+  confirmed to fail when the pool is named by its connection string. Full suite: the PR's CI.
+- Known issues and risks: a full connection pool (5) makes readiness report unavailable.
+  Old SQL spans and pool series in Grafana keep the connection-string label until they expire.
+- Next step: review and PR; after deploy, `curl /health/ready` (DEPLOYMENT.md). Then step 6,
+  the service-health dashboard and uptime checks.
+
+## Previous task: Hash visitor IPs on web traces (2026-11-25)
+
+- Branch: `feature/observability-ip-hashing`, from `main` at `c5e1509`. PR #31, merged.
 - Scope: the web root span's `client.address` becomes a keyed hash of the visitor's IP, so
   raw IPs never reach Grafana or AI agents reading it, and the privacy page needn't change
   (ADR-060). `user.id` is unchanged.
