@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { randomBytes, randomUUID } from "node:crypto";
-import { parseHeaders, redactAttributes, redactText } from "../../app/web/src/lib/telemetry";
+import { clientAddressFromHeaders, hashIp, parseHeaders, redactAttributes, redactText } from "../../app/web/src/lib/telemetry";
 import { startApi } from "../support/api-process";
 import { newTrace, received, testAuthorization } from "../support/otlp";
 
@@ -68,6 +68,21 @@ test("web spans keep only the scheme and host of URLs and drop raw paths and que
     "http.url": "https://api.example", "next.route": "/invites/[token]", "http.status_code": 200,
     "list": ["https://a.example", "plain"],
   });
+});
+
+test("web spans carry a keyed hash of the visitor's IP, never the IP, and no IP without a key", () => {
+  type Headers = Record<string, string | string[] | undefined>;
+  const getter = { keys: (carrier: Headers) => Object.keys(carrier), get: (carrier: Headers, key: string) => carrier[key] };
+  const ip = "203.0.113.7";
+  // Fixed value: the lookup command in docs/OBSERVABILITY.md gives the same result.
+  expect(hashIp(ip, "key-one")).toBe("2908191852e916b3");
+  expect(clientAddressFromHeaders("key-one")({ "x-real-ip": ip }, getter)).toEqual({ "client.address": "2908191852e916b3" });
+  expect(clientAddressFromHeaders("key-one")({ "x-real-ip": [` ${ip} `] }, getter)).toEqual({ "client.address": "2908191852e916b3" });
+  expect(hashIp(ip, "key-two")).not.toBe(hashIp(ip, "key-one"));
+  expect(hashIp("203.0.113.8", "key-one")).not.toBe(hashIp(ip, "key-one"));
+  expect(clientAddressFromHeaders(undefined)({ "x-real-ip": ip }, getter)).toBeUndefined();
+  expect(clientAddressFromHeaders("   ")({ "x-real-ip": ip }, getter)).toBeUndefined();
+  expect(clientAddressFromHeaders("key-one")({}, getter)).toBeUndefined();
 });
 
 test("OTEL_EXPORTER_OTLP_HEADERS is read as percent-encoded name=value pairs", () => {

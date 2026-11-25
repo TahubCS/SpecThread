@@ -7,5 +7,5 @@ export async function register() {
   const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT?.trim();
   if (process.env.NEXT_RUNTIME !== "nodejs" || !endpoint) return;
   const { startTelemetry } = await import("./lib/telemetry");
-  startTelemetry(endpoint, process.env.OTEL_EXPORTER_OTLP_HEADERS);
+  startTelemetry(endpoint, process.env.OTEL_EXPORTER_OTLP_HEADERS, process.env.TELEMETRY_IP_HASH_KEY);
 }

@@ -299,6 +299,7 @@ Variables, **Production only**, so Preview deployments send nothing):
 |---|---|---|
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | The stack's OTLP endpoint (Grafana Cloud > stack > OpenTelemetry), for example `https://otlp-gateway-prod-us-west-0.grafana.net/otlp` | No |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic%20<base64 of "<instanceId>:<token>">`, with the space written as `%20` | Yes (Vercel: Sensitive) |
+| `TELEMETRY_IP_HASH_KEY` | **Vercel only.** Random key, for example `openssl rand -hex 32`, used to hash visitor IPs before they are sent (ADR-060). Keep a copy in the team password manager: it is needed to look up an IP, and Vercel can't show a Sensitive value again. Unset means no IP value is recorded | Yes (Vercel: Sensitive) |
 
 Then deploy the latest commit on Render (auto-deploy is off) and redeploy Production on Vercel;
 both read the variables only at startup. A value that is not an HTTP(S) URL stops the API from
@@ -311,7 +312,8 @@ Verify, about 10 minutes, with a test account:
 
 - In Grafana, **Explore > Tempo**, a `specthread-web` trace from opening a project continues
   into `specthread-api` and shows SQL spans; `service.version` is the deployed commit.
-- The web root span's `client.address` is your own IP address, not a Vercel address.
+- The web root span's `client.address` equals your own IP address hashed with the lookup
+  command in docs/OBSERVABILITY.md, and your raw IP appears nowhere in the trace.
 - Opening an invitation link shows `/invites/[token]` and `/invites/{token}`, never the token.
 - **Explore > Prometheus**: `http_server_request_duration_seconds` exists for `specthread-api`.
 - **Explore > Loki**: API warnings and errors, if any, carry a `trace_id`.
