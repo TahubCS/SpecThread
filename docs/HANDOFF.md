@@ -1,8 +1,44 @@
 # Shared handoff
 
-## Current task: API readiness endpoint and telemetry labels (2026-11-25)
+## Current task: Service-health dashboard and uptime checks (2026-11-25)
 
-- Branch: `feature/observability-api-health`, from `main` at `f2631fb` (after PR #31).
+- Branch: `feature/observability-dashboards`, from `main` at `bec7400` (after PR #32).
+- Scope: step 6 of the observability plan. One Grafana dashboard for production (D43–D51) and
+  six uptime checks (D9), kept in the repository (ADR-062). Browser health (D49) waits for Faro
+  (step 8).
+- Completed: `observability/service-health.json` (22 panels in five rows: Render API, Vercel
+  web, Database, Outside services, Tables); `observability/queries.md` (every query, explained);
+  the uptime-check list and import steps in OBSERVABILITY.md; `tests/api/dashboard.spec.ts`.
+- Changed files: `observability/service-health.json`, `observability/queries.md`,
+  `tests/api/dashboard.spec.ts` (new); docs DECISIONS (ADR-062), OBSERVABILITY, ARCHITECTURE,
+  TESTING, this file.
+- Decisions and assumptions (Jacob, 2026-11-25): JSON in the repo, imported by hand, because
+  the Grafana MCP access is read-only (GET only; `dashboards:read`, `folders:read`). Grafana
+  Cloud span metrics were already on (at least 14 days), so nothing needed turning on. Slowest
+  queries and the web failures table use TraceQL over the last 24 hours instead of a Support
+  request for extra span-metric labels. The Grafana owner creates the checks by hand from
+  OBSERVABILITY.md. GitHub and Resend checks fail only on a major or critical status (GitHub
+  showed "minor" while this was written). Google has no sign-in status JSON, so its check
+  fetches the OpenID discovery document. "Slow" on the web row means over 2 seconds (no
+  figure was agreed). The stashed Kanban work now needs ADR-063 or later.
+- Environment change: in Grafana, import the dashboard and create the six checks (job names
+  must match exactly). Nothing changes on Vercel, Render, or Supabase.
+- Checks: every Prometheus and TraceQL query was run against the live stack through read-only
+  Grafana MCP. `npx playwright test tests/api/dashboard.spec.ts` passes, and fails when one
+  query loses its production filter. `npm run lint`, `npm run typecheck`, `git diff --check`
+  pass. Full suite: the PR's CI.
+- Known issues and risks: the panels haven't been rendered in Grafana. The two TraceQL tables
+  rely on Grafana's Labels to fields and Merge transformations, so their column names may need
+  fixing after import. Strips show "No check data" until the checks exist. At current traffic
+  the 24-hour panels are often empty. Render's free CPU and memory lines (0.1 CPU, 512 MB) are
+  still to recheck on Render.
+- Next step: review and PR. After merge, the Grafana owner imports the file and creates the
+  checks. Then I check the imported dashboard read-only and fix any panel by PR. Then step 7,
+  the observability skill, which reads queries.md.
+
+## Previous task: API readiness endpoint and telemetry labels (2026-11-25)
+
+- Branch: `feature/observability-api-health`, from `main` at `f2631fb` (after PR #31). PR #32, merged.
 - Scope: step 5 of the observability plan, before the service-health dashboard. A database
   readiness endpoint for uptime checks; the Npgsql pool and SQL spans no longer labelled
   with the connection string; `deployment.environment.name` settable for load-test runs.

@@ -54,7 +54,7 @@ Observability
 
 OpenTelemetry (OTLP/HTTP) to Grafana Cloud; grafana/otel-lgtm locally
 
-Traces, metrics, and logs, off unless an endpoint is configured (ADR-055, OBSERVABILITY.md)
+Traces, metrics, and logs, off unless an endpoint is configured (ADR-055, OBSERVABILITY.md); a service-health dashboard and uptime checks kept in observability/ (ADR-062)
 
 Continuous integration
 
@@ -85,6 +85,7 @@ Agreed repository layout (ADR-006)
 ├── tests/
 │   ├── e2e/                  # Playwright browser tests
 │   └── api/                  # Playwright API and EF setup tests
+├── observability/            # Grafana dashboard JSON and its queries (ADR-062)
 ├── docs/
 │   ├── PROJECT.md
 │   ├── ARCHITECTURE.md
