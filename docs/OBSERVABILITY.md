@@ -116,18 +116,24 @@ file, update queries.md, and open a PR. Run `npx playwright test tests/api/dashb
 before committing.
 
 **Uptime checks** (Synthetic Monitoring, ADR-062). The Grafana owner creates them in **Testing &
-synthetics > Synthetics > Checks > New check > API endpoint (HTTP)**. Each one runs every
-5 minutes from one probe, the public probe nearest Render's Oregon region. The job names must be
-exactly these, because the dashboard queries them by name:
+synthetics > Synthetics > Create new check > API Endpoint > HTTP**. The job names must be exactly
+these, because the dashboard queries them by name:
 
-| Job name | Request | Passes when |
+| Job name | Request target (method GET) | Regex validation |
 |---|---|---|
-| `specthread-api-health` | `GET https://specthread-api.onrender.com/health` | 200 |
-| `specthread-api-ready` | `GET https://specthread-api.onrender.com/health/ready` | 200 (503 means the database is unreachable) |
-| `specthread-web` | `GET https://spec-thread.com/login` | 200 |
-| `github-status` | `GET https://www.githubstatus.com/api/v2/status.json` | 200, and **fail if body matches** `"indicator":\s*"(major\|critical)"` |
-| `resend-status` | `GET https://resend-status.com/api/v2/status.json` | 200, and **fail if body matches** `"indicator":\s*"(major\|critical)"` |
-| `google-sign-in` | `GET https://accounts.google.com/.well-known/openid-configuration` | 200, and **fail if body doesn't match** `"authorization_endpoint"` |
+| `specthread-api-health` | `https://specthread-api.onrender.com/health` | None |
+| `specthread-api-ready` | `https://specthread-api.onrender.com/health/ready` | None (a 503 fails the check: database unreachable) |
+| `specthread-web` | `https://spec-thread.com/login` | None |
+| `github-status` | `https://www.githubstatus.com/api/v2/status.json` | Body, `"indicator":\s*"(major\|critical)"` |
+| `resend-status` | `https://resend-status.com/api/v2/status.json` | Body, `"indicator":\s*"(major\|critical)"` |
+| `google-sign-in` | `https://accounts.google.com/.well-known/openid-configuration` | Body, `"authorization_endpoint"`, **Invert match** on |
+
+A body regex fails the check when it matches; Invert match makes it fail when it doesn't match.
+Set on every check: **Frequency** 5 minutes (the form starts at 1 minute), **Timeout** 10 seconds
+(readiness itself gives up after 5), and **Probe locations** a single public probe in the western
+US (Render's region is Oregon). Leave everything else at its default: valid status codes 2xx, no
+headers or authentication, no custom labels, full metrics off, per-check alerts off (alerting is
+a later step).
 
 Six checks at this rate are about 52,000 runs a month; the free tier allows 100,000. Minor
 incidents on GitHub's or Resend's status page stay green. Google has no status JSON for sign-in,

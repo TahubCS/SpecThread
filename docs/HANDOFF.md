@@ -21,15 +21,17 @@
   showed "minor" while this was written). Google has no sign-in status JSON, so its check
   fetches the OpenID discovery document. "Slow" on the web row means over 2 seconds (no
   figure was agreed). The stashed Kanban work now needs ADR-063 or later.
-- Environment change: in Grafana, import the dashboard and create the six checks (job names
-  must match exactly). Nothing changes on Vercel, Render, or Supabase.
+- Environment change: done in Grafana on 2026-11-25 (Jacob). The dashboard is imported
+  (version 2), and the six checks run every 5 minutes from the Oregon probe; all six passed on
+  their first runs. Nothing changes on Vercel, Render, or Supabase.
 - Checks: every Prometheus and TraceQL query was run against the live stack through read-only
   Grafana MCP. `npx playwright test tests/api/dashboard.spec.ts` passes, and fails when one
   query loses its production filter. `npm run lint`, `npm run typecheck`, `git diff --check`
   pass. Full suite: the PR's CI.
-- Known issues and risks: the panels haven't been rendered in Grafana. The two TraceQL tables
-  rely on Grafana's Labels to fields and Merge transformations, so their column names may need
-  fixing after import. Strips show "No check data" until the checks exist. At current traffic
+- Known issues and risks: after the first import (Jacob's screenshots), the TraceQL tables merged
+  every query into one "value" column and showed label values in quotes. Fixed by renaming each
+  query's value before Merge and a regex value mapping, but the fix itself is unrendered until
+  the next import. Strips say "Data does not have a time field" until the checks exist. At current traffic
   the 24-hour panels are often empty. Render's free CPU and memory lines (0.1 CPU, 512 MB) are
   still to recheck on Render.
 - Next step: review and PR. After merge, the Grafana owner imports the file and creates the

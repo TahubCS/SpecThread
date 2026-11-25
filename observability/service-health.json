@@ -827,6 +827,54 @@
           }
         },
         {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Count"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Average"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "C"
+          },
+          "options": {
+            "renameByName": {
+              "value": "p95"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "D"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Total time"
+            }
+          }
+        },
+        {
           "id": "merge",
           "options": {}
         },
@@ -844,6 +892,13 @@
               "Value #B": "Average",
               "Value #C": "p95",
               "Value #D": "Total time"
+            },
+            "indexByName": {
+              "span.db.query.text": 0,
+              "Count": 1,
+              "Average": 2,
+              "p95": 3,
+              "Total time": 4
             }
           }
         },
@@ -868,9 +923,69 @@
             },
             "filterable": true
           },
-          "noValue": "0"
+          "noValue": "No API queries in the last 24 hours",
+          "mappings": [
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^\"([\\s\\S]*)\"$",
+                "result": {
+                  "text": "$1",
+                  "index": 0
+                }
+              }
+            }
+          ]
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total time"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -916,6 +1031,21 @@
               {
                 "id": "decimals",
                 "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Query"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
               }
             ]
           }
@@ -1256,6 +1386,13 @@
               "Value #B": "4xx",
               "Value #C": "5xx",
               "Value #D": "Failure rate"
+            },
+            "indexByName": {
+              "route": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4
             }
           }
         },
@@ -1280,9 +1417,58 @@
             },
             "filterable": true
           },
-          "noValue": "0"
+          "noValue": "No API requests in this time range",
+          "mappings": []
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Requests"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failure rate"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1296,6 +1482,18 @@
               {
                 "id": "decimals",
                 "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Route"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
               }
             ]
           }
@@ -1382,6 +1580,54 @@
           }
         },
         {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Requests"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "options": {
+            "renameByName": {
+              "value": "4xx"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "C"
+          },
+          "options": {
+            "renameByName": {
+              "value": "5xx"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "D"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Failed"
+            }
+          }
+        },
+        {
           "id": "merge",
           "options": {}
         },
@@ -1400,6 +1646,14 @@
               "Value #B": "4xx",
               "Value #C": "5xx",
               "Value #D": "Failed"
+            },
+            "indexByName": {
+              "span.http.method": 0,
+              "span.http.route": 1,
+              "Requests": 2,
+              "4xx": 3,
+              "5xx": 4,
+              "Failed": 5
             }
           }
         },
@@ -1424,9 +1678,70 @@
             },
             "filterable": true
           },
-          "noValue": "0"
+          "noValue": "No web requests in the last 24 hours",
+          "mappings": [
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^\"([\\s\\S]*)\"$",
+                "result": {
+                  "text": "$1",
+                  "index": 0
+                }
+              }
+            }
+          ]
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Requests"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -1507,6 +1822,13 @@
               "Value #A": "Count",
               "Value #B": "Average",
               "Value #C": "p95"
+            },
+            "indexByName": {
+              "layer": 0,
+              "route": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4
             }
           }
         },
@@ -1531,9 +1853,46 @@
             },
             "filterable": true
           },
-          "noValue": "0"
+          "noValue": "No requests in this time range",
+          "mappings": []
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",
@@ -1563,6 +1922,18 @@
               {
                 "id": "decimals",
                 "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Layer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
               }
             ]
           }
