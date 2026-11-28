@@ -79,6 +79,15 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: export requirements as a PDF
+
+As a client reviewer (Robert), I want to export a set of requirements with their decisions and
+evidence summary as a PDF so that I can send it to someone who won't log in, such as my CFO.
+Source: scenario "Signing off a contract milestone". Acceptance criteria (ADR-068): the export
+includes each requirement's title, acceptance criteria, evidence status, and latest decision with
+reviewer and date; it can be limited to one milestone or sprint; links in the PDF point back to
+SpecThread.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that

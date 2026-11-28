@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Archive, ArrowLeft, Plus } from "lucide-react";
+import { Archive, ArrowLeft, FileDown, Plus } from "lucide-react";
 import { RequirementRows } from "@/components/requirement-rows";
 import { listMilestones, listRequirements, requireProject } from "@/lib/project-data";
 import { canEditProject, requirementCounts } from "@/lib/projects";
@@ -35,6 +35,11 @@ export default async function Page({ params, searchParams }: PageProps<"/project
         <span className="count">{requirements.length}</span>
         {!archived && (
           <Link className="button secondary" href={archivedHref}><Archive size={15} aria-hidden="true" /> Archived</Link>
+        )}
+        {!archived && (
+          <Link className="button secondary" href={`/projects/${project.id}/exports${milestone ? `?${new URLSearchParams({ milestone })}` : ""}`}>
+            <FileDown size={15} aria-hidden="true" /> Export PDF
+          </Link>
         )}
         {!archived && !project.archivedAt && canEditProject(project) && (
           <Link className="button" href={`${base}/new`}><Plus size={16} aria-hidden="true" /> New requirement</Link>

@@ -56,6 +56,7 @@ Observers get 403 with "Your role on this team can read this project but not cha
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
 | POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
 | DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| GET | `/projects/{projectId}/export?milestone=` | member, any role | | 200 `ProjectExport`: active requirements, or one milestone's (ADR-068) |
 | GET | `/requirements/{requirementId}/comments` | member | | 200 `Comments` |
 | POST | `/requirements/{requirementId}/comments` | member, any role | `{ body, parentId? }` | 201 `Comment` (409 when archived or the parent was deleted) |
 | PATCH | `/requirements/{requirementId}/comments/{commentId}` | the comment's author | `{ body }` | 200 `Comment` (409 when archived or deleted) |
@@ -235,6 +236,17 @@ type Comments = {
   // parentId and authorId describe the comment, actor who made the change.
   history: { id: string; commentId: string; parentId: string | null; authorId: string;
     action: "created" | "edited" | "deleted"; actor: string; occurredAt: string }[];
+};
+// What a PDF export contains (ADR-068). Active requirements only, oldest first; milestone is the
+// trimmed filter, or null for all. latestDecision names the reviewer (not an ID) so the PDF
+// reads on its own; outdated and criteriaChanged as on the requirement list.
+type ProjectExport = {
+  projectId: string; projectName: string; milestone: string | null; generatedAt: string;
+  requirements: { id: string; title: string; milestone: string | null; criteriaVersion: number | null;
+    acceptanceCriteria: string[]; evidenceComplete: boolean;
+    evidenceMissing: ("issue" | "merged_pull_request" | "passing_checks" | "release")[];
+    latestDecision: { decision: Decision; note: string; reviewerName: string; decidedAt: string;
+      outdated: boolean; criteriaChanged: boolean } | null }[];
 };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {

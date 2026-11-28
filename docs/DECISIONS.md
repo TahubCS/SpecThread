@@ -1698,6 +1698,38 @@ check adds 12 traced requests an hour to `GET /login`. The 24-hour panels are of
 current traffic. Browser health waits for Faro. A change made only in Grafana is lost at the
 next import unless it is exported. Rollback: delete the dashboard and the checks.
 
+ADR-068: Requirements are exported as a PDF generated in the web app with pdf-lib
+
+Status: Accepted
+
+Context: US-22 (Jira SPEC-30) asks a client reviewer to export a set of requirements with their
+decisions and evidence summary as a PDF to send to someone who won't sign in: each requirement's
+title, acceptance criteria, evidence status, and latest decision with reviewer and date; limited
+to one milestone or sprint when wanted; with links back to SpecThread. The product owner chose a
+generated PDF download over a print-to-PDF page (2026-11-28). The scaffold reserved
+`/projects/{id}/exports`.
+
+Decision: `GET /projects/{id}/export?milestone=` returns, in one call, the project's active
+requirements (or one milestone's) with their criteria, Evidence complete status (ADR-057), and
+latest decision with the reviewer's name. Any member, Observers included, reads it. The web app
+adds the `pdf-lib` dependency (1.17.1, pinned; pure JavaScript, no native code, so it runs on
+Vercel) and builds the PDF in `app/web/src/lib/project-export.ts`: a heading with the project,
+milestone, and time; a note that Evidence complete and Accepted don't mean proven correct; then
+each requirement with its title and an "Evidence and history" line linking to its SpecThread page,
+its numbered criteria, evidence status, and latest decision (with "needs a new review" when it is
+outdated) and note; and page numbers. Links use the configured `BETTER_AUTH_URL`, as invitation
+links do, never the request's host. `GET /projects/{id}/exports/pdf?milestone=` (a route handler
+behind the session proxy) sends it as an attachment, never cached, named like
+`checkout-sprint-3-2026-11-28.pdf`. The Exports page offers the choice and the download; the
+Requirements tab links to it with the milestone being viewed.
+
+Consequences: The standard PDF fonts cover Western European text only; any other character
+(emoji, most non-Latin scripts) prints as "?" until a Unicode font is embedded, which would add a
+font file and `@pdf-lib/fontkit`. The whole PDF is built in memory, fine for hundreds of
+requirements. Archived requirements are not exported. pdf-lib has had no release since 2021; it
+is stable, but a replacement may be needed if it stops working with a future Node.js. Rollback:
+remove the route, page, endpoint, and dependency.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected
