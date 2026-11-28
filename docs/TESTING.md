@@ -265,6 +265,12 @@ currently require network access during the web build.
   tests/api/project-data.spec.ts. The reviews migration stays applied in the other
   schema specs, so their migration-history counts include it. Not exercised: two
   reviewers deciding at the same moment.
+- Plain-language explanations (US-17): tests/api/glossary.spec.ts checks that every term has
+  a short explanation without "verified" or "proven", the four product labels are covered, and
+  the Evidence complete rule's wording is unchanged. tests/e2e/glossary.spec.ts opens a word's
+  explanation with Enter and closes it with Escape, opens another by click and closes it by
+  clicking elsewhere, checks `aria-expanded`/`aria-controls`, the phone width, and the folded
+  glossary's ten terms.
 - Evidence count on requirement lists: tests/schema/reviews.spec.ts checks that the
   list's `evidenceCount` is 0 with nothing linked, counts issues, commits, and
   releases, follows a removed link, and leaves out other requirements' links.

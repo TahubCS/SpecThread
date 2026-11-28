@@ -472,6 +472,19 @@ a.row:focus-visible { outline-offset: -2px; }
 .row .evidence-missing + .badge { margin-left: 0; }
 .evidence-status { margin-bottom: 14px; }
 .evidence-status-heading { margin: 0 0 8px; }
+/* Plain-language explanations (US-17): a word that explains itself, and a folded glossary. */
+.term { position: relative; }
+.term-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline dotted var(--app-text-3); text-underline-offset: 3px; cursor: help; }
+.term-button:hover, .term-button[aria-expanded="true"] { color: var(--app-text); text-decoration-color: currentColor; }
+.term-explanation { position: absolute; z-index: 10; top: calc(100% + 6px); left: 0; width: min(280px, 70vw); padding: 8px 10px; border: 1px solid var(--app-line-strong); border-radius: 8px; background: var(--app-raised); box-shadow: 0 8px 24px #0008; color: var(--app-text-2); font-size: 12.5px; line-height: 1.45; white-space: normal; }
+.term-explanation strong { color: var(--app-text); font-weight: 600; }
+.glossary { margin: 10px 0 0; font-size: 13px; }
+.glossary + .notice { margin-top: 16px; }
+.glossary summary { width: fit-content; color: var(--app-text-2); cursor: pointer; }
+.glossary summary:hover { color: var(--app-text); }
+.glossary dl { display: grid; gap: 8px; margin: 10px 0 0; padding: 12px 14px; border: 1px solid var(--app-line); border-radius: 10px; }
+.glossary dt { color: var(--app-text); font-weight: 500; }
+.glossary dd { margin: 2px 0 0; color: var(--app-text-2); }
 .evidence-parts { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
 .evidence-parts li { display: flex; align-items: center; gap: 8px; color: var(--app-text-2); }
 .evidence-parts li > svg { flex: none; }

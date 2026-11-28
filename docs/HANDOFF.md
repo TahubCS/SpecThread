@@ -1,6 +1,31 @@
 # Shared handoff
 
-## Current task: Service-health dashboard and uptime checks (2026-11-25)
+## Current task: US-17, plain-language explanations of technical terms (2026-11-28)
+
+- Branch: `feature/us-17-plain-language`, from `main` at `d4f0079`. Independent of PRs #34 to
+  #38 (each adds an entry here).
+- Scope: Jira SPEC-25 (US-17). Terms such as pull request, commit, check, and release have a
+  short explanation available on the page; status labels use the product language (Linked,
+  Check passed, Evidence complete, Accepted).
+- Completed: `app/web/src/lib/glossary.ts` (ten terms and their explanations);
+  `components/glossary.tsx` with `Term` (a word that opens its explanation; keyboard, Escape,
+  and click-away) and `Glossary` (a folded "What do these words mean?" list); the Evidence
+  complete rule's words (issue, merged, pull request, Checks passed, commit, release) use `Term`;
+  the glossary sits under the requirement page's heading; styles.
+- Changed files: web `lib/glossary.ts` (new), `components/glossary.tsx` (new),
+  `components/evidence-status.tsx`, the requirement page, `app/app-shell.css`; tests new
+  `tests/api/glossary.spec.ts`, `tests/e2e/glossary.spec.ts`; docs PROJECT, TESTING, this file.
+- Decisions and assumptions: explanations are written for a client reviewer; the glossary is
+  folded so it doesn't push the requirement down. "Linked", "Evidence complete", and "Accepted"
+  were already the on-screen labels; check results read "Check passed"/"Check failed" once
+  PR #34 (US-12) is merged. No API change, migration, or variable.
+- Checks (2026-11-28, local): `npm test` 441 passed; `npm run lint`, `npm run typecheck`, and
+  `git diff --check` passed. No C# changed.
+- Known issues and risks: other pages (the evidence thread, releases) can add `Term` and
+  `Glossary` once their PRs are merged.
+- Next step: review and PR; then US-18 (project evidence status summary).
+
+## Previous task: Service-health dashboard and uptime checks (2026-11-25)
 
 - Branch: `feature/observability-dashboards`, from `main` at `bec7400` (after PR #32).
 - Scope: step 6 of the observability plan. One Grafana dashboard for production (D43–D51) and
