@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { EvidenceStatus } from "@/components/evidence-status";
+import { Glossary } from "@/components/glossary";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
 import { RequirementComments } from "@/components/requirement-comments";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
@@ -70,6 +71,7 @@ export default async function Page({ params }: Props) {
           {" "}· <Link href={`${base}/${requirement.id}/history`}>Criteria version {requirement.criteriaVersion}</Link>
         </>}
       </p>
+      <Glossary />
       {requirement.archivedAt && (
         <p className="notice">
           This requirement was archived on {formatDate(requirement.archivedAt)}. It can&apos;t be edited or reviewed until it is restored.

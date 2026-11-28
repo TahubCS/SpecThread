@@ -185,6 +185,10 @@ Use precise product language:
 
 “Accepted” means an authorized human approved the requirement.
 
+The plain-language explanations a reviewer can open on a requirement (story US-17) live in
+app/web/src/lib/glossary.ts: issue, pull request, merged, commit, check, release, and the four
+labels above. Change them there so every page says the same thing.
+
 Do not label a requirement “proven correct.” Passing checks are evidence, not proof of all possible behavior.
 
 Success criteria
