@@ -56,6 +56,8 @@ Observers get 403 with "Your role on this team can read this project but not cha
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
 | POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
 | DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| GET | `/requirements/{requirementId}/events` | member | | 200 `RequirementEvent[]`, newest first (ADR-065) |
+| GET | `/projects/{projectId}/audit` | member | | 200 `AuditEntry[]`, the newest 200 across the project, newest first (ADR-065) |
 | GET | `/requirements/{requirementId}/comments` | member | | 200 `Comments` |
 | POST | `/requirements/{requirementId}/comments` | member, any role | `{ body, parentId? }` | 201 `Comment` (409 when archived or the parent was deleted) |
 | PATCH | `/requirements/{requirementId}/comments/{commentId}` | the comment's author | `{ body }` | 200 `Comment` (409 when archived or deleted) |
@@ -235,6 +237,27 @@ type Comments = {
   // parentId and authorId describe the comment, actor who made the change.
   history: { id: string; commentId: string; parentId: string | null; authorId: string;
     action: "created" | "edited" | "deleted"; actor: string; occurredAt: string }[];
+};
+// A recorded change to a requirement itself (ADR-065). Records are only ever added; no endpoint
+// edits or deletes them. version is the requirement's version after the change. changes names what
+// an edit changed ([] for a save that changed nothing); null when it was not recorded (an edit
+// made before the record existed). milestone is set only for "milestone_set". Times are UTC.
+type RequirementEvent = {
+  id: string; requirementId: string;
+  action: "created" | "edited" | "archived" | "restored" | "milestone_set" | "milestone_cleared";
+  version: number | null; changes: ("title" | "description" | "criteria" | "documents")[] | null;
+  milestone: string | null; actor: string; occurredAt: string;
+};
+// One entry of a project's audit trail. area says which record it comes from; action is that
+// record's own action (for "decision", the decision). Comment text is never included.
+type AuditEntry = {
+  id: string; requirementId: string; requirementTitle: string;
+  area: "requirement" | "evidence" | "decision" | "follow_up" | "comment";
+  action: string; actor: string; occurredAt: string;
+  version: number | null;            // requirement: version after the change; decision: version decided on
+  changes: RequirementEvent["changes"]; milestone: string | null; // requirement
+  label: string | null; title: string | null; // evidence: the link as it was
+  otherRequirementTitle: string | null; // evidence moves: the other side; follow_up: the original requirement
 };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {

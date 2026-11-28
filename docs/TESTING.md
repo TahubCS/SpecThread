@@ -336,6 +336,22 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- Requirement changes and the project audit trail (ADR-065, US-21).
+  tests/schema/requirement-events.spec.ts (API on 5135): create, title edit, criteria and
+  description edit, a save with no changes, archive and restore (repeats record nothing),
+  milestone set and cleared, newest first with actor, version, and what changed, UTC times
+  matching the requirement's own; every role reads, outsiders get 404; refused changes
+  (403, 409) record nothing; no endpoint changes or removes a record, RLS is on with no
+  browser-role grants, and the constraints reject records that describe no real change;
+  the project audit trail merging requirement, evidence, decision, follow-up, and comment
+  entries newest first without comment text, other projects left out, and the 200 cap;
+  and the migration's backfill (creator, last editor, ADR-050's fallback) and rollback.
+  tests/api/requirement-events.spec.ts checks parsing and wording without a browser.
+  tests/e2e/audit.spec.ts edits, sets a milestone, archives, and restores through the UI,
+  reads the History page's "Requirement changes" and the overview's Audit trail link to
+  the project audit trail, follows an entry to its History page, checks phone width, an
+  Observer reading, and an API without the record. The migration-history counts in
+  evidence, github-repository, and reviews specs include RequirementEvents.
 - Requirement comments (ADR-059). tests/schema/comments.spec.ts (API on 5134): every
   role, Observers included, comments and replies, and the requirement and its decisions
   stay identical; validation (empty, 5,001 characters, NUL on create and edit, unknown

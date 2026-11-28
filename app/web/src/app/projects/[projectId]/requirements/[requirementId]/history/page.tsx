@@ -4,8 +4,10 @@ import { ArrowLeft } from "lucide-react";
 import { EvidenceHistory } from "@/components/evidence-panel";
 import { FollowUpHistory } from "@/components/requirement-follow-ups";
 import { commentEventText } from "@/lib/comments";
+import { requirementEventText } from "@/lib/requirement-events";
 import {
-  listComments, listCriteriaVersions, listEvidenceHistory, listFollowUps, listMembers, listReviews, requireProject, requireRequirement,
+  listComments, listCriteriaVersions, listEvidenceHistory, listFollowUps, listMembers, listRequirementEvents, listReviews, requireProject,
+  requireRequirement,
 } from "@/lib/project-data";
 import { formatDate, formatDateTime } from "@/lib/projects";
 import { decisionText } from "@/lib/reviews";
@@ -13,17 +15,18 @@ import { decisionText } from "@/lib/reviews";
 export const metadata: Metadata = { title: "Requirement history" };
 
 /**
- * Shows how a requirement changed: every version of its acceptance criteria with who saved it,
+ * Shows how a requirement changed: every change to the requirement itself with who made it and
+ * when (ADR-065), every version of its acceptance criteria with who saved it,
  * when, and the decisions made against it (ADR-051), every follow-up link added or removed
  * (ADR-052), every evidence link added or removed (ADR-054), and every comment posted, edited, or
  * deleted (ADR-059). Earlier versions open read-only.
  */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/requirements/[requirementId]/history">) {
   const { projectId, requirementId } = await params;
-  const [project, requirement, versions, followUps, reviews, members, evidenceHistory, comments] = await Promise.all([
+  const [project, requirement, versions, followUps, reviews, members, evidenceHistory, comments, changes] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listCriteriaVersions(requirementId),
     listFollowUps(requirementId), listReviews(requirementId), listMembers(projectId), listEvidenceHistory(requirementId),
-    listComments(requirementId),
+    listComments(requirementId), listRequirementEvents(requirementId),
   ]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
@@ -35,6 +38,27 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       <header className="project-page-heading">
         <h1 id="page-title">Requirement history</h1>
       </header>
+      <section className="requirement-section" aria-labelledby="changes-heading">
+        <h2 id="changes-heading">Requirement changes</h2>
+        {changes === null
+          ? <p className="notice" role="status">Requirement changes can&apos;t be shown right now. Try again in a few minutes.</p>
+          : changes.length === 0
+          ? <p className="muted">No changes have been recorded.</p>
+          : (
+            <div className="review-history">
+              <ol className="follow-up-history" aria-label="Requirement changes">
+                {changes.map(change => (
+                  <li key={change.id}>
+                    <span>{requirementEventText(change)}</span>{" "}
+                    <span className="muted">
+                      by {nameOf(change.actor)} on <time dateTime={change.occurredAt}>{formatDateTime(change.occurredAt)}</time>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+      </section>
       <section className="requirement-section" aria-labelledby="versions-heading">
         <h2 id="versions-heading">Acceptance criteria versions</h2>
         {versions === null

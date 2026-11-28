@@ -26,6 +26,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<RequirementFollowUpEvent> RequirementFollowUpEvents => Set<RequirementFollowUpEvent>();
     public DbSet<RequirementComment> RequirementComments => Set<RequirementComment>();
     public DbSet<RequirementCommentEvent> RequirementCommentEvents => Set<RequirementCommentEvent>();
+    public DbSet<RequirementEvent> RequirementEvents => Set<RequirementEvent>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -455,5 +456,28 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         commentEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<RequirementComment>().WithMany().HasForeignKey(x => x.CommentId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
+
+        var requirementEvent = model.Entity<RequirementEvent>();
+        requirementEvent.ToTable("requirement_events", table =>
+        {
+            table.HasCheckConstraint("ck_requirement_events_action",
+                "action IN ('created', 'edited', 'archived', 'restored', 'milestone_set', 'milestone_cleared')");
+            table.HasCheckConstraint("ck_requirement_events_version", "version IS NULL OR version > 0");
+            table.HasCheckConstraint("ck_requirement_events_changes",
+                "changes IS NULL OR (action = 'edited' AND changes <@ ARRAY['title', 'description', 'criteria', 'documents']::text[])");
+            table.HasCheckConstraint("ck_requirement_events_milestone", "(milestone IS NOT NULL) = (action = 'milestone_set')");
+        });
+        requirementEvent.HasKey(x => x.Id);
+        requirementEvent.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        requirementEvent.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        requirementEvent.Property(x => x.Action).HasColumnName("action");
+        requirementEvent.Property(x => x.Version).HasColumnName("version");
+        requirementEvent.Property(x => x.Changes).HasColumnName("changes");
+        requirementEvent.Property(x => x.Milestone).HasColumnName("milestone");
+        requirementEvent.Property(x => x.Actor).HasColumnName("actor");
+        requirementEvent.Property(x => x.OccurredAt).HasColumnName("occurred_at").HasDefaultValueSql("now()");
+        requirementEvent.HasIndex(x => new { x.RequirementId, x.OccurredAt });
+        requirementEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        requirementEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
     }
 }

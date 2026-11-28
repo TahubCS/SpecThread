@@ -79,6 +79,14 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: audit important changes
+
+As a tech lead (Danielle), I want every important change (requirement edits, links, releases,
+decisions) timestamped with who made it so that the record can be trusted later. Source: MVP
+scope. Acceptance criteria (ADR-065): each of these changes stores the user and UTC timestamp;
+audit entries can't be edited or deleted by users. Every member reads a requirement's changes on
+its History page and the project's newest changes on its audit trail.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that

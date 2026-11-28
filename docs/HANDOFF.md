@@ -1,6 +1,47 @@
 # Shared handoff
 
-## Current task: Service-health dashboard and uptime checks (2026-11-25)
+## Current task: US-21, requirement change record and project audit trail (2026-11-28)
+
+- Branch: `feature/us-21-audit-trail`, from `main` at `d4f0079`. Independent of PR #34
+  (US-12) and PR #35 (US-16); all three add an entry here, so later merges need a small
+  conflict fix in this file.
+- Scope: Jira SPEC-29 (US-21). Every important change (requirement edits, links, releases,
+  decisions) stores the user and UTC time; audit entries can't be edited or deleted by users.
+  Links (releases included) and decisions already had append-only records; requirement edits
+  kept only the last editor. Recorded as ADR-065.
+- Completed:
+  - API: migration RequirementEvents (`requirement_events`, RLS, no browser grants,
+    constraints, backfill of creations and current versions) with
+    `scripts/generate-requirement-events.mjs` and `docs/schema/requirement-events{,-rollback}.sql`;
+    `Requirements/RequirementEventEndpoints.cs` (`Record`, `GET /requirements/{id}/events`,
+    `GET /projects/{id}/audit` merging the newest 200 across five records); create, update
+    (with what changed), archive/restore (only real changes), and milestone (only real
+    changes) record events in their transactions.
+  - Web: `lib/requirement-events.ts` (parsers and wording), loaders in `lib/project-data.ts`,
+    a "Requirement changes" section on the History page, the scaffold "Project audit trail"
+    page made real, and an "Audit trail" link on the project overview.
+- Changed files: API `Data/{ProductModels,SpecThreadDbContext}.cs`, `Program.cs`,
+  `Requirements/{RequirementEventEndpoints (new),RequirementEndpoints,MilestoneEndpoints}.cs`,
+  migration + designer + snapshot; `scripts/{generate-requirement-events (new),test-database}.mjs`,
+  `docs/schema/requirement-events{,-rollback}.sql`; web files above, `app/app-shell.css`; tests
+  new `tests/{schema,api}/requirement-events.spec.ts`, `tests/e2e/audit.spec.ts`, migration
+  counts in `tests/schema/{evidence,github-repository,reviews}.spec.ts`, `tests/e2e/scaffold.spec.ts`;
+  docs DECISIONS (ADR-065), API, DATABASE (also corrected the table count and migration order),
+  ARCHITECTURE, PROJECT, TESTING, this file.
+- Decisions and assumptions: a save that changes nothing is recorded as "Saved without
+  changes" because it is a new version; repeated archive/restore/milestone calls record
+  nothing; no database trigger forbids updates (it would break older rollbacks and tests);
+  the audit trail omits comment text; at most 200 entries.
+- Environment change: apply RequirementEvents to the shared database before deploying the
+  API (CI does this on merge, ADR-044). No new variable.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 446 passed; `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check` passed.
+- Known issues and risks: the backfill can't recover earlier edits or who archived a
+  requirement. Once PR #35 is merged, the evidence thread can show these events too.
+- Next step: review and PR; then US-13 (releases and deployments with an environment).
+
+## Previous task: Service-health dashboard and uptime checks (2026-11-25)
 
 - Branch: `feature/observability-dashboards`, from `main` at `bec7400` (after PR #32).
 - Scope: step 6 of the observability plan. One Grafana dashboard for production (D43–D51) and

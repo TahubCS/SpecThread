@@ -775,6 +775,64 @@ namespace SpecThread.Api.Migrations
                     b.ToTable("requirement_documents", "public");
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("actor");
+
+                    b.PrimitiveCollection<string[]>("Changes")
+                        .HasColumnType("text[]")
+                        .HasColumnName("changes");
+
+                    b.Property<string>("Milestone")
+                        .HasColumnType("text")
+                        .HasColumnName("milestone");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<int?>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Actor");
+
+                    b.HasIndex("RequirementId", "OccurredAt");
+
+                    b.ToTable("requirement_events", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_events_action", "action IN ('created', 'edited', 'archived', 'restored', 'milestone_set', 'milestone_cleared')");
+
+                            t.HasCheckConstraint("ck_requirement_events_changes", "changes IS NULL OR (action = 'edited' AND changes <@ ARRAY['title', 'description', 'criteria', 'documents']::text[])");
+
+                            t.HasCheckConstraint("ck_requirement_events_milestone", "(milestone IS NOT NULL) = (action = 'milestone_set')");
+
+                            t.HasCheckConstraint("ck_requirement_events_version", "version IS NULL OR version > 0");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.RequirementEvidence", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1623,6 +1681,21 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.AuthUser", null)
                         .WithMany()
                         .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.RequirementEvent", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("Actor")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 

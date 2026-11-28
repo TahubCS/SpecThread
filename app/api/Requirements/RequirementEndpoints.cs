@@ -100,6 +100,7 @@ internal static class RequirementEndpoints
         var criteria = AddCriteria(db, requirement.Id, input.Criteria);
         CriteriaVersionEndpoints.Add(db, requirement.Id, 1, input.Criteria, userId, now);
         LinkDocuments(db, requirement.Id, input.DocumentIds, userId, now);
+        RequirementEventEndpoints.Record(db, requirement.Id, "created", userId, now, version: 1);
         await db.SaveChangesAsync(cancel);
         var documents = await LoadDocuments(db, requirement.Id, cancel);
         await transaction.CommitAsync(cancel);
@@ -157,6 +158,14 @@ internal static class RequirementEndpoints
         if (refused is not null) return refused;
         db.RequirementDocuments.RemoveRange(links.Where(l => !input.DocumentIds.Contains(l.DocumentId)));
 
+        // What this save changes, for the audit record (ADR-065). A save that changes nothing is
+        // still a new version, so it is recorded with no changes named.
+        var changed = new List<string>();
+        if (requirement.Title != input.Title) changed.Add("title");
+        if (requirement.Description != input.Description) changed.Add("description");
+        if (criteriaChanged) changed.Add("criteria");
+        if (!linked.SetEquals(input.DocumentIds)) changed.Add("documents");
+
         // Delete first so new positions never collide with the unique (requirement_id, position) index.
         await db.AcceptanceCriteria.Where(c => c.RequirementId == requirementId).ExecuteDeleteAsync(cancel);
         var now = Clock.UtcNow();
@@ -168,6 +177,7 @@ internal static class RequirementEndpoints
         var criteria = AddCriteria(db, requirementId, input.Criteria);
         if (criteriaChanged) CriteriaVersionEndpoints.Add(db, requirementId, ++criteriaVersion, input.Criteria, userId, now);
         LinkDocuments(db, requirementId, input.DocumentIds.Where(id => !linked.Contains(id)), userId, now);
+        RequirementEventEndpoints.Record(db, requirementId, "edited", userId, now, version: requirement.Version, changes: [.. changed]);
         try
         {
             await db.SaveChangesAsync(cancel);
@@ -202,8 +212,16 @@ internal static class RequirementEndpoints
         if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.ProjectArchived) return ProjectEndpoints.Archived();
 
-        // Idempotent: archiving again keeps the original timestamp, and restoring an active one changes nothing.
-        found.Requirement.ArchivedAt = archived ? found.Requirement.ArchivedAt ?? Clock.UtcNow() : null;
+        // Idempotent: archiving again keeps the original timestamp, and restoring an active one
+        // changes nothing. Only a real change is recorded (ADR-065).
+        var wasArchived = found.Requirement.ArchivedAt is not null;
+        var now = Clock.UtcNow();
+        found.Requirement.ArchivedAt = archived ? found.Requirement.ArchivedAt ?? now : null;
+        if (wasArchived != archived)
+        {
+            RequirementEventEndpoints.Record(db, requirementId, archived ? "archived" : "restored", user.CallerId(), now,
+                version: found.Requirement.Version);
+        }
         try
         {
             await db.SaveChangesAsync(cancel);
