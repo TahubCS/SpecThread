@@ -430,9 +430,12 @@ from protected pages to /onboarding, and POST /projects returns 409 with
 `code: "onboarding_required"` for an incomplete existing account. Anonymous requests
 remain 401, and an account without a user row remains 403. Project access follows the containing team as described above.
 
-Not yet available: a general activity and audit history. The only change histories kept
-are criteria versions (ADR-051), follow-up link changes (ADR-052), evidence link changes
-(ADR-054, ADR-056), and comment changes (ADR-059).
+Change histories kept: criteria versions (ADR-051), acceptance decisions (ADR-038), follow-up
+link changes (ADR-052), evidence link changes (ADR-054, ADR-056), comment changes (ADR-059),
+and requirement changes (ADR-065). `GET /projects/{projectId}/audit` merges requirement
+changes, evidence link changes, decisions, follow-up changes, and comment activity into one
+audit trail, newest first (ADR-065). Team, membership, and project settings changes are not
+recorded there.
 
 
 Team management uses authenticated server actions. Role changes require explicit
