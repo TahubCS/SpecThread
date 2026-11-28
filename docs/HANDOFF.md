@@ -26,6 +26,44 @@
   automatically; running checks could then be placed by their start time (a small follow-up).
 - Next step: review and PR; then US-21 (requirement edit audit), which adds edit events the
   thread can show.
+## Previous task: US-12, check results with failures and re-runs (2026-11-28)
+
+- Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
+- Scope: Jira SPEC-20 (US-12). Acceptance criteria: each check result shows its name,
+  status, time, and a link to its log; failed runs and later re-runs on the same commit are
+  both shown; results are labeled "Check passed" or "Check failed", never verified or proven.
+  Recorded as ADR-063.
+- Completed:
+  - API: `GitHubClient.GetChecksAsync` reads check runs with `filter=all` and the statuses
+    list (`/commits/{sha}/statuses`) instead of the combined status; stores `startedAt` and
+    `superseded` on each run; drops a pending status once its context reports again; sorts by
+    name, kind, then oldest run. `EvidencePolicy` counts only runs that are not superseded.
+  - Web: `EvidenceCheck` gains `startedAt` and `superseded` (absent from an older API, read as
+    null and false); `checkSummary` counts each check's newest run and adds "N earlier runs";
+    the check list says "Check passed"/"Check failed", "Finished ..." or "Started ..." in UTC,
+    and marks earlier runs.
+  - Test stand-in: `scripts/test-github.mjs` answers only the newest run of each check unless
+    asked with `filter=all`, as GitHub does, and serves the statuses list newest first.
+- Changed files: API `GitHub/GitHubClient.cs`, `GitHub/EvidenceEndpoints.cs`,
+  `Requirements/EvidencePolicy.cs`; web `lib/evidence.ts`, `components/evidence-panel.tsx`,
+  `app/app-shell.css`; `scripts/test-github.mjs`, `tests/support/github.ts`; tests
+  `tests/schema/{evidence,milestones}.spec.ts`, `tests/e2e/evidence.spec.ts`,
+  `tests/api/project-data.spec.ts`; docs DECISIONS (ADR-063, note on ADR-035), API, PROJECT,
+  TESTING, this file.
+- Decisions and assumptions: only each check's newest run counts toward Evidence complete, so
+  a flaky failure fixed by a re-run no longer blocks it (confirm with the team). Times on
+  checks are shown with the hour in UTC, as comments are. No migration and no new variable.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 439 of 440 passed on the first full run; the one
+  failure was the new browser test's own expectations (screen-reader text, an off-screen
+  assertion), fixed, after which tests/e2e/evidence.spec.ts, tests/schema/evidence.spec.ts,
+  tests/schema/milestones.spec.ts, and tests/api/project-data.spec.ts passed (67). `npm run
+  lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`, and
+  `git diff --check` passed.
+- Known issues and risks: stored checks keep the previous shape until the evidence is
+  refreshed. The real GitHub's `filter=all` and statuses list are not exercised by tests.
+- Next step: review and PR; after deploy, refresh a requirement whose pull request has a
+  re-run check and confirm both runs show. Then US-16/US-20, the chronological thread.
 
 ## Previous task: Service-health dashboard and uptime checks (2026-11-25)
 
