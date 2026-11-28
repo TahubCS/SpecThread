@@ -79,6 +79,14 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: see who worked on a requirement
+
+As an instructor (Angela), I want to see the authors of the commits and pull requests linked to
+each requirement so that I can ask informed questions about who worked on it. Source: scenario
+"Checking student team progress before sprint review". Acceptance criteria: each requirement
+lists the distinct authors of its linked commits and pull requests (including the commits inside
+linked pull requests), alphabetically; no contribution score, count, or ranking is shown.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
+import { EvidenceAuthors } from "@/components/evidence-authors";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { EvidenceStatus } from "@/components/evidence-status";
 import { RequirementArchive, RequirementRestore } from "@/components/requirement-archive";
@@ -123,6 +124,7 @@ export default async function Page({ params }: Props) {
       <section className="requirement-section" aria-labelledby="evidence-heading">
         <h2 id="evidence-heading">Evidence</h2>
         <EvidenceStatus complete={requirement.evidenceComplete} missing={requirement.evidenceMissing} />
+        <EvidenceAuthors evidence={evidence} />
         {repository || evidence.length > 0 ? (
           <EvidencePanel projectId={project.id} requirementId={requirement.id} evidence={evidence} history={evidenceHistory}
             suggestions={suggestions} moveTargets={moveTargets}

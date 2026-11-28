@@ -1,6 +1,28 @@
 # Shared handoff
 
-## Current task: Service-health dashboard and uptime checks (2026-11-25)
+## Current task: US-19, authors of linked commits and pull requests (2026-11-28)
+
+- Branch: `feature/us-19-evidence-authors`, from `main` at `d4f0079`. Independent of PRs #34
+  to #37 (each adds an entry here).
+- Scope: Jira SPEC-27 (US-19). Each requirement lists the distinct authors of its linked
+  commits and pull requests; no contribution score or ranking.
+- Completed: `evidenceAuthors` in `app/web/src/lib/evidence.ts`; `components/evidence-authors.tsx`
+  shown in the requirement page's Evidence section under the Evidence complete status; styles.
+- Changed files: web `lib/evidence.ts`, `components/evidence-authors.tsx` (new), the requirement
+  page, `app/app-shell.css`; tests `tests/api/evidence-authors.spec.ts` (new),
+  `tests/e2e/evidence.spec.ts`; docs PROJECT, TESTING, this file.
+- Decisions and assumptions: authors of the commits inside a linked pull request count too;
+  issue reporters and release authors don't (they are not code authors); a commit author
+  without a GitHub account is listed by the name in the commit; names that differ only in case
+  are listed separately, since they are different GitHub accounts or written names. No API
+  change, migration, or variable.
+- Checks (2026-11-28, local): `npm test` 440 passed; `npm run lint`, `npm run typecheck`, and
+  `git diff --check` passed. No C# changed.
+- Known issues and risks: a pull request lists its first 100 commits (ADR-034), so authors of
+  later commits in a very large pull request are not listed.
+- Next step: review and PR; then US-17 (plain-language explanations).
+
+## Previous task: Service-health dashboard and uptime checks (2026-11-25)
 
 - Branch: `feature/observability-dashboards`, from `main` at `bec7400` (after PR #32).
 - Scope: step 6 of the observability plan. One Grafana dashboard for production (D43–D51) and

@@ -265,6 +265,11 @@ currently require network access during the web build.
   tests/api/project-data.spec.ts. The reviews migration stays applied in the other
   schema specs, so their migration-history counts include it. Not exercised: two
   reviewers deciding at the same moment.
+- Authors of linked work (US-19): tests/api/evidence-authors.spec.ts checks
+  `evidenceAuthors` (pull request and commit authors, commits inside a pull request, names
+  without an account, duplicates, issues and releases left out, alphabetical order).
+  tests/e2e/evidence.spec.ts checks that nothing shows with only an issue linked, then the
+  list after linking a pull request and a commit, without the issue's reporter or any number.
 - Evidence count on requirement lists: tests/schema/reviews.spec.ts checks that the
   list's `evidenceCount` is 0 with nothing linked, counts issues, commits, and
   releases, follows a removed link, and leaves out other requirements' links.
