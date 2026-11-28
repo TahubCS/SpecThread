@@ -21,6 +21,7 @@
 - Known issues and risks: a pull request lists its first 100 commits (ADR-034), so authors of
   later commits in a very large pull request are not listed.
 - Next step: review and PR; then US-17 (plain-language explanations).
+
 ## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
