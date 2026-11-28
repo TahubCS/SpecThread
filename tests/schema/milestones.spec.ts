@@ -209,6 +209,43 @@ test("a requirement is Evidence complete only with an issue, a merged pull reque
   expect(await restored.json()).toMatchObject({ archivedAt: null, ...status(["issue"]) });
 });
 
+test("a release recorded for the project that contains the merged pull request also meets the release part (ADR-069)", async ({ request }) => {
+  const projectId = await createProject(request);
+  const otherProject = await createProject(request);
+  const requirement = await createRequirement(request, projectId, "Recorded release");
+  const insert = async (kind: string, extra: Record<string, unknown>) => {
+    const row = { requirement_id: requirement.id, kind, repository_id: 1, repository_owner: "acme", repository_name: "box", title: "t",
+      url: "https://github.com/acme/box", github_created_at: new Date(), github_updated_at: new Date(), linked_by: "owner", ...extra };
+    const names = Object.keys(row);
+    const { rows: [inserted] } = await database.pool.query(
+      `INSERT INTO public.requirement_evidence (${names.join(",")}) VALUES (${names.map((_, i) => `$${i + 1}`).join(",")}) RETURNING id`, Object.values(row));
+    return inserted.id as string;
+  };
+  await insert("issue", { number: nextNumber++, state: "open" });
+  const pull = await insert("pull_request", { number: nextNumber++, state: "merged",
+    checks: JSON.stringify([{ name: "ci", result: "passed", url: null, completedAt: null, kind: "check" }]) });
+  const record = (project: string, tag: string, contains: Record<string, boolean>) => database.pool.query(
+    `INSERT INTO public.project_releases (project_id,repository_id,tag,name,sha,url,prerelease,published_at,environment,deployed_on,recorded_by,contains,compared_at)
+     VALUES ($1,1,$2,$2,$3,'https://github.com/acme/box/releases/tag/x',false,now(),'Production',current_date,'owner',$4,now())`,
+    [project, tag, "a".repeat(40), JSON.stringify(contains)]);
+  const owner = await as(request, "owner");
+  const status = async () => {
+    const listed = (await (await owner.get(`/projects/${projectId}/requirements`)).json())
+      .find((r: { id: string }) => r.id === requirement.id);
+    const single = await (await owner.get(`/requirements/${requirement.id}`)).json();
+    expect(single.evidenceMissing).toEqual(listed.evidenceMissing);
+    return listed.evidenceMissing as string[];
+  };
+  expect(await status()).toEqual(["release"]);
+  // A recorded release that doesn't contain it, or one recorded for another project, doesn't count.
+  await record(projectId, "v1", { [pull]: false });
+  await record(otherProject, "v2", { [pull]: true });
+  expect(await status()).toEqual(["release"]);
+  // One that GitHub found contains it does, in any environment, without linking it on the requirement.
+  await record(projectId, "v3", { [pull]: true });
+  expect(await status()).toEqual([]);
+});
+
 test("the migration constrains labels, and its rollback removes only the column", async () => {
   const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
   const { rows: [requirement] } = await database.pool.query("SELECT id FROM public.requirements ORDER BY created_at LIMIT 1");

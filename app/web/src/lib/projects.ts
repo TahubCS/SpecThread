@@ -106,7 +106,7 @@ export const EVIDENCE_PART_TEXT: Record<EvidencePart, string> = {
   issue: "A linked issue",
   merged_pull_request: "A merged pull request",
   passing_checks: "Checks passed on the final commit of each merged pull request",
-  release: "A linked release that includes each merged pull request",
+  release: "A linked or recorded release that includes each merged pull request",
 };
 
 /** Short names for missing parts in a requirement row. */

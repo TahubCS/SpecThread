@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SpecThread.Api.Data;
 using SpecThread.Api.GitHub;
 
 namespace SpecThread.Api.Requirements;
@@ -22,8 +24,9 @@ internal static class EvidencePolicy
     // `passing_checks`: a merged pull request's final commit has unreadable checks, no passed
     //   check, or a check whose newest run failed, is still running, or was cancelled; also when
     //   none is merged.
-    // `release`: a merged pull request is not in the history of any linked release; also when
-    //   none is merged.
+    // `release`: a merged pull request is not in the history of any linked release, nor of any
+    //   release recorded for the project (ADR-069), which callers pass in as release facts;
+    //   also when none is merged.
     // Linked commits and unmerged pull requests neither count toward nor block it.
     public static List<string> Missing(IReadOnlyCollection<EvidenceFacts> evidence)
     {
@@ -48,6 +51,14 @@ internal static class EvidencePolicy
         var checks = (JsonSerializer.Deserialize<List<EvidenceCheck>>(stored, Json) ?? []).FindAll(c => !c.Superseded);
         return checks.Exists(c => c.Result == "passed") && checks.TrueForAll(c => Acceptable.Contains(c.Result));
     }
+
+    // The releases recorded for a project (ADR-066), as release facts for `Missing`: each one's
+    // comparison is keyed by evidence ID, as a linked release's is, so a recorded release that
+    // GitHub found contains a requirement's merged pull request meets the release part (ADR-069).
+    // Any environment counts. Pass them alongside a requirement's own links, never in place of them.
+    public static async Task<List<EvidenceFacts>> RecordedReleasesAsync(SpecThreadDbContext db, Guid projectId, CancellationToken cancel) =>
+        await db.ProjectReleases.AsNoTracking().Where(r => r.ProjectId == projectId)
+            .Select(r => new EvidenceFacts(r.Id, "release", null, null, r.Contains)).ToListAsync(cancel);
 
     // Which linked changes a release's history includes, by evidence ID; empty when not yet read (ADR-037).
     private static Dictionary<Guid, bool> ReadContains(string? stored) =>

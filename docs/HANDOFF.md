@@ -1,6 +1,29 @@
 # Shared handoff
 
-## Current task: US-13, releases recorded with an environment and date (2026-11-28)
+## Current task: recorded releases count toward Evidence complete (2026-11-28)
+
+- Branch: `feature/evidence-complete-deployments`, stacked on `feature/us-13-release-records`
+  (PR #37); its PR targets that branch and moves to `main` once #37 merges.
+- Scope: the product owner's decision of 2026-11-28 (Jira SPEC-21 comment): a release recorded
+  for the project that GitHub confirms contains a requirement's merged pull request meets the
+  release part of Evidence complete. Recorded as ADR-069, amending ADR-057.
+- Completed: `EvidencePolicy.RecordedReleasesAsync`; the requirement list and
+  `MissingEvidenceAsync` pass recorded releases to `EvidencePolicy.Missing`; the rule's wording
+  "A linked or recorded release that includes each merged pull request".
+- Changed files: API `Requirements/{EvidencePolicy,RequirementEndpoints}.cs`; web
+  `lib/projects.ts`; tests `tests/schema/milestones.spec.ts`, `tests/e2e/milestones.spec.ts`;
+  docs DECISIONS (ADR-069, note on ADR-066), PROJECT, TESTING, this file.
+- Decisions and assumptions: any environment counts; decisions don't become outdated when a
+  release is recorded. No migration or variable.
+- Checks (2026-11-28, local): `npm test` 448 passed; `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check` passed.
+- Known issues and risks: PR #39 (US-17) asserts the rule's old wording in
+  tests/api/glossary.spec.ts and tests/e2e/glossary.spec.ts; whichever merges second updates it.
+  PR #41's export endpoint calls `EvidencePolicy.Missing` with links only; once both are merged,
+  pass `RecordedReleasesAsync` there too.
+- Next step: review after #37.
+
+## Previous task: US-13, releases recorded with an environment and date (2026-11-28)
 
 - Branch: `feature/us-13-release-records`, from `main` at `d4f0079`. Independent of PRs #34,
   #35, and #36; each adds an entry here and an ADR (063 to 066). #36 and this branch both add a

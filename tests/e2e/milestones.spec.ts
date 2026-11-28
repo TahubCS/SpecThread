@@ -90,7 +90,7 @@ test("requirements are grouped by milestone, filtered one set at a time, and cou
   const parts = page.getByRole("list", { name: "Evidence complete rule" }).getByRole("listitem");
   await expect(parts).toHaveText([
     "A linked issueMet", "A merged pull requestMet", "Checks passed on the final commit of each merged pull requestMet",
-    "A linked release that includes each merged pull requestMet",
+    "A linked or recorded release that includes each merged pull requestMet",
   ]);
   await expect(page.getByRole("region", { name: "Evidence" }).getByText("Evidence complete", { exact: true })).toBeVisible();
   await page.goto(`/projects/${projectId}/requirements`);
