@@ -336,6 +336,11 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- Recorded releases meeting the release part (ADR-069): tests/schema/milestones.spec.ts records
+  releases for the project directly in the database and checks the list and the single
+  requirement agree: one that doesn't contain the merged pull request, or one recorded for
+  another project, leaves "release" missing; one that contains it completes the evidence.
+  tests/e2e/milestones.spec.ts reads the rule's new wording.
 - Recorded releases (ADR-066, US-13). tests/schema/releases.spec.ts (API on 5136, GitHub
   stand-in on 5137): recording with tag, environment, date, who, and when; the included
   requirements found by merge commit and commit, an issue never compared, a commit GitHub no

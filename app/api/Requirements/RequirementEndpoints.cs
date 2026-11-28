@@ -50,11 +50,12 @@ internal static class RequirementEndpoints
                 .Select(e => new { e.RequirementId, Facts = new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains) }).ToListAsync(cancel))
             .ToLookup(e => e.RequirementId);
         var criteriaVersions = await CriteriaVersionEndpoints.LatestNumbersAsync(db, ids, cancel);
+        var recorded = await EvidencePolicy.RecordedReleasesAsync(db, projectId, cancel);
 
         return TypedResults.Ok(requirements.ConvertAll(r =>
         {
             var links = evidence[r.Id].Select(e => e.Facts).ToList();
-            var missing = EvidencePolicy.Missing(links);
+            var missing = EvidencePolicy.Missing([.. links, .. recorded]);
             int? criteriaVersion = criteriaVersions.TryGetValue(r.Id, out var number) ? number : null;
             return new RequirementSummary(
                 r.Id, r.ProjectId, r.Title, r.Version, r.CreatedAt, r.UpdatedAt, r.ArchivedAt, links.Count,
@@ -325,10 +326,15 @@ internal static class RequirementEndpoints
         criteria.Select(c => new CriterionResponse(c.Id, c.Text, c.Position)).ToList(), documents, criteriaVersion, r.Milestone,
         evidenceMissing.Count == 0, evidenceMissing);
 
-    // The parts of the Evidence complete rule one requirement's links do not meet (ADR-057).
-    private static async Task<List<string>> MissingEvidenceAsync(SpecThreadDbContext db, Guid requirementId, CancellationToken cancel) =>
-        EvidencePolicy.Missing(await db.RequirementEvidence.AsNoTracking().Where(e => e.RequirementId == requirementId)
-            .Select(e => new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains)).ToListAsync(cancel));
+    // The parts of the Evidence complete rule one requirement's links, with the releases recorded
+    // for its project, do not meet (ADR-057, ADR-069).
+    private static async Task<List<string>> MissingEvidenceAsync(SpecThreadDbContext db, Guid requirementId, CancellationToken cancel)
+    {
+        var links = await db.RequirementEvidence.AsNoTracking().Where(e => e.RequirementId == requirementId)
+            .Select(e => new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains)).ToListAsync(cancel);
+        var projectId = await db.Requirements.AsNoTracking().Where(r => r.Id == requirementId).Select(r => r.ProjectId).SingleAsync(cancel);
+        return EvidencePolicy.Missing([.. links, .. await EvidencePolicy.RecordedReleasesAsync(db, projectId, cancel)]);
+    }
 
     // `Role` is the caller's team role as of the lock (ADR-058); reads that do not lock leave it empty.
     internal sealed record MemberRequirement(Requirement Requirement, bool ProjectArchived, string Role)

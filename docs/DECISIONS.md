@@ -1729,9 +1729,36 @@ Consequences: A recording costs one GitHub call for the release, one for its tag
 distinct linked commit. Inclusion is as of the last comparison. A release linked to a requirement
 (ADR-037) and a release recorded for the project are separate: the Evidence complete rule
 (ADR-057) still reads only linked releases, so recording a deployment does not by itself complete
-a requirement's evidence (a team decision is needed to change that). A wrongly recorded release
+a requirement's evidence (a team decision is needed to change that). ADR-069 later makes
+recorded releases count. A wrongly recorded release
 can't be removed in the product yet. The evidence thread (ADR-064) and the project audit trail
 (ADR-065) can add these records once merged. Rollback drops the table only.
+
+ADR-069: A release recorded for the project also meets the release part of Evidence complete
+
+Status: Accepted
+
+Context: ADR-057's rule needs "a linked release that includes each merged pull request": the
+release had to be linked on every requirement. ADR-066 lets a tech lead record a release once for
+the project, with its environment and date, and SpecThread asks GitHub which linked changes it
+contains; but such a release did not count, so a requirement could show "deployed to
+Production" and "Missing release" at once, and a release covering twenty requirements needed
+twenty more links. The product owner decided on 2026-11-28 that recorded releases count.
+
+Decision: The release part is met when each merged pull request is in the history of a release
+linked on the requirement (ADR-037) or of a release recorded for the requirement's project
+(ADR-066), as GitHub reported when it was last compared. Any environment counts, as any linked
+release does. `EvidencePolicy.Missing` is unchanged; the requirement list and every single
+requirement response pass the project's recorded releases to it as release facts, because a
+recorded release's comparison is keyed by evidence ID like a linked one's. The rule's text on a
+requirement page reads "A linked or recorded release that includes each merged pull request".
+Decisions are unaffected: recording a release doesn't change a requirement's links, so it never
+makes a decision outdated.
+
+Consequences: Recording or comparing a release again can turn many requirements Evidence complete
+at once. A recorded release counts only for changes linked when it was last compared; "Compare
+again" picks up later links. Each requirement read makes one more query for the project's
+recorded releases. Rollback: stop passing recorded releases to the rule.
 
 ADR-NNN: Title
 
