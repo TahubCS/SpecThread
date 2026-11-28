@@ -253,6 +253,31 @@ test("a failed check and its re-run on the same commit are both shown, with time
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
+test("a requirement lists the distinct authors of its linked commits and pull requests, without counts or ranking", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const [first, second, lone] = [sha("abc1234"), sha("bcd2345"), sha("cde3456")];
+  const { repositoryId } = await connect(projectId, [
+    issue(2, "Guests cannot pay", { user: "reporter" }),
+    issue(9, "Add guest checkout", { pull: true, user: "grace", commits: [
+      { sha: first, message: "Add guest path", date: "2026-09-08T09:00:00Z", login: "ada" },
+      { sha: second, message: "Fix totals", date: "2026-09-08T11:00:00Z", login: "grace" },
+    ] }),
+  ]);
+  await setGitHubCommits(repositoryId, [{ sha: lone, message: "Hotfix rounding", date: "2026-09-20T09:00:00Z", login: null, name: "Linus Torvalds" }]);
+  await page.goto(url);
+  // Only an issue linked: no code authors to list yet.
+  await link(page, "2");
+  await expect(page.getByRole("heading", { name: "Authors of linked commits and pull requests" })).toHaveCount(0);
+  await link(page, "9");
+  await link(page, lone);
+  const authors = page.getByRole("list", { name: "Authors of linked commits and pull requests" }).getByRole("listitem");
+  await expect(authors).toHaveText(["ada", "grace", "Linus Torvalds"]);
+  // The issue's reporter is not an author of code, and nothing is counted or ranked.
+  await expect(authors).not.toContainText(["reporter"]);
+  await expect(page.getByRole("list", { name: "Authors of linked commits and pull requests" })).not.toContainText(/\d/);
+  await page.screenshot({ path: testInfo.outputPath("evidence-authors.png"), fullPage: true });
+});
+
 test("a release shows which linked commits and pull requests its history contains", async ({ page }, testInfo) => {
   const { projectId, url } = await createRequirement(page);
   const [head, squash, early, late, newer] = [sha("abc1234"), sha("5ca1ab1e"), sha("0a1b2c3d"), sha("feed123"), sha("beef456")];

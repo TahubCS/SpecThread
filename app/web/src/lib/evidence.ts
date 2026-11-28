@@ -201,6 +201,33 @@ export function checkSummary(evidence: Pick<Evidence, "kind" | "checks" | "check
   return parts.join(", ");
 }
 
+/**
+ * The distinct authors of a requirement's linked commits and pull requests, including the
+ * authors of the commits inside each linked pull request, in alphabetical order (US-19). An
+ * author is a GitHub account, or the name written in a commit that matches no account. Nothing
+ * is counted or ranked: the list says who worked on it, not how much.
+ */
+export function evidenceAuthors(evidence: Pick<Evidence, "kind" | "author" | "commits">[]): string[] {
+  const authors = new Set<string>();
+  for (const item of evidence) {
+    if (item.kind !== "commit" && item.kind !== "pull_request") continue;
+    if (item.author) authors.add(item.author);
+    for (const commit of item.commits ?? []) if (commit.author) authors.add(commit.author);
+  }
+  return [...authors].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }) || a.localeCompare(b));
+}
+
+/**
+ * The labels, such as "#9", of linked pull requests whose commits were not all read (GitHub lists
+ * at most 100 per pull request, and a failed read lists none), so some of their authors may be
+ * missing from `evidenceAuthors`.
+ */
+export function pullRequestsWithUnreadCommits(evidence: Pick<Evidence, "kind" | "number" | "commitCount" | "commits">[]): string[] {
+  return evidence
+    .filter(item => item.kind === "pull_request" && item.commitCount !== null && item.commitCount > (item.commits?.length ?? 0))
+    .map(item => `#${item.number}`);
+}
+
 /** Reads the `detail` of a problem-details body, or null when there is none. */
 export function problemDetail(problem: unknown): string | null {
   const detail = (problem as { detail?: unknown } | null)?.detail;
