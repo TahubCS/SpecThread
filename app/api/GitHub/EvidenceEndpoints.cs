@@ -406,7 +406,7 @@ internal static partial class EvidenceEndpoints
 
     // The commit that a release would contain: a commit itself, or a merged pull request's commit
     // on its target branch. Null for anything that cannot be in a release.
-    private static string? ChangeSha(RequirementEvidence evidence) => evidence.Kind switch
+    internal static string? ChangeSha(RequirementEvidence evidence) => evidence.Kind switch
     {
         "commit" => evidence.Sha,
         "pull_request" when evidence.State == "merged" => evidence.MergeSha,
@@ -478,7 +478,7 @@ internal static partial class EvidenceEndpoints
 
     // Runs `read` for every input with at most MaxConcurrentReads in flight, and returns the
     // results in input order. Reads must not touch the DbContext, which is not thread-safe.
-    private static async Task<List<TResult>> ReadConcurrentlyAsync<TInput, TResult>(
+    internal static async Task<List<TResult>> ReadConcurrentlyAsync<TInput, TResult>(
         IReadOnlyList<TInput> inputs, Func<TInput, Task<TResult>> read, CancellationToken cancel)
     {
         using var gate = new SemaphoreSlim(MaxConcurrentReads);

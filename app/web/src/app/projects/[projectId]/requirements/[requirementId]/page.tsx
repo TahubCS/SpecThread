@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { EvidenceStatus } from "@/components/evidence-status";
@@ -9,10 +10,11 @@ import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
 import { ReviewPanel } from "@/components/review-panel";
 import { documentTypeLabel } from "@/lib/documents";
+import { formatDeployedOn, releasesIncluding } from "@/lib/releases";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listComments, listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews,
-  requireProject, requireRequirement,
+  listComments, listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listReleases, listRequirements,
+  listReviews, requireProject, requireRequirement,
 } from "@/lib/project-data";
 import { canEditProject, canReviewProject, formatDate } from "@/lib/projects";
 import { requireTeamSession } from "@/lib/teams";
@@ -37,13 +39,17 @@ export default async function Page({ params }: Props) {
   const { projectId, requirementId } = await params;
   // One round of parallel reads. Each is authorized by the API, and requireRequirement still
   // shows the not-found page before anything renders when the requirement is in another project.
-  const [project, requirement, members, repository, evidence, reviews, followUps, requirements, milestones, evidenceHistory, suggestions, comments, session] = await Promise.all([
+  const [project, requirement, members, repository, evidence, reviews, followUps, requirements, milestones, evidenceHistory, suggestions, comments, releases, session] = await Promise.all([
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId),
     listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
     listEvidenceSuggestions(requirementId), listComments(requirementId),
+    // Deployments are secondary: when they can't be read, the rest of the page still shows.
+    listReleases(projectId).catch((error: unknown) => { unstable_rethrow(error); return "unavailable" as const; }),
     requireTeamSession(`/projects/${projectId}/requirements/${requirementId}`),
   ]);
+  // Recorded releases whose history includes one of this requirement's linked changes (ADR-066).
+  const deployments = releases === null || releases === "unavailable" ? [] : releasesIncluding(requirementId, releases);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
   // Reviewers and Observers read everything; only Owners, Admins, and Members change it (ADR-058).
@@ -142,6 +148,26 @@ export default async function Page({ params }: Props) {
               </details>
             )}
           </>
+        )}
+        {deployments.length > 0 && (
+          <div className="requirement-deployments">
+            <h3 id="deployments-heading">Deployments</h3>
+            <ul aria-labelledby="deployments-heading">
+              {deployments.map(release => (
+                <li key={release.id}>
+                  <Link href={`/projects/${project.id}/releases/${release.id}`}>{release.tag}</Link> deployed to {release.environment} on{" "}
+                  {formatDeployedOn(release.deployedOn)}
+                  <span className="muted"> · recorded by {nameOf(release.recordedBy)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {releases === "unavailable" && (
+          <p className="notice notice-error" role="status">
+            Deployments could not be loaded. Reload the page to try again, or open the project&apos;s{" "}
+            <Link href={`/projects/${project.id}/releases`}>Releases</Link>.
+          </p>
         )}
         {repository === null && evidence.length > 0 && (
           <p className="notice">

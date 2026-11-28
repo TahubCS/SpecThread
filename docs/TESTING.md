@@ -345,6 +345,21 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- Recorded releases (ADR-066, US-13). tests/schema/releases.spec.ts (API on 5136, GitHub
+  stand-in on 5137): recording with tag, environment, date, who, and when; the included
+  requirements found by merge commit and commit, an issue never compared, a commit GitHub no
+  longer has never included; the same tag in another environment; newest deployment first;
+  every role reads and outsiders get 404; validation of each field and a tag GitHub doesn't
+  have; read-only roles refused; duplicates; a GitHub failure saving nothing; no repository and
+  an archived project; refreshing with a change linked since, keeping who recorded it; a
+  different repository; and the migration's RLS, grants, constraints, unique index, and
+  rollback. tests/api/releases.spec.ts checks parsing and wording without a browser.
+  tests/e2e/releases.spec.ts records through the Releases tab (a missing tag and a GitHub
+  failure keep what was typed), reads the release page and the requirement's Deployments,
+  refuses a duplicate, checks phone width, compares again after a new link, an Observer
+  reading without recording, and a project without a repository. The migration-history
+  counts in evidence, github-repository, and reviews specs include ProjectReleases, and
+  tests/e2e/projects.spec.ts lists the Releases tab.
 - Requirement comments (ADR-059). tests/schema/comments.spec.ts (API on 5134): every
   role, Observers included, comments and replies, and the requirement and its decisions
   stay identical; validation (empty, 5,001 characters, NUL on create and edit, unknown

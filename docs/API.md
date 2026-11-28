@@ -56,6 +56,10 @@ Observers get 403 with "Your role on this team can read this project but not cha
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
 | POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
 | DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| GET | `/projects/{projectId}/releases` | member | | 200 `ProjectRelease[]`, newest deployment first (ADR-066) |
+| POST | `/projects/{projectId}/releases` | Owner, Admin, Member | `{ tag, environment, deployedOn }` | 201 `ProjectRelease` (400 on a field, including a tag GitHub has no published release for; 409 without a repository, archived, already recorded for that environment, more than 300 changes to compare, or the repository changing; 502/503 GitHub) |
+| GET | `/releases/{releaseId}` | member | | 200 `ProjectRelease` |
+| POST | `/releases/{releaseId}/refresh` | Owner, Admin, Member | | 200 `ProjectRelease`, compared again with every change linked now (409 archived, no repository, or a different repository) |
 | GET | `/requirements/{requirementId}/comments` | member | | 200 `Comments` |
 | POST | `/requirements/{requirementId}/comments` | member, any role | `{ body, parentId? }` | 201 `Comment` (409 when archived or the parent was deleted) |
 | PATCH | `/requirements/{requirementId}/comments/{commentId}` | the comment's author | `{ body }` | 200 `Comment` (409 when archived or deleted) |
@@ -235,6 +239,18 @@ type Comments = {
   // parentId and authorId describe the comment, actor who made the change.
   history: { id: string; commentId: string; parentId: string | null; authorId: string;
     action: "created" | "edited" | "deleted"; actor: string; occurredAt: string }[];
+};
+// A published GitHub release recorded as deployed to an environment (ADR-066). tag, name, url,
+// sha, author, prerelease, and publishedAt are GitHub's. environment is 1 to 50 characters;
+// deployedOn is a calendar date (YYYY-MM-DD, not after tomorrow in UTC). requirements lists those
+// with a linked commit or merged pull request the release's history includes, as compared at
+// comparedAt (compared changes in all); changes linked later count after a refresh.
+type ProjectRelease = {
+  id: string; projectId: string; tag: string; name: string; url: string; sha: string; author: string | null;
+  prerelease: boolean; publishedAt: string; environment: string; deployedOn: string;
+  recordedBy: string; recordedAt: string; comparedAt: string; compared: number;
+  requirements: { id: string; title: string; archivedAt: string | null;
+    changes: { evidenceId: string; kind: "commit" | "pull_request"; label: string; title: string }[] }[];
 };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {

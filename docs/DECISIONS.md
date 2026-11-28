@@ -1733,6 +1733,41 @@ real GitHub; try it once on a repository with a re-run. Rollback: revert the cha
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
 
+ADR-066: Releases are recorded per project with the environment and date they were deployed
+
+Status: Accepted
+
+Context: US-13 (Jira SPEC-21) asks to record a release or deployment and see which requirements
+it includes, so reviewers know a change reached staging or production: a release records its
+name/tag, environment, and date; requirements whose linked commits are in it show it; and the
+record shows who added it. ADR-037 lets one requirement link a release and compares it with that
+requirement's changes, but it records no environment or deployment date, and each requirement has
+to link the release itself. GitHub deployments can't be read: the app lacks that permission
+(ADR-037). The scaffold reserved `/projects/{id}/releases` and `/releases/{releaseId}`.
+
+Decision: Migration ProjectReleases adds `project_releases`. An Owner, Admin, or Member records a
+published release of the connected repository by its tag, with an environment (free text up to
+50 characters; Production, Staging, and Test are offered) and the calendar date it was deployed
+(not after tomorrow in UTC). The API reads the release from GitHub as the app, then asks GitHub's
+compare endpoint, once per distinct commit, whether the release's history includes each linked
+commit and merged pull request (by its merge commit) in the project, archived requirements
+included, and stores the answers by evidence ID. At most 300 distinct commits are compared in one
+request. GitHub is read without the team lock and the save rechecks role, archive state, and the
+connected repository under it (ADR-048). The same tag may be recorded once per environment. Who
+recorded it and when are kept. "Compare again" re-runs the comparison so changes linked since are
+included; the release itself and who recorded it don't change. Every member reads the project's
+Releases tab (a new tab), each release's page with its included requirements and their changes,
+and, on a requirement's page, the deployments that include it. Records can't be edited or removed
+in the product.
+
+Consequences: A recording costs one GitHub call for the release, one for its tag, and one per
+distinct linked commit. Inclusion is as of the last comparison. A release linked to a requirement
+(ADR-037) and a release recorded for the project are separate: the Evidence complete rule
+(ADR-057) still reads only linked releases, so recording a deployment does not by itself complete
+a requirement's evidence (a team decision is needed to change that). A wrongly recorded release
+can't be removed in the product yet. The evidence thread (ADR-064) and the project audit trail
+(ADR-065) can add these records once merged. Rollback drops the table only.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

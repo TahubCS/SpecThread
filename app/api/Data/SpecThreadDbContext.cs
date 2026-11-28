@@ -26,6 +26,7 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<RequirementFollowUpEvent> RequirementFollowUpEvents => Set<RequirementFollowUpEvent>();
     public DbSet<RequirementComment> RequirementComments => Set<RequirementComment>();
     public DbSet<RequirementCommentEvent> RequirementCommentEvents => Set<RequirementCommentEvent>();
+    public DbSet<ProjectRelease> ProjectReleases => Set<ProjectRelease>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -455,5 +456,33 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         commentEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<RequirementComment>().WithMany().HasForeignKey(x => x.CommentId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
+
+        var release = model.Entity<ProjectRelease>();
+        release.ToTable("project_releases", table =>
+        {
+            table.HasCheckConstraint("ck_project_releases_environment", "char_length(environment) BETWEEN 1 AND 50 AND environment = btrim(environment)");
+            table.HasCheckConstraint("ck_project_releases_sha", "sha ~ '^[0-9a-f]{40}$'");
+            table.HasCheckConstraint("ck_project_releases_tag", "char_length(tag) BETWEEN 1 AND 255");
+        });
+        release.HasKey(x => x.Id);
+        release.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        release.Property(x => x.ProjectId).HasColumnName("project_id");
+        release.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        release.Property(x => x.Tag).HasColumnName("tag");
+        release.Property(x => x.Name).HasColumnName("name");
+        release.Property(x => x.Sha).HasColumnName("sha");
+        release.Property(x => x.Url).HasColumnName("url");
+        release.Property(x => x.Author).HasColumnName("author");
+        release.Property(x => x.Prerelease).HasColumnName("prerelease");
+        release.Property(x => x.PublishedAt).HasColumnName("published_at");
+        release.Property(x => x.Environment).HasColumnName("environment");
+        release.Property(x => x.DeployedOn).HasColumnName("deployed_on");
+        release.Property(x => x.RecordedBy).HasColumnName("recorded_by");
+        release.Property(x => x.RecordedAt).HasColumnName("recorded_at").HasDefaultValueSql("now()");
+        release.Property(x => x.Contains).HasColumnName("contains");
+        release.Property(x => x.ComparedAt).HasColumnName("compared_at");
+        release.HasIndex(x => new { x.ProjectId, x.RepositoryId, x.Tag, x.Environment }).IsUnique();
+        release.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        release.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.RecordedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

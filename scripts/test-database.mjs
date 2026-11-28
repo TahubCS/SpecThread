@@ -64,6 +64,7 @@ export async function startTestDatabase() {
     await pool.query(await readSql("docs/schema/requirement-evidence-suggestions.sql"));
     await pool.query(await readSql("docs/schema/team-reviewer-observer-roles.sql"));
     await pool.query(await readSql("docs/schema/requirement-comments.sql"));
+    await pool.query(await readSql("docs/schema/project-releases.sql"));
     return { name, connectionString, pool, stop };
   } catch (error) {
     await stop();

@@ -1,6 +1,45 @@
 # Shared handoff
 
-## Current task: US-12, check results with failures and re-runs (2026-11-28)
+## Current task: US-13, releases recorded with an environment and date (2026-11-28)
+
+- Branch: `feature/us-13-release-records`, from `main` at `d4f0079`. Independent of PRs #34,
+  #35, and #36; each adds an entry here and an ADR (063 to 066). #36 and this branch both add a
+  migration and bump the same migration counts and the product-table count, so whichever merges
+  second must set the counts one higher (evidence.spec 24/23/22/21, github-repository 24,
+  reviews 25, and "twenty-three product tables") and list both migrations in DATABASE.md.
+- Scope: Jira SPEC-21 (US-13). A release records its name/tag, environment, and date;
+  requirements whose linked commits are in it show it; the record shows who added it.
+  Recorded as ADR-066.
+- Completed:
+  - API: migration ProjectReleases (`project_releases`, RLS, constraints, unique per tag and
+    environment) with `scripts/generate-project-releases.mjs` and
+    `docs/schema/project-releases{,-rollback}.sql`; `GitHub/ReleaseEndpoints.cs` (list, record,
+    get, refresh); `EvidenceEndpoints.ChangeSha` and `ReadConcurrentlyAsync` made internal for reuse.
+  - Web: `lib/releases.ts`, loaders `listReleases`/`requireRelease`,
+    `app/projects/release-actions.ts`, `components/release-controls.tsx`, the scaffold Releases
+    and Release details pages made real, a Releases project tab, and a Deployments list in the
+    requirement page's Evidence section.
+- Changed files: API `Data/{ProductModels,SpecThreadDbContext}.cs`, `Program.cs`,
+  `GitHub/{ReleaseEndpoints (new),EvidenceEndpoints}.cs`, migration + designer + snapshot;
+  `scripts/{generate-project-releases (new),test-database}.mjs`, `docs/schema/project-releases*.sql`;
+  web files above, `components/project-tabs.tsx`, `app/app-shell.css`, the requirement page;
+  tests new `tests/{schema,api,e2e}/releases.spec.ts`, counts in
+  `tests/schema/{evidence,github-repository,reviews}.spec.ts`, `tests/e2e/{projects,scaffold}.spec.ts`;
+  docs DECISIONS (ADR-066), API, DATABASE, ARCHITECTURE, PROJECT, TESTING, this file.
+- Decisions and assumptions (confirm with the team): environment is free text (Production,
+  Staging, and Test offered); the date is a calendar date and can't be in the future; recorded
+  releases do not count toward Evidence complete, which still needs a linked release (ADR-057);
+  records can't be removed in the product.
+- Environment change: apply ProjectReleases before deploying the API (CI does on merge). No new variable.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 447 passed; `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check` passed.
+- Known issues and risks: inclusion is as of the last comparison; "Compare again" updates it.
+  Releases with more than 300 distinct linked commits to compare are refused.
+- Next step: review and PR; team decision on whether recorded deployments should satisfy the
+  release part of Evidence complete.
+
+## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
 - Scope: Jira SPEC-20 (US-12). Acceptance criteria: each check result shows its name,

@@ -498,6 +498,21 @@ a.row:focus-visible { outline-offset: -2px; }
 .history-list a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
 .history-decisions { margin: 0; padding-left: 18px; color: var(--app-text-2); font-size: 13px; }
 .follow-up-history li { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+/* Recorded releases (US-13). */
+.release-row { flex-wrap: wrap; row-gap: 2px; }
+.release-row .badge { flex: none; }
+.release-row .row-meta { flex: 1 1 100%; margin-left: 28px; white-space: normal; }
+.release-form { display: grid; gap: 14px; }
+.release-form-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 560px) { .release-form-row { grid-template-columns: minmax(0, 1fr); } }
+.release-details { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 18px 0 0; font-size: 13.5px; }
+.release-details dt { color: var(--app-text-3); }
+.release-details dd { margin: 0; overflow-wrap: anywhere; }
+.release-details a, .requirement-deployments a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+.release-note { margin-top: 10px !important; font-size: 13px; }
+.requirement-deployments { margin-top: 14px; }
+.requirement-deployments h3 { margin: 0 0 6px; color: var(--app-text-2); font-size: 13px; font-weight: 500; }
+.requirement-deployments ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
 /* Finding evidence by title (ADR-054) */
 .evidence-link + .evidence-link { margin-top: 12px; }
 .evidence-link + .evidence-rows, .evidence-link + .muted { margin-top: 8px; }

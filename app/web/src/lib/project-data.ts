@@ -13,6 +13,7 @@ import {
   parseEvidenceHistory, parseEvidenceList, parseEvidenceSuggestions, type Evidence, type EvidenceEvent, type EvidenceSuggestion,
 } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
+import { parseRelease, parseReleases, type ProjectRelease } from "./releases";
 import { parseReviews, type Review } from "./reviews";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
@@ -74,6 +75,24 @@ export const requireRequirement = cache(async (projectId: string, requirementId:
   const requirement = parseRequirement(body);
   if (requirement.projectId !== projectId) notFound();
   return requirement;
+});
+
+/**
+ * Lists a project's recorded releases, newest deployment first (ADR-066). Call after
+ * `requireProject`. Returns null when an API older than release records answers 404.
+ */
+export const listReleases = cache(async (projectId: string): Promise<ProjectRelease[] | null> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/releases`) : null;
+  return body === null ? null : parseReleases(body);
+});
+
+/** Loads a recorded release of the given project, or shows the not-found page. */
+export const requireRelease = cache(async (projectId: string, releaseId: string): Promise<ProjectRelease> => {
+  const body = isUuid(releaseId) ? await read(`/releases/${releaseId}`) : null;
+  if (body === null) notFound();
+  const release = parseRelease(body);
+  if (release.projectId !== projectId) notFound();
+  return release;
 });
 
 /** Lists the issues and pull requests linked to a requirement, oldest first. Call after `requireRequirement`. */
