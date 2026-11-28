@@ -160,6 +160,10 @@ test("a requirement is Evidence complete only with an issue, a merged pull reque
     ["one failed", [issue, merged([check("passed"), check("failed")]), released(1)], ["passing_checks"]],
     ["one running", [issue, merged([check("passed"), check("running")]), released(1)], ["passing_checks"]],
     ["one cancelled", [issue, merged([check("passed"), check("cancelled")]), released(1)], ["passing_checks"]],
+    // Only the newest run of each check counts (ADR-063); earlier runs are history.
+    ["a failed run passed on re-run", [issue, merged([{ ...check("failed"), superseded: true }, check("passed")]), released(1)], []],
+    ["a passed run failed on re-run", [issue, merged([{ ...check("passed"), superseded: true }, check("failed")]), released(1)], ["passing_checks"]],
+    ["only superseded runs passed", [issue, merged([{ ...check("passed"), superseded: true }]), released(1)], ["passing_checks"]],
     ["no release", [issue, merged()], ["release"]],
     ["a release without the pull request", [issue, merged(), released()], ["release"]],
     ["a release not yet compared", [issue, merged(), { kind: "release" }], ["release"]],
