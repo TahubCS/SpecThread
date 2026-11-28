@@ -281,6 +281,17 @@ currently require network access during the web build.
   the Requirements tab and the overview, the row at 390px, and the error page for a
   list whose count is missing, text, or negative. The parser and wording are unit
   tested in tests/api/project-data.spec.ts.
+- Evidence thread (ADR-064, US-16 and US-20): tests/api/thread.spec.ts checks
+  `buildThread` without a browser: every kind of event oldest first with its wording,
+  person, and time; evidence linked after a decision placed after it; GitHub events
+  linking to the item and checks to their log; running checks counted, not placed;
+  open, closed, and unmerged work; same-moment order; and no "verified" or "proven".
+  tests/e2e/thread.spec.ts links an issue, a merged pull request with a passing check,
+  and a release around a "More evidence requested" decision, then reads the thread:
+  criteria above the events, the full ordered list with who and when, the check's log
+  link, the phone width without sideways scrolling, a requirement without a
+  repository, a running check, an API that can't list link changes, an Observer
+  reading it, and another project's requirement showing not found.
 - API: health response without database credentials, development OpenAPI, and
   unknown routes (401 anonymous, 404 authenticated).
 - API JWT validation: valid tokens identify the user; missing, malformed,

@@ -117,6 +117,19 @@ A user can confirm or reject each suggestion.
 
 Confirming or rejecting is recorded with name and timestamp.
 
+Story: one chronological evidence thread
+
+As a client reviewer (Robert), I want one chronological thread for each requirement showing its
+criteria, links, checks, releases, and decisions so that I don't have to search several systems.
+Source: MVP scope. Acceptance criteria (ADR-064, with US-20's "new evidence added after a
+decision appears after it"):
+
+The thread lists events in time order, newest last.
+
+Each event shows what happened, who did it, and when.
+
+The acceptance criteria are shown at the top of the thread.
+
 Story: move a wrongly linked pull request
 
 As a tech lead (Danielle), I want to move a wrongly linked pull request to the correct

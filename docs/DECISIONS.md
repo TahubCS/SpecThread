@@ -1733,6 +1733,40 @@ real GitHub; try it once on a repository with a re-run. Rollback: revert the cha
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
 
+ADR-064: The evidence thread is assembled from recorded data, oldest first
+
+Status: Accepted
+
+Context: US-16 (Jira SPEC-24) asks for one chronological thread per requirement showing its
+criteria, links, checks, releases, and decisions, each event with what happened, who did it, and
+when, and the acceptance criteria at the top. US-20 (SPEC-28) adds that evidence added after a
+decision appears after it. Everything the thread needs is already recorded: the requirement's
+creation, criteria versions (ADR-051), evidence link changes (ADR-054, ADR-056), GitHub's
+snapshots of linked work with their check results and release contents (ADR-033 to ADR-037),
+and decisions (ADR-038). The scaffold reserved `/projects/{id}/requirements/{id}/evidence` as
+"Evidence thread".
+
+Decision: The thread is a read-only page at that route, built in the web app by `buildThread`
+(app/web/src/lib/thread.ts) from the API reads the requirement page already uses; no endpoint,
+table, or migration is added. The page shows the current acceptance criteria and the Evidence
+complete status first, then every event oldest first: requirement created; each criteria
+version; every link added, removed, confirmed, rejected, or moved, by its person; for work linked
+now, an issue or pull request opened (by its GitHub author), merged, closed, or closed without
+merging, a commit, every finished check run with its result and log link, and a release
+published with the linked changes it includes; and every decision with its criteria version and
+note. Events at the same moment keep a natural order (requirement, criteria, GitHub work, links,
+checks, decisions). Times are shown in UTC to the minute. GitHub's events say "By ada on
+GitHub" or "Reported by GitHub"; SpecThread's say "By" and the member's name. A check still
+running has no time yet: it is counted under the thread and placed once it reports. The
+requirement page links to the thread from its header.
+
+Consequences: GitHub events reflect the links as they are now and as of the last read: work
+that was unlinked keeps only its "Linked" and "Removed" events, and a merge or check that
+happened after the last refresh appears after the next one. Commits inside a pull request are
+not listed one by one (they remain on the requirement page). Comments and follow-ups stay on
+their own sections and on the History page. The page makes seven API reads, as the History page
+does. Rollback: restore the scaffold page; nothing is stored.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

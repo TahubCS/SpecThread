@@ -69,6 +69,7 @@ export default async function Page({ params }: Props) {
         {requirement.criteriaVersion !== null && <>
           {" "}· <Link href={`${base}/${requirement.id}/history`}>Criteria version {requirement.criteriaVersion}</Link>
         </>}
+        {" "}· <Link href={`${base}/${requirement.id}/evidence`}>Evidence thread</Link>
       </p>
       {requirement.archivedAt && (
         <p className="notice">
