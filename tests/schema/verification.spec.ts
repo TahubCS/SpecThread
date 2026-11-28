@@ -153,6 +153,18 @@ test("running starts only the predefined workflow with the run's ID, then stores
   }
 });
 
+test("a run is still found when many newer runs of the same workflow are listed before it", async ({ request }) => {
+  const { projectId, requirementId, repositoryId } = await setUp(request);
+  const runsPath = `/requirements/${requirementId}/verification-runs`;
+  await (await as(request, "owner")).put(`/projects/${projectId}/verification`, { workflow: "specthread-verification.yml", branch: "main" });
+  const member = await as(request, "member");
+  expect((await member.post(runsPath)).status()).toBe(201);
+  // GitHub lists 100 runs per page, newest first, so this run is on the third page.
+  await request.post(`${gitHub}/__github/repositories/${repositoryId}/runs/others`, { data: { count: 250 } });
+  const listed = await (await member.post(`${runsPath}/refresh`)).json();
+  expect(listed[0]).toMatchObject({ status: "running", url: "https://github.com/acme/repo/actions/runs/1" });
+});
+
 test("a run GitHub won't start is kept as not started, and archived requirements or a changed repository refuse to run", async ({ request }) => {
   const { projectId, requirementId, repositoryId } = await setUp(request, [{ file: "specthread-verification.yml", branches: ["main"] }]);
   const owner = await as(request, "owner");

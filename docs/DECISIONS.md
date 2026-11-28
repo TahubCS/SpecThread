@@ -1751,7 +1751,8 @@ active. An Owner, Admin, or Member starts a run from a requirement: the API reco
 `workflow_dispatch` for exactly that workflow and branch, with one input, `specthread_run`,
 carrying the run's ID; anything a caller sends is ignored, so nothing else can be run. The
 workflow must put that input in its run name (a template is on the settings page), so "Refresh
-from GitHub" finds the run among the workflow's `workflow_dispatch` runs and stores its GitHub
+from GitHub" finds the run among the workflow's `workflow_dispatch` runs created since it was
+requested (less five minutes for clock differences, up to 500 runs, page by page) and stores its GitHub
 ID, result (as for checks: passed, failed, cancelled, skipped, neutral), start and finish times,
 and its page, which holds the logs. A dispatch GitHub refuses is kept as `not_started` with the
 reason shown. Results read "Check passed" and "Check failed". The GitHub App needs Actions read

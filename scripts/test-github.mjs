@@ -22,6 +22,9 @@ import { createVerify } from "node:crypto";
 //                                    { workflows: [{ file, name?, active?, branches?: [branch] }] }   (clears earlier runs)
 //   POST   /__github/repositories/<id>/runs/latest   { status, conclusion? }: changes the newest run, as GitHub would as it runs
 //   GET    /__github/repositories/<id>/runs          { runs }: every run started, with the inputs it was given
+//   POST   /__github/repositories/<id>/runs/others   { count }: adds that many newer dispatch runs of the
+//                                    first workflow that SpecThread didn't start, as a busy repository has
+//                                    Runs are listed newest first; `created=>=<time>` lists only runs created since.
 //                                    A dispatch to a missing workflow answers 404; to a branch not listed (default
 //                                    ["main"]) or with inputs other than specthread_run, 422, as GitHub does.
 //   PUT    /__github/repositories/<id>/releases
@@ -107,6 +110,17 @@ export function startFakeGitHub({ port, appId, publicKey }) {
           if (!run) return send(response, 404);
           const change = JSON.parse(body);
           Object.assign(run, { status: change.status, conclusion: change.conclusion ?? null, updated_at: change.updated_at ?? new Date().toISOString() });
+        } else if (request.method === "POST" && /^\/__github\/repositories\/\d+\/runs\/others$/.test(url.pathname)) {
+          const state = workflows.get(Number(url.pathname.split("/")[3]));
+          if (!state) return send(response, 404);
+          for (let index = 0; index < JSON.parse(body).count; index++) {
+            const id = state.runs.length + 1;
+            state.runs.push({
+              id, name: state.files[0]?.name ?? "Workflow", display_title: "Another run " + id, status: "completed", conclusion: "success",
+              event: "workflow_dispatch", head_branch: "main", inputs: {}, html_url: "https://github.com/acme/repo/actions/runs/" + id,
+              created_at: new Date().toISOString(), run_started_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            });
+          }
         } else if (request.method === "GET" && /^\/__github\/repositories\/\d+\/runs$/.test(url.pathname)) {
           return send(response, 200, { runs: workflows.get(Number(url.pathname.split("/")[3]))?.runs ?? [] });
         } else if (request.method === "PUT" && /^\/__github\/repositories\/\d+\/releases$/.test(url.pathname)) {
@@ -190,13 +204,16 @@ export function startFakeGitHub({ port, appId, publicKey }) {
           state.runs.push({
             id, name: workflow.name ?? file, display_title: "SpecThread verification " + inputs.specthread_run, status: "queued", conclusion: null,
             event: "workflow_dispatch", head_branch: ref, inputs, html_url: "https://github.com/acme/repo/actions/runs/" + id,
-            run_started_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(), run_started_at: new Date().toISOString(), updated_at: new Date().toISOString(),
           });
           response.writeHead(204);
           return response.end();
         }
         if (workflowPath[3] === "/runs" && request.method === "GET") {
-          const listed = [...state.runs].reverse().filter(run => url.searchParams.get("event") === null || run.event === url.searchParams.get("event"));
+          const since = /^>=(.+)$/.exec(url.searchParams.get("created") ?? "")?.[1];
+          const listed = [...state.runs].reverse()
+            .filter(run => url.searchParams.get("event") === null || run.event === url.searchParams.get("event"))
+            .filter(run => since === undefined || Date.parse(run.created_at) >= Date.parse(since));
           return send(response, 200, { total_count: listed.length, workflow_runs: page(listed, url) });
         }
       }

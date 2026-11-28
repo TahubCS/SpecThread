@@ -134,10 +134,10 @@ internal interface IGitHubClient
     Task<GitHubResult<bool>> DispatchWorkflowAsync(
         long installationId, long repositoryId, string workflow, string branch, string runName, CancellationToken cancel);
 
-    // The newest run of the workflow started by workflow_dispatch whose name contains runName, or
-    // null when GitHub doesn't list one yet (ADR-070).
+    // The newest run of the workflow started by workflow_dispatch since createdSince whose name
+    // contains runName, or null when GitHub doesn't list one yet (ADR-070). Reads up to 500 runs.
     Task<GitHubResult<GitHubWorkflowRun?>> FindWorkflowRunAsync(
-        long installationId, long repositoryId, string workflow, string runName, CancellationToken cancel);
+        long installationId, long repositoryId, string workflow, string runName, DateTime createdSince, CancellationToken cancel);
 
     // Pull requests of owner/name that mention the issue, from its timeline (ADR-056). NotFound
     // when the issue can't be read.
@@ -831,47 +831,54 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     }
 
     public async Task<GitHubResult<GitHubWorkflowRun?>> FindWorkflowRunAsync(
-        long installationId, long repositoryId, string workflow, string runName, CancellationToken cancel)
+        long installationId, long repositoryId, string workflow, string runName, DateTime createdSince, CancellationToken cancel)
     {
         var token = await CreateInstallationTokenAsync(installationId, cancel);
         if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubWorkflowRun?>.Fail(token.Failure);
-        var (failure, body) = await SendAsync(HttpMethod.Get,
-            $"repositories/{repositoryId}/actions/workflows/{Uri.EscapeDataString(workflow)}/runs?event=workflow_dispatch&per_page={PageSize}",
-            token.Value!, cancel);
-        if (failure != GitHubFailure.None) return GitHubResult<GitHubWorkflowRun?>.Fail(AsInstallation(failure));
-        using (body)
+        // Only runs created since the dispatch can be this one, and GitHub lists 100 per page, so
+        // a busy workflow is read page by page until a short page or the page limit.
+        var created = Uri.EscapeDataString($">={createdSince.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}");
+        GitHubWorkflowRun? found = null;
+        for (var page = 1; page <= MaxListPages; page++)
         {
-            var root = body!.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("workflow_runs", out var runs) || runs.ValueKind != JsonValueKind.Array)
+            var (failure, body) = await SendAsync(HttpMethod.Get,
+                $"repositories/{repositoryId}/actions/workflows/{Uri.EscapeDataString(workflow)}/runs?event=workflow_dispatch&created={created}&per_page={PageSize}&page={page}",
+                token.Value!, cancel);
+            if (failure != GitHubFailure.None) return GitHubResult<GitHubWorkflowRun?>.Fail(AsInstallation(failure));
+            using (body)
             {
-                return GitHubResult<GitHubWorkflowRun?>.Fail(GitHubFailure.Unavailable);
-            }
-            GitHubWorkflowRun? found = null;
-            foreach (var run in runs.EnumerateArray())
-            {
-                var title = run.GetPropertyOrDefault("display_title").GetStringOrNull() ?? run.GetPropertyOrDefault("name").GetStringOrNull();
-                if (title is null || !title.Contains(runName, StringComparison.Ordinal)) continue;
-                if (!run.TryGetProperty("id", out var id) || !id.TryGetInt64(out var runId) ||
-                    run.GetPropertyOrDefault("status").GetStringOrNull() is not { } status ||
-                    ReadGitHubLink(run, "html_url") is not { } url)
+                var root = body!.RootElement;
+                if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("workflow_runs", out var runs) || runs.ValueKind != JsonValueKind.Array)
                 {
                     return GitHubResult<GitHubWorkflowRun?>.Fail(GitHubFailure.Unavailable);
                 }
-                var conclusion = run.GetPropertyOrDefault("conclusion").GetStringOrNull();
-                var result = status != "completed" ? "running" : conclusion switch
+                foreach (var run in runs.EnumerateArray())
                 {
-                    "success" => "passed",
-                    "failure" or "timed_out" or "action_required" or "startup_failure" => "failed",
-                    "cancelled" => "cancelled",
-                    "skipped" => "skipped",
-                    _ => "neutral",
-                };
-                var candidate = new GitHubWorkflowRun(runId, result, url, ReadDate(run, "run_started_at"),
-                    result == "running" ? null : ReadDate(run, "updated_at"));
-                if (found is null || candidate.Id > found.Id) found = candidate;
+                    var title = run.GetPropertyOrDefault("display_title").GetStringOrNull() ?? run.GetPropertyOrDefault("name").GetStringOrNull();
+                    if (title is null || !title.Contains(runName, StringComparison.Ordinal)) continue;
+                    if (!run.TryGetProperty("id", out var id) || !id.TryGetInt64(out var runId) ||
+                        run.GetPropertyOrDefault("status").GetStringOrNull() is not { } status ||
+                        ReadGitHubLink(run, "html_url") is not { } url)
+                    {
+                        return GitHubResult<GitHubWorkflowRun?>.Fail(GitHubFailure.Unavailable);
+                    }
+                    var conclusion = run.GetPropertyOrDefault("conclusion").GetStringOrNull();
+                    var result = status != "completed" ? "running" : conclusion switch
+                    {
+                        "success" => "passed",
+                        "failure" or "timed_out" or "action_required" or "startup_failure" => "failed",
+                        "cancelled" => "cancelled",
+                        "skipped" => "skipped",
+                        _ => "neutral",
+                    };
+                    var candidate = new GitHubWorkflowRun(runId, result, url, ReadDate(run, "run_started_at"),
+                        result == "running" ? null : ReadDate(run, "updated_at"));
+                    if (found is null || candidate.Id > found.Id) found = candidate;
+                }
+                if (runs.GetArrayLength() < PageSize) break;
             }
-            return GitHubResult<GitHubWorkflowRun?>.Ok(found);
         }
+        return GitHubResult<GitHubWorkflowRun?>.Ok(found);
     }
 
     // Accepts HTTPS, or HTTP on loopback so tests can stand in for GitHub.

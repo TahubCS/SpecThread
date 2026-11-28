@@ -178,7 +178,9 @@ internal static partial class VerificationEndpoints
         foreach (var run in open)
         {
             if (run.RepositoryId != repository.RepositoryId) continue;
-            var found = await github.FindWorkflowRunAsync(repository.InstallationId, repository.RepositoryId, run.Workflow, RunName(run), cancel);
+            // A few minutes' allowance for the clocks of GitHub and this server differing.
+            var found = await github.FindWorkflowRunAsync(
+                repository.InstallationId, repository.RepositoryId, run.Workflow, RunName(run), run.RequestedAt.AddMinutes(-5), cancel);
             if (found.Failure != GitHubFailure.None) return Failed(found.Failure, repository);
             run.CheckedAt = Clock.UtcNow();
             if (found.Value is not { } seen) continue;
