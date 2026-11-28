@@ -251,6 +251,8 @@ test("a failed check and its re-run on the same commit are both shown, with time
   await expect(checks.nth(0).getByText("Earlier run")).toBeInViewport();
   await expect(checks.nth(0).getByText("Finished Sep 8, 2026, 9:05 AM UTC")).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+});
+
 test("a requirement lists the distinct authors of its linked commits and pull requests, without counts or ranking", async ({ page }, testInfo) => {
   const { projectId, url } = await createRequirement(page);
   const [first, second, lone] = [sha("abc1234"), sha("bcd2345"), sha("cde3456")];
