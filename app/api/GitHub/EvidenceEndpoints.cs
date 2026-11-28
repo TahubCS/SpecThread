@@ -507,7 +507,7 @@ internal static partial class EvidenceEndpoints
         }
         evidence.Checks = checks.Value is null
             ? null
-            : JsonSerializer.Serialize(checks.Value.Items.ConvertAll(c => new EvidenceCheck(c.Name, c.Result, c.Url, c.CompletedAt, c.Kind)), CommitJson);
+            : JsonSerializer.Serialize(checks.Value.Items.ConvertAll(c => new EvidenceCheck(c.Name, c.Result, c.Url, c.StartedAt, c.CompletedAt, c.Kind, c.Superseded)), CommitJson);
         evidence.CheckCount = checks.Value?.Total;
         evidence.ChecksReadAt = now;
     }
@@ -618,7 +618,10 @@ internal sealed record EvidenceEventResponse(
 
 internal sealed record EvidenceCommit(string Sha, string Message, string? Author, DateTime Date, string Url);
 
-internal sealed record EvidenceCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
+// One run of a check. StartedAt and Superseded are absent from checks stored before ADR-063,
+// which listed only the latest run of each check; read that way, every such run is current.
+internal sealed record EvidenceCheck(
+    string Name, string Result, string? Url, DateTime? StartedAt, DateTime? CompletedAt, string Kind, bool Superseded = false);
 
 internal sealed record EvidenceResponse(
     Guid Id, Guid RequirementId, string Kind, int? Number, string? Sha, string? Tag, bool? Prerelease,

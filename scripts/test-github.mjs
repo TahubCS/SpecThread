@@ -12,9 +12,12 @@ import { createVerify } from "node:crypto";
 //   PUT    /__github/repositories/<id>/commits
 //                                    { commits: [{ sha, message, login?, name?, date, additions?, deletions?, files? }] }
 //   PUT    /__github/repositories/<id>/checks/<sha>
-//                                    { runs?: [{ name, status, conclusion?, html_url?, completed_at? }], total_runs?,
-//                                      statuses?: [{ context, state, target_url?, updated_at? }],
+//                                    { runs?: [{ id?, name, status, conclusion?, html_url?, started_at?, completed_at? }], total_runs?,
+//                                      statuses?: [{ id?, context, state, target_url?, created_at?, updated_at? }],
 //                                      deny?: "runs" | "statuses" | "both" }   (403, as without the permission)
+//                                    Runs are listed in order, oldest first; without filter=all only the last
+//                                    run of each name is answered, as GitHub does. Statuses are listed newest
+//                                    first, as GitHub does. A missing id is the entry's position, counted from 1.
 //   PUT    /__github/repositories/<id>/releases
 //                                    { releases: [{ tag, name?, prerelease?, published_at, author?, sha,
 //                                                   contains?: [sha], unknown?: [sha] }] }
@@ -153,18 +156,22 @@ export function startFakeGitHub({ port, appId, publicKey }) {
         return send(response, 200, { status, ahead_by: status === "identical" ? 0 : 1, behind_by: status === "diverged" ? 1 : 0, commits: [] });
       }
 
-      const checkPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]{40})\/(check-runs|status)$/.exec(url.pathname);
+      const checkPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]{40})\/(check-runs|statuses)$/.exec(url.pathname);
       if (checkPath && request.method === "GET") {
         if (bearer !== installationToken) return send(response, 401, { message: "Bad credentials" });
         const set = checks.get(`${checkPath[1]}/${checkPath[2]}`) ?? {};
-        const denied = set.deny === "both" || set.deny === (checkPath[3] === "status" ? "statuses" : "runs");
+        const denied = set.deny === "both" || set.deny === (checkPath[3] === "statuses" ? "statuses" : "runs");
         if (denied) return send(response, 403, { message: "Resource not accessible by integration" });
         if (checkPath[3] === "check-runs") {
-          const runs = set.runs ?? [];
+          const all = (set.runs ?? []).map((run, index) => ({ id: index + 1, ...run }));
+          // GitHub's default filter is "latest": only the most recent run of each check.
+          const runs = url.searchParams.get("filter") === "all"
+            ? all
+            : all.filter((run, index) => !all.slice(index + 1).some(later => later.name === run.name));
           return send(response, 200, { total_count: set.total_runs ?? runs.length, check_runs: page(runs, url) });
         }
-        const statuses = set.statuses ?? [];
-        return send(response, 200, { state: "pending", total_count: statuses.length, statuses: page(statuses, url) });
+        const statuses = (set.statuses ?? []).map((status, index, list) => ({ id: list.length - index, ...status }));
+        return send(response, 200, page(statuses, url));
       }
 
       const commitPath = /^\/repositories\/(\d+)\/commits\/([0-9a-f]+)$/.exec(url.pathname);
