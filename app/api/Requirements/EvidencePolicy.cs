@@ -20,7 +20,8 @@ internal static class EvidencePolicy
     // `issue`: no issue is linked.
     // `merged_pull_request`: no merged pull request is linked.
     // `passing_checks`: a merged pull request's final commit has unreadable checks, no passed
-    //   check, or a check that failed, is still running, or was cancelled; also when none is merged.
+    //   check, or a check whose newest run failed, is still running, or was cancelled; also when
+    //   none is merged.
     // `release`: a merged pull request is not in the history of any linked release; also when
     //   none is merged.
     // Linked commits and unmerged pull requests neither count toward nor block it.
@@ -38,11 +39,13 @@ internal static class EvidencePolicy
         return missing;
     }
 
-    // Checks pass when they could be read, at least one passed, and the rest passed, were skipped, or were neutral.
+    // Checks pass when they could be read, at least one passed, and the rest passed, were skipped, or
+    // were neutral. Only the newest run of each check counts: a run that a re-run superseded is
+    // history, shown on the page but not what the check reports now (ADR-063).
     private static bool ChecksPassed(string? stored)
     {
         if (stored is null) return false;
-        var checks = JsonSerializer.Deserialize<List<EvidenceCheck>>(stored, Json) ?? [];
+        var checks = (JsonSerializer.Deserialize<List<EvidenceCheck>>(stored, Json) ?? []).FindAll(c => !c.Superseded);
         return checks.Exists(c => c.Result == "passed") && checks.TrueForAll(c => Acceptable.Contains(c.Result));
     }
 

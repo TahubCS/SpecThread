@@ -197,7 +197,11 @@ test("check results show in words for a pull request and for commits, and refres
   const checks = page.getByRole("list", { name: "Checks for #9" }).getByRole("listitem");
   await expect(checks.first()).toBeHidden();
   await pull.getByText("2 of 7 checks passed, 1 failed, 1 running").click();
-  await expect(checks).toHaveText([/^Neutral\s*audit/, /^Passed\s*build/, /^Passed\s*ci\/legacy/, /^Cancelled\s*deploy/, /^Skipped\s*docs/, /^Running\s*e2e/, /^Failed\s*lint/]);
+  // Results read "Check passed" and "Check failed", never verified or proven (US-12).
+  await expect(checks).toHaveText([
+    /^Neutral\s*audit/, /^Check passed\s*build/, /^Check passed\s*ci\/legacy/, /^Cancelled\s*deploy/, /^Skipped\s*docs/, /^Running\s*e2e/, /^Check failed\s*lint/,
+  ]);
+  await expect(page.getByRole("region", { name: "Evidence" })).not.toContainText(/verified|proven/i);
   await expect(checks.nth(1).getByRole("link", { name: /build/ })).toHaveAttribute("href", "https://github.com/acme/repo/runs/build");
   // A status that points at an outside CI service is listed without a link.
   await expect(checks.nth(2).getByRole("link")).toHaveCount(0);
@@ -210,6 +214,43 @@ test("check results show in words for a pull request and for commits, and refres
   await expect(pull).toContainText("3 of 3 checks passed");
   await expect(commit).toContainText("1 of 1 check passed");
   await expect(unreadable).toContainText("0 of 1 check passed, 1 failed");
+});
+
+test("a failed check and its re-run on the same commit are both shown, with times and log links", async ({ page }, testInfo) => {
+  const { projectId, url } = await createRequirement(page);
+  const head = sha("abc1234");
+  const { repositoryId } = await connect(projectId, [
+    issue(9, "Add guest checkout", { pull: true, commits: [{ sha: head, message: "Add guest path", date: "2026-09-08T09:00:00Z" }] }),
+  ]);
+  await setGitHubChecks(repositoryId, head, {
+    runs: [
+      { name: "build", status: "completed", conclusion: "failure", html_url: "https://github.com/acme/repo/actions/runs/1",
+        started_at: "2026-09-08T09:01:00Z", completed_at: "2026-09-08T09:05:00Z" },
+      { name: "build", status: "completed", conclusion: "success", html_url: "https://github.com/acme/repo/actions/runs/2",
+        started_at: "2026-09-08T14:01:00Z", completed_at: "2026-09-08T14:06:00Z" },
+      { name: "e2e", status: "in_progress", conclusion: null, html_url: "https://github.com/acme/repo/actions/runs/3", started_at: "2026-09-08T14:10:00Z" },
+    ],
+  });
+  await page.goto(url);
+  await link(page, "9");
+  const pull = rows(page).first();
+  // The summary counts each check's newest run and says how many earlier runs are listed.
+  await pull.getByText("1 of 2 checks passed, 1 running, 1 earlier run").click();
+  const checks = page.getByRole("list", { name: "Checks for #9" }).getByRole("listitem");
+  await expect(checks).toHaveText([
+    /^Check failed\s*build \(opens its log on GitHub in a new tab\)\s*Earlier run\s*Finished Sep 8, 2026, 9:05 AM UTC$/,
+    /^Check passed\s*build \(opens its log on GitHub in a new tab\)\s*Finished Sep 8, 2026, 2:06 PM UTC$/,
+    /^Running\s*e2e \(opens its log on GitHub in a new tab\)\s*Started Sep 8, 2026, 2:10 PM UTC$/,
+  ]);
+  await expect(checks.nth(0).getByRole("link", { name: /build/ })).toHaveAttribute("href", "https://github.com/acme/repo/actions/runs/1");
+  await expect(checks.nth(1).getByRole("link", { name: /build/ })).toHaveAttribute("href", "https://github.com/acme/repo/actions/runs/2");
+  await page.screenshot({ path: testInfo.outputPath("evidence-check-reruns.png"), fullPage: true });
+  // At phone width every run still shows its marker and time, and nothing widens the page.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await checks.nth(0).scrollIntoViewIfNeeded();
+  await expect(checks.nth(0).getByText("Earlier run")).toBeInViewport();
+  await expect(checks.nth(0).getByText("Finished Sep 8, 2026, 9:05 AM UTC")).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 });
 
 test("a release shows which linked commits and pull requests its history contains", async ({ page }, testInfo) => {
@@ -352,8 +393,8 @@ test("a failing check endpoint stops the link with an explanation and saves noth
     { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 500 },
     { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 200, body: { check_runs: "none" } },
     { path: `^/repositories/${repositoryId}/commits/${head}/check-runs$`, status: 200, body: { total_count: 1, check_runs: [{ name: 5, status: "completed" }] } },
-    { path: `^/repositories/${repositoryId}/commits/${head}/status$`, close: true },
-    { path: `^/repositories/${repositoryId}/commits/${head}/status$`, status: 200, body: { total_count: 1, statuses: [{ context: "ci" }] } },
+    { path: `^/repositories/${repositoryId}/commits/${head}/statuses$`, close: true },
+    { path: `^/repositories/${repositoryId}/commits/${head}/statuses$`, status: 200, body: [{ context: "ci" }] },
   ] as const) {
     await failGitHub("installation", fault);
     await link(page, "9");
