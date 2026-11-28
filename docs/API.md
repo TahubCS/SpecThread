@@ -215,6 +215,9 @@ type RequirementSummary = {
   // meet, in this order (ADR-057). evidenceComplete is true exactly when evidenceMissing is empty.
   evidenceComplete: boolean;
   evidenceMissing: ("issue" | "merged_pull_request" | "passing_checks" | "release")[];
+  // Only on the list (ADR-067): numbers of its linked pull requests that another requirement of
+  // the same project (archived ones included) also links, from the same repository, ascending.
+  sharedPullRequests: number[];
 };
 type CriteriaVersion = { number: number; criteria: string[]; createdBy: string; createdAt: string };
 type FollowUpLink = { requirementId: string; title: string; archivedAt: string | null; linkedBy: string; linkedAt: string };

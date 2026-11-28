@@ -1733,6 +1733,34 @@ real GitHub; try it once on a repository with a re-run. Rollback: revert the cha
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
 
+ADR-067: The project overview counts requirements by evidence status, and shared pull requests are flagged
+
+Status: Accepted
+
+Context: US-18 (Jira SPEC-26) asks for a summary of evidence status across a project: counts by
+status on the project page, each opening the matching requirements, and a flag on requirements
+that share the same linked pull request. The requirement list already carries each
+requirement's Evidence complete status and missing parts (ADR-057), but not which pull requests
+other requirements also link.
+
+Decision: The requirement list adds `sharedPullRequests`: the numbers of a requirement's linked
+pull requests that another requirement of the same project links from the same repository,
+archived requirements included. The project overview shows six counts of its active
+requirements: Evidence complete, missing an issue, missing a merged pull request, missing passing
+checks, missing a release (a requirement missing several parts is counted in each), and sharing a
+pull request with another requirement. Each count links to the Requirements tab with
+`?evidence=complete|issue|merged_pull_request|passing_checks|release|shared`, which filters the
+list the API returned (with the milestone filter too) and says what it shows, with a "Show all"
+link. Requirement rows flag shared pull requests as "Shares #9". The counts and filters are
+computed in the web app from the list; only the flag needs the API. Requirement rows now wrap
+their details below the title when space runs out, so titles aren't cut short.
+
+Consequences: Sharing is not wrong in itself (one pull request can implement two requirements);
+the flag asks a reviewer to check. A link moved between requirements stops being shared. The
+list makes one more query per request. An API older than this sends no field, which reads as
+nothing shared. Requirements without an evidence status (an older API) are in no count but the
+total. Rollback: revert; no data is stored.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

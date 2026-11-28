@@ -473,6 +473,16 @@ a.row:focus-visible { outline-offset: -2px; }
 .row .evidence-missing + .badge { margin-left: 0; }
 .evidence-status { margin-bottom: 14px; }
 .evidence-status-heading { margin: 0 0 8px; }
+/* The project's evidence status counts (US-18), each a link to the matching requirements. */
+.evidence-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.evidence-summary a { display: grid; gap: 2px; height: 100%; padding: 10px 12px; border: 1px solid var(--app-line); border-radius: 10px; color: var(--app-text-2); font-size: 13px; }
+.evidence-summary a:hover { border-color: var(--app-line-strong); background: var(--app-hover); color: var(--app-text); }
+.evidence-summary strong { color: var(--app-text); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.evidence-summary .is-complete strong { color: var(--app-ok); }
+.badge.is-shared { flex: none; border-color: var(--app-warn); color: var(--app-warn); }
+/* A requirement row wraps its details under the title rather than cutting the title short. */
+.requirement-row { flex-wrap: wrap; row-gap: 4px; }
+.requirement-row .row-title { flex: 1 1 200px; }
 .evidence-parts { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
 .evidence-parts li { display: flex; align-items: center; gap: 8px; color: var(--app-text-2); }
 .evidence-parts li > svg { flex: none; }
@@ -484,6 +494,7 @@ a.row:focus-visible { outline-offset: -2px; }
 .requirement-filter label { color: var(--app-text); font-weight: 500; }
 .requirement-counts { margin: 0 0 12px; color: var(--app-text-2); font-size: 13px; }
 .requirement-counts strong { color: var(--app-text); font-weight: 500; }
+.requirement-counts a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
 .follow-up-heading { margin: 16px 0 8px; color: var(--app-text-2); font-size: 13px; font-weight: 500; }
 .follow-up-heading:first-child { margin-top: 0; }
 .follow-up-row { display: flex; align-items: center; gap: 8px; }

@@ -91,12 +91,17 @@ test("only UUID-shaped project IDs are sent to the API", () => {
 test("requirement and member lists are accepted only in the documented shape", () => {
   const requirement = { id: "r1", projectId: "p1", title: "Guest checkout", version: 2,
     createdAt: "2026-10-01T10:00:00Z", updatedAt: "2026-10-02T10:00:00Z", archivedAt: null, evidenceCount: 3, review: null,
-    milestone: "Sprint 3", criteriaVersion: 2, evidenceComplete: true, evidenceMissing: [] };
+    milestone: "Sprint 3", criteriaVersion: 2, evidenceComplete: true, evidenceMissing: [], sharedPullRequests: [9, 12] };
   expect(parseRequirementSummaries([{ ...requirement, description: "ignored" }])).toEqual([requirement]);
   // The previous API (ADR-044) sends none of the milestone, criteria version, or evidence rule fields.
   const previous: Record<string, unknown> = { ...requirement };
-  for (const field of ["milestone", "criteriaVersion", "evidenceComplete", "evidenceMissing"]) delete previous[field];
-  expect(parseRequirementSummaries([previous])).toEqual([{ ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false, evidenceMissing: [] }]);
+  for (const field of ["milestone", "criteriaVersion", "evidenceComplete", "evidenceMissing", "sharedPullRequests"]) delete previous[field];
+  expect(parseRequirementSummaries([previous])).toEqual([{
+    ...previous, milestone: null, criteriaVersion: null, evidenceComplete: false, evidenceMissing: [], sharedPullRequests: [],
+  }]);
+  for (const sharedPullRequests of [null, "9", [0], [1.5], ["9"]]) {
+    expect(() => parseRequirementSummaries([{ ...requirement, sharedPullRequests }]), JSON.stringify(sharedPullRequests)).toThrow("unexpected requirement");
+  }
   // The API before ADR-057 sends `evidenceComplete` under the old rule; it is not shown as complete.
   expect(parseRequirementSummaries([{ ...previous, evidenceComplete: true }])[0]).toMatchObject({ evidenceComplete: false, evidenceMissing: [] });
   // Even then, a value of the wrong shape is refused.

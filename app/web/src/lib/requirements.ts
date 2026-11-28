@@ -8,7 +8,7 @@ export type LinkedDocument = {
 };
 
 /** A requirement with its description, ordered acceptance criteria, linked documents, and evidence status (docs/API.md). */
-export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount"> & {
+export type Requirement = Omit<RequirementSummary, "review" | "evidenceCount" | "sharedPullRequests"> & {
   description: string;
   createdBy: string;
   /** Who saved the current version (the creator until someone edits it). */

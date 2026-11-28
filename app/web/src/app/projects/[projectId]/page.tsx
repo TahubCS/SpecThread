@@ -3,9 +3,12 @@ import { Box } from "lucide-react";
 import { RequirementRows } from "@/components/requirement-rows";
 import { getProjectRepository } from "@/lib/github-data";
 import { listMembers, listRequirements, requireProject } from "@/lib/project-data";
-import { formatDate } from "@/lib/projects";
+import { EVIDENCE_FILTER_TEXT, evidenceSummary, formatDate } from "@/lib/projects";
 
-/** Shows a project's most recently changed requirements beside its details. */
+/**
+ * Shows a project's evidence status counts (US-18), each opening the matching requirements, and
+ * its most recently changed requirements, beside its details.
+ */
 export default async function Page({ params }: PageProps<"/projects/[projectId]">) {
   const { projectId } = await params;
   const [project, requirements, members, repository] = await Promise.all([
@@ -23,6 +26,22 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
         </header>
         {project.archivedAt && (
           <p className="notice">This project was archived on {formatDate(project.archivedAt)}. It can be read but not changed.</p>
+        )}
+        {requirements.length > 0 && (
+          <section className="project-section" aria-labelledby="evidence-summary-heading">
+            <div className="project-section-heading">
+              <h2 id="evidence-summary-heading">Evidence status</h2>
+            </div>
+            <ul className="evidence-summary" aria-labelledby="evidence-summary-heading">
+              {evidenceSummary(requirements).map(({ filter, count }) => (
+                <li key={filter} className={filter === "complete" ? "is-complete" : filter === "shared" ? "is-shared" : undefined}>
+                  <Link href={`/projects/${project.id}/requirements?evidence=${filter}`}>
+                    <strong>{count}</strong> <span>{EVIDENCE_FILTER_TEXT[filter]}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
         <section className="project-section" aria-labelledby="recent-requirements">
           <div className="project-section-heading">

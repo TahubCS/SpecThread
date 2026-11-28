@@ -50,6 +50,7 @@ internal static class RequirementEndpoints
                 .Select(e => new { e.RequirementId, Facts = new EvidenceFacts(e.Id, e.Kind, e.State, e.Checks, e.Contains) }).ToListAsync(cancel))
             .ToLookup(e => e.RequirementId);
         var criteriaVersions = await CriteriaVersionEndpoints.LatestNumbersAsync(db, ids, cancel);
+        var shared = await SharedPullRequestsAsync(db, projectId, cancel);
 
         return TypedResults.Ok(requirements.ConvertAll(r =>
         {
@@ -61,8 +62,26 @@ internal static class RequirementEndpoints
                 reviews.TryGetValue(r.Id, out var review)
                     ? ReviewEndpoints.Summarize(review, r.Version, links.Select(e => e.Id), criteriaVersion)
                     : null,
-                r.Milestone, criteriaVersion, missing.Count == 0, missing);
+                r.Milestone, criteriaVersion, missing.Count == 0, missing, shared.GetValueOrDefault(r.Id, []));
         }));
+    }
+
+    // The pull requests each requirement shares with another requirement of the same project,
+    // archived ones included, by number (US-18). Work counted for two requirements is flagged so a
+    // reviewer can check whether both really depend on it.
+    private static async Task<Dictionary<Guid, List<int>>> SharedPullRequestsAsync(SpecThreadDbContext db, Guid projectId, CancellationToken cancel)
+    {
+        var links = await db.RequirementEvidence.AsNoTracking()
+            .Where(e => e.Kind == "pull_request" && e.Number != null)
+            .Join(db.Requirements.Where(r => r.ProjectId == projectId), e => e.RequirementId, r => r.Id,
+                (e, r) => new { e.RequirementId, e.RepositoryId, Number = e.Number!.Value })
+            .ToListAsync(cancel);
+        return links
+            .GroupBy(link => (link.RepositoryId, link.Number))
+            .Where(group => group.Select(link => link.RequirementId).Distinct().Skip(1).Any())
+            .SelectMany(group => group.Select(link => (link.RequirementId, link.Number)))
+            .GroupBy(pair => pair.RequirementId)
+            .ToDictionary(group => group.Key, group => group.Select(pair => pair.Number).Distinct().Order().ToList());
     }
 
     private static async Task<Results<Created<RequirementResponse>, ValidationProblem, NotFound, ProblemHttpResult>> Create(
@@ -349,7 +368,7 @@ internal sealed record UpdateRequirementRequest(
 
 internal sealed record RequirementSummary(
     Guid Id, Guid ProjectId, string Title, int Version, DateTime CreatedAt, DateTime UpdatedAt, DateTime? ArchivedAt, int EvidenceCount, ReviewSummary? Review,
-    string? Milestone, int? CriteriaVersion, bool EvidenceComplete, List<string> EvidenceMissing);
+    string? Milestone, int? CriteriaVersion, bool EvidenceComplete, List<string> EvidenceMissing, List<int> SharedPullRequests);
 
 internal sealed record RequirementResponse(
     Guid Id, Guid ProjectId, string Title, string Description, string CreatedBy, string UpdatedBy, int Version,

@@ -1,6 +1,33 @@
 # Shared handoff
 
-## Current task: US-12, check results with failures and re-runs (2026-11-28)
+## Current task: US-18, evidence status summary across a project (2026-11-28)
+
+- Branch: `feature/us-18-evidence-summary`, from `main` at `d4f0079`. Independent of PRs #34 to
+  #39 (each adds an entry here and an ADR; this one is ADR-067).
+- Scope: Jira SPEC-26 (US-18): counts of requirements by evidence status on the project page,
+  each opening the matching requirements, and requirements sharing a linked pull request flagged.
+- Completed: API `RequirementEndpoints.List` adds `sharedPullRequests` (`SharedPullRequestsAsync`);
+  web `lib/projects.ts` (`EVIDENCE_FILTERS`, `EVIDENCE_FILTER_TEXT`, `parseEvidenceFilter`,
+  `matchesEvidence`, `evidenceSummary`, the new field), the overview's Evidence status counts,
+  the Requirements tab's `?evidence=` filter with Show all, the "Shares #9" row flag, and
+  requirement rows wrapping instead of cutting titles.
+- Changed files: API `Requirements/RequirementEndpoints.cs`; web `lib/projects.ts`,
+  `lib/requirements.ts`, `components/requirement-rows.tsx`, the project overview and
+  Requirements pages, `app/app-shell.css`; tests new `tests/api/evidence-summary.spec.ts`,
+  `tests/e2e/evidence-summary.spec.ts`, updated `tests/api/project-data.spec.ts`,
+  `tests/schema/milestones.spec.ts`; docs DECISIONS (ADR-067), API, PROJECT, TESTING, this file.
+- Decisions and assumptions: counts are of active requirements; sharing is within one project
+  and repository and includes archived requirements; the filter is applied in the web app.
+  No migration or variable.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 443 passed; `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check` passed.
+- Known issues and risks: none known. Note for test authors: tests/schema/milestones.spec.ts
+  rolls back the milestone migration in a later test, so tests that create requirements must
+  come before it.
+- Next step: review and PR.
+
+## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
 - Scope: Jira SPEC-20 (US-12). Acceptance criteria: each check result shows its name,

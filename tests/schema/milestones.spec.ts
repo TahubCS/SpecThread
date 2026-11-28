@@ -209,6 +209,35 @@ test("a requirement is Evidence complete only with an issue, a merged pull reque
   expect(await restored.json()).toMatchObject({ archivedAt: null, ...status(["issue"]) });
 });
 
+test("requirements that link the same pull request are flagged with its number, within one project and repository (US-18)", async ({ request }) => {
+  const projectId = await createProject(request);
+  const otherProject = await createProject(request);
+  const [first, second, third, archived, elsewhere] = (await Promise.all([
+    createRequirement(request, projectId, "First"), createRequirement(request, projectId, "Second"),
+    createRequirement(request, projectId, "Third"), createRequirement(request, projectId, "Archived"),
+    createRequirement(request, otherProject, "Elsewhere"),
+  ])).map(requirement => requirement.id);
+  const pull = (requirementId: string, number: number, repositoryId = 1) => database.pool.query(
+    `INSERT INTO public.requirement_evidence (requirement_id,kind,repository_id,repository_owner,repository_name,number,state,title,url,
+      github_created_at,github_updated_at,linked_by) VALUES ($1,'pull_request',$2,'acme','box',$3,'merged','t','https://github.com/acme/box',now(),now(),'owner')`,
+    [requirementId, repositoryId, number]);
+  await pull(first, 9); await pull(second, 9);           // shared
+  await pull(first, 12); await pull(archived, 12);       // shared with an archived requirement
+  await pull(third, 20); await pull(elsewhere, 20);      // another project's link doesn't count
+  await pull(third, 21); await pull(second, 21, 2);      // the same number in another repository is another pull request
+  await database.pool.query(`INSERT INTO public.requirement_evidence (requirement_id,kind,repository_id,repository_owner,repository_name,number,state,title,url,
+    github_created_at,github_updated_at,linked_by) VALUES ($1,'issue',1,'acme','box',9,'open','t','https://github.com/acme/box',now(),now(),'owner')`, [third]);
+  await (await as(request, "owner")).post(`/requirements/${archived}/archive`);
+
+  const owner = await as(request, "owner");
+  const listed = await (await owner.get(`/projects/${projectId}/requirements`)).json();
+  expect(Object.fromEntries(listed.map((r: { title: string; sharedPullRequests: number[] }) => [r.title, r.sharedPullRequests])))
+    .toEqual({ First: [9, 12], Second: [9], Third: [] });
+  const archivedList = await (await owner.get(`/projects/${projectId}/requirements?archived=true`)).json();
+  expect(archivedList.map((r: { sharedPullRequests: number[] }) => r.sharedPullRequests)).toEqual([[12]]);
+  expect((await (await owner.get(`/projects/${otherProject}/requirements`)).json())[0].sharedPullRequests).toEqual([]);
+});
+
 test("the migration constrains labels, and its rollback removes only the column", async () => {
   const count = async (sql: string) => (await database.pool.query(sql)).rows[0].count;
   const { rows: [requirement] } = await database.pool.query("SELECT id FROM public.requirements ORDER BY created_at LIMIT 1");

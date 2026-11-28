@@ -85,12 +85,14 @@ export function fieldError(problem: unknown, field: string): string | null {
  * it has; `review` is its latest decision, or null. `milestone` is its milestone or sprint label
  * (ADR-053), and `criteriaVersion` its current acceptance-criteria version (ADR-051).
  * `evidenceComplete` is whether its evidence meets the team's Evidence complete rule, and
- * `evidenceMissing` lists the parts of that rule it does not meet (ADR-057).
+ * `evidenceMissing` lists the parts of that rule it does not meet (ADR-057). `sharedPullRequests`
+ * are the numbers of its linked pull requests that another requirement of the project also links (US-18).
  */
 export type RequirementSummary = {
   id: string; projectId: string; title: string; version: number;
   createdAt: string; updatedAt: string; archivedAt: string | null; evidenceCount: number; review: ReviewSummary | null;
   milestone: string | null; criteriaVersion: number | null; evidenceComplete: boolean; evidenceMissing: EvidencePart[];
+  sharedPullRequests: number[];
 };
 
 /**
@@ -156,7 +158,8 @@ export const isLabel = (value: unknown): value is string => typeof value === "st
 
 /**
  * Validates a requirement list from an API response. Throws when the shape is not the documented one.
- * The previous API (ADR-044) may send no `milestone`, `criteriaVersion`, `evidenceComplete`, or `evidenceMissing`.
+ * The previous API (ADR-044) may send no `milestone`, `criteriaVersion`, `evidenceComplete`, `evidenceMissing`, or
+ * `sharedPullRequests` (read as none shared).
  */
 export function parseRequirementSummaries(value: unknown): RequirementSummary[] {
   if (!Array.isArray(value)) throw new Error("The API returned an unexpected requirement list.");
@@ -165,6 +168,10 @@ export function parseRequirementSummaries(value: unknown): RequirementSummary[] 
     const milestone = optionalField(item?.milestone, isLabel);
     const criteriaVersion = optionalField(item?.criteriaVersion, isVersion);
     const evidence = parseEvidenceStatus(item);
+    const shared = item?.sharedPullRequests === undefined ? [] : item.sharedPullRequests;
+    if (!Array.isArray(shared) || !shared.every(number => typeof number === "number" && Number.isInteger(number) && number > 0)) {
+      throw new Error("The API returned an unexpected requirement.");
+    }
     if (typeof item !== "object" || item === null || typeof item.id !== "string" || typeof item.projectId !== "string" ||
         typeof item.title !== "string" || typeof item.version !== "number" || !isDate(item.createdAt) ||
         !isDate(item.updatedAt) || (item.archivedAt !== null && typeof item.archivedAt !== "string") ||
@@ -175,9 +182,46 @@ export function parseRequirementSummaries(value: unknown): RequirementSummary[] 
     return {
       id: item.id, projectId: item.projectId, title: item.title, version: item.version,
       createdAt: item.createdAt, updatedAt: item.updatedAt, archivedAt: item.archivedAt, evidenceCount: item.evidenceCount,
-      review: parseReviewSummary(item.review), milestone, criteriaVersion, ...evidence,
+      review: parseReviewSummary(item.review), milestone, criteriaVersion, ...evidence, sharedPullRequests: shared as number[],
     };
   });
+}
+
+/**
+ * The evidence statuses a project's requirements can be counted and listed by (US-18): Evidence
+ * complete, missing each part of the rule (a requirement missing two parts is in both), and
+ * sharing a linked pull request with another requirement.
+ */
+export const EVIDENCE_FILTERS = ["complete", ...EVIDENCE_PARTS, "shared"] as const;
+export type EvidenceFilter = (typeof EVIDENCE_FILTERS)[number];
+
+/** How each evidence status reads after its count, such as "3 missing a release". */
+export const EVIDENCE_FILTER_TEXT: Record<EvidenceFilter, string> = {
+  complete: "Evidence complete",
+  issue: "missing an issue",
+  merged_pull_request: "missing a merged pull request",
+  passing_checks: "missing passing checks",
+  release: "missing a release",
+  shared: "sharing a pull request with another requirement",
+};
+
+/** Reads an evidence status from the address, or null for anything else. */
+export function parseEvidenceFilter(value: unknown): EvidenceFilter | null {
+  return EVIDENCE_FILTERS.includes(value as EvidenceFilter) ? value as EvidenceFilter : null;
+}
+
+/** Whether a listed requirement has an evidence status. */
+export function matchesEvidence(
+  requirement: Pick<RequirementSummary, "evidenceComplete" | "evidenceMissing" | "sharedPullRequests">, filter: EvidenceFilter,
+): boolean {
+  if (filter === "complete") return requirement.evidenceComplete;
+  if (filter === "shared") return requirement.sharedPullRequests.length > 0;
+  return requirement.evidenceMissing.includes(filter);
+}
+
+/** Counts listed requirements by every evidence status, in EVIDENCE_FILTERS order. */
+export function evidenceSummary(requirements: Pick<RequirementSummary, "evidenceComplete" | "evidenceMissing" | "sharedPullRequests">[]) {
+  return EVIDENCE_FILTERS.map(filter => ({ filter, count: requirements.filter(requirement => matchesEvidence(requirement, filter)).length }));
 }
 
 /** Counts a set of listed requirements, such as one milestone, by Evidence complete and by Accepted. */
