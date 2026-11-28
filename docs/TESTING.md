@@ -345,6 +345,20 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- Predefined verification (ADR-070, US-15). tests/schema/verification.spec.ts (API on 5139,
+  GitHub stand-in on 5140): settings validation, a missing or disabled workflow, Owner/Admin
+  only, every member reading, removal; a run dispatching only the configured workflow and
+  branch with only the run's ID as input whatever the caller sends, one unfinished run at a
+  time, refresh to running and then failed with times and log link, a second passing run,
+  Reviewers and Observers refused; a dispatch GitHub refuses (422) or fails (500) kept as
+  not started; a changed repository; an archived requirement; and the migration's RLS,
+  grants, constraints, and rollback. The stand-in answers the Actions workflow, dispatch, and
+  runs endpoints as GitHub does. tests/api/verification.spec.ts checks parsing, wording, the
+  file-name rule, and the template. tests/e2e/verification.spec.ts sets up the workflow
+  (a missing one explained), reads the template, runs it from a requirement, refreshes to
+  "Check failed" with the time and log link, an Observer reading without running, phone
+  width, and a run GitHub won't start. tests/e2e/projects.spec.ts now uses Settings history
+  as its scaffold example.
 - Requirement comments (ADR-059). tests/schema/comments.spec.ts (API on 5134): every
   role, Observers included, comments and replies, and the requirement and its decisions
   stay identical; validation (empty, 5,001 characters, NUL on create and edit, unknown

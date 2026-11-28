@@ -56,6 +56,12 @@ Observers get 403 with "Your role on this team can read this project but not cha
 | GET | `/requirements/{requirementId}/follow-ups` | member | | 200 `FollowUps` |
 | POST | `/requirements/{requirementId}/follow-ups` | editor | `{ originalRequirementId }` | 201 `FollowUpLink` |
 | DELETE | `/requirements/{requirementId}/follow-ups/{originalRequirementId}` | editor | | 204 |
+| GET | `/projects/{projectId}/verification` | member | | 200 `VerificationSettings` (ADR-070) |
+| PUT | `/projects/{projectId}/verification` | team Owner, Admin | `{ workflow, branch }` | 200 `VerificationSettings` once GitHub confirms the workflow exists and is active (400 on a field; 409 no repository, disabled, archived) |
+| DELETE | `/projects/{projectId}/verification` | team Owner, Admin | | 204; recorded runs stay |
+| GET | `/requirements/{requirementId}/verification-runs` | member | | 200 `VerificationRun[]`, newest first, at most 50 |
+| POST | `/requirements/{requirementId}/verification-runs` | Owner, Admin, Member | (body ignored) | 201 `VerificationRun` with status `requested`; 409 not set up, set up for another repository, a run still unfinished, archived, or GitHub refused to start it (kept as `not_started`); 502/503 GitHub |
+| POST | `/requirements/{requirementId}/verification-runs/refresh` | Owner, Admin, Member | | 200 `VerificationRun[]` after reading unfinished runs from GitHub |
 | GET | `/requirements/{requirementId}/comments` | member | | 200 `Comments` |
 | POST | `/requirements/{requirementId}/comments` | member, any role | `{ body, parentId? }` | 201 `Comment` (409 when archived or the parent was deleted) |
 | PATCH | `/requirements/{requirementId}/comments/{commentId}` | the comment's author | `{ body }` | 200 `Comment` (409 when archived or deleted) |
@@ -236,6 +242,17 @@ type Comments = {
   history: { id: string; commentId: string; parentId: string | null; authorId: string;
     action: "created" | "edited" | "deleted"; actor: string; occurredAt: string }[];
 };
+// The project's predefined verification (ADR-070). current is false when it was set up for a
+// repository that is no longer connected; it must then be set up again before it can run.
+type VerificationSettings = { configured: boolean; workflow: string | null; branch: string | null;
+  configuredBy: string | null; configuredAt: string | null; current: boolean };
+// One run. status: "requested" (started, not yet listed by GitHub), "running", "completed".
+// result is set exactly when completed. url is the run's page on GitHub, with its logs.
+type VerificationRun = { id: string; requirementId: string; workflow: string; branch: string;
+  status: "requested" | "running" | "completed";
+  result: "passed" | "failed" | "cancelled" | "skipped" | "neutral" | "not_started" | null;
+  url: string | null; requestedBy: string; requestedAt: string; startedAt: string | null;
+  completedAt: string | null; checkedAt: string | null };
 type Decision = "accepted" | "rejected" | "more_evidence";
 type Review = {
   id: string; requirementId: string; decision: Decision; note: string;

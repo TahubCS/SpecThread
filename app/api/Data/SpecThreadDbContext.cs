@@ -26,6 +26,8 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
     public DbSet<RequirementFollowUpEvent> RequirementFollowUpEvents => Set<RequirementFollowUpEvent>();
     public DbSet<RequirementComment> RequirementComments => Set<RequirementComment>();
     public DbSet<RequirementCommentEvent> RequirementCommentEvents => Set<RequirementCommentEvent>();
+    public DbSet<ProjectVerification> ProjectVerifications => Set<ProjectVerification>();
+    public DbSet<VerificationRun> VerificationRuns => Set<VerificationRun>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -455,5 +457,47 @@ public sealed class SpecThreadDbContext(DbContextOptions<SpecThreadDbContext> op
         commentEvent.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<RequirementComment>().WithMany().HasForeignKey(x => x.CommentId).OnDelete(DeleteBehavior.Restrict);
         commentEvent.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.Actor).OnDelete(DeleteBehavior.Restrict);
+
+        var verification = model.Entity<ProjectVerification>();
+        verification.ToTable("project_verifications", table =>
+        {
+            table.HasCheckConstraint("ck_project_verifications_workflow", "workflow ~ '^[A-Za-z0-9._-]{1,100}\\.ya?ml$'");
+            table.HasCheckConstraint("ck_project_verifications_branch", "char_length(branch) BETWEEN 1 AND 255 AND branch !~ '\\s'");
+        });
+        verification.HasKey(x => x.ProjectId);
+        verification.Property(x => x.ProjectId).HasColumnName("project_id");
+        verification.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        verification.Property(x => x.Workflow).HasColumnName("workflow");
+        verification.Property(x => x.Branch).HasColumnName("branch");
+        verification.Property(x => x.ConfiguredBy).HasColumnName("configured_by");
+        verification.Property(x => x.ConfiguredAt).HasColumnName("configured_at").HasDefaultValueSql("now()");
+        verification.HasOne<Project>().WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Restrict);
+        verification.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.ConfiguredBy).OnDelete(DeleteBehavior.Restrict);
+
+        var run = model.Entity<VerificationRun>();
+        run.ToTable("verification_runs", table =>
+        {
+            table.HasCheckConstraint("ck_verification_runs_status", "status IN ('requested', 'running', 'completed')");
+            table.HasCheckConstraint("ck_verification_runs_result",
+                "(status = 'completed') = (result IS NOT NULL) AND (result IS NULL OR result IN ('passed', 'failed', 'cancelled', 'skipped', 'neutral', 'not_started'))");
+        });
+        run.HasKey(x => x.Id);
+        run.Property(x => x.Id).HasColumnName("id").HasDefaultValueSql("gen_random_uuid()");
+        run.Property(x => x.RequirementId).HasColumnName("requirement_id");
+        run.Property(x => x.RepositoryId).HasColumnName("repository_id");
+        run.Property(x => x.Workflow).HasColumnName("workflow");
+        run.Property(x => x.Branch).HasColumnName("branch");
+        run.Property(x => x.Status).HasColumnName("status");
+        run.Property(x => x.Result).HasColumnName("result");
+        run.Property(x => x.GitHubRunId).HasColumnName("github_run_id");
+        run.Property(x => x.Url).HasColumnName("url");
+        run.Property(x => x.RequestedBy).HasColumnName("requested_by");
+        run.Property(x => x.RequestedAt).HasColumnName("requested_at").HasDefaultValueSql("now()");
+        run.Property(x => x.StartedAt).HasColumnName("started_at");
+        run.Property(x => x.CompletedAt).HasColumnName("completed_at");
+        run.Property(x => x.CheckedAt).HasColumnName("checked_at");
+        run.HasIndex(x => new { x.RequirementId, x.RequestedAt });
+        run.HasOne<Requirement>().WithMany().HasForeignKey(x => x.RequirementId).OnDelete(DeleteBehavior.Restrict);
+        run.HasOne<AuthUser>().WithMany().HasForeignKey(x => x.RequestedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }

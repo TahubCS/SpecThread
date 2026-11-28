@@ -1,6 +1,37 @@
 # Shared handoff
 
-## Current task: US-12, check results with failures and re-runs (2026-11-28)
+## Current task: US-15, the predefined Playwright verification through GitHub Actions (2026-11-28)
+
+- Branch: `feature/us-15-playwright-verification`, from `main` at `d4f0079`. Independent of PRs
+  #34 to #42. #36 (RequirementEvents), #37 (ProjectReleases), and this branch
+  (ProjectVerification) each add a migration and bump the same migration counts and the table
+  count from main's numbers; whichever merge later must add one more each time, and
+  DATABASE.md's migration order must list all three.
+- Scope: Jira SPEC-23 (US-15). Only the predefined verification path can be run; the result,
+  time, and run log are stored as evidence on the linked requirement. The product owner chose
+  GitHub Actions. Recorded as ADR-070.
+- Completed: API `GitHub/VerificationEndpoints.cs`; `GitHubClient` `GetWorkflowAsync`,
+  `DispatchWorkflowAsync`, `FindWorkflowRunAsync` (and a JSON-body `SendAsync` that accepts 204);
+  migration ProjectVerification with `scripts/generate-project-verification.mjs` and
+  `docs/schema/project-verification{,-rollback}.sql`. Web `lib/verification.ts` (with the workflow
+  template), loaders, `app/projects/verification-actions.ts`, `components/verification.tsx`, the
+  Verification settings page (was a scaffold) and its link in Settings, a Verification section
+  on the requirement page. The GitHub stand-in serves workflows, dispatches, and runs.
+- Changed files: see the PR.
+- Decisions and assumptions: the workflow must accept `specthread_run` and put it in its run
+  name; one unfinished run per requirement; Reviewers and Observers read but can't run; results
+  don't affect Evidence complete.
+- Environment change: the GitHub App needs **Actions: Read and write** (DEPLOYMENT.md), and
+  each installation must accept it. Apply ProjectVerification before deploying the API.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 446 passed; `npm run lint`, `npm run typecheck`,
+  `dotnet format app/api --verify-no-changes --no-restore`, and `git diff --check` passed.
+- Known issues and risks: no webhook, so runs update on refresh only; real GitHub's run listing
+  is not exercised by tests.
+- Next step: review and PR; grant the GitHub App permission; add the workflow to a team
+  repository and try one run end to end.
+
+## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
 - Scope: Jira SPEC-20 (US-12). Acceptance criteria: each check result shows its name,

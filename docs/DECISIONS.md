@@ -1733,6 +1733,39 @@ real GitHub; try it once on a repository with a re-run. Rollback: revert the cha
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
 
+ADR-070: The predefined verification runs as one GitHub Actions workflow per project
+
+Status: Accepted
+
+Context: US-15 (Jira SPEC-23) asks a tech lead to run the project's predefined Playwright
+verification and record its result as evidence: only the predefined path can be run, and the
+result, time, and run log are kept on the linked requirement. Running browsers on SpecThread's
+own API host would mean executing a team's code there. The product owner chose GitHub Actions
+(2026-11-28). The scaffold reserved `/projects/{id}/settings/verification`.
+
+Decision: Migration ProjectVerification adds `project_verifications` and `verification_runs`.
+The team's Owner or an Admin names one workflow file of the connected repository and its branch;
+SpecThread saves it only after GitHub, read as the app, confirms the workflow exists and is
+active. An Owner, Admin, or Member starts a run from a requirement: the API records the run as
+`requested` under the team lock (one unfinished run per requirement), then calls GitHub's
+`workflow_dispatch` for exactly that workflow and branch, with one input, `specthread_run`,
+carrying the run's ID; anything a caller sends is ignored, so nothing else can be run. The
+workflow must put that input in its run name (a template is on the settings page), so "Refresh
+from GitHub" finds the run among the workflow's `workflow_dispatch` runs created since it was
+requested (less five minutes for clock differences, up to 500 runs, page by page) and stores its GitHub
+ID, result (as for checks: passed, failed, cancelled, skipped, neutral), start and finish times,
+and its page, which holds the logs. A dispatch GitHub refuses is kept as `not_started` with the
+reason shown. Results read "Check passed" and "Check failed". The GitHub App needs Actions read
+and write (DEPLOYMENT.md). Every member reads the settings and the runs; Reviewers and Observers
+can't start or refresh them. Verification results are evidence shown on the requirement; they
+are not part of the Evidence complete rule (ADR-057).
+
+Consequences: A run is only as fresh as the last refresh; there is no webhook. A workflow
+without the input in its run name can be started but never found. Re-pointing the project at
+another repository makes the setting stale until it is set up again. The finish time is GitHub's
+last update of the run. How the real GitHub lists `workflow_dispatch` runs and their
+`display_title` follows its documentation and is not exercised by tests. Rollback drops both tables.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

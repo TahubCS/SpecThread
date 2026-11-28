@@ -8,11 +8,12 @@ import { RequirementComments } from "@/components/requirement-comments";
 import { RequirementFollowUps } from "@/components/requirement-follow-ups";
 import { RequirementMilestone } from "@/components/requirement-milestone";
 import { ReviewPanel } from "@/components/review-panel";
+import { VerificationPanel } from "@/components/verification";
 import { documentTypeLabel } from "@/lib/documents";
 import { getProjectRepository } from "@/lib/github-data";
 import {
-  listComments, listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones, listRequirements, listReviews,
-  requireProject, requireRequirement,
+  getVerificationSettings, listComments, listEvidence, listEvidenceHistory, listEvidenceSuggestions, listFollowUps, listMembers, listMilestones,
+  listRequirements, listReviews, listVerificationRuns, requireProject, requireRequirement,
 } from "@/lib/project-data";
 import { canEditProject, canReviewProject, formatDate } from "@/lib/projects";
 import { requireTeamSession } from "@/lib/teams";
@@ -44,6 +45,7 @@ export default async function Page({ params }: Props) {
     listEvidenceSuggestions(requirementId), listComments(requirementId),
     requireTeamSession(`/projects/${projectId}/requirements/${requirementId}`),
   ]);
+  const [verification, verificationRuns] = await Promise.all([getVerificationSettings(projectId), listVerificationRuns(requirementId)]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
   // Reviewers and Observers read everything; only Owners, Admins, and Members change it (ADR-058).
@@ -150,6 +152,17 @@ export default async function Page({ params }: Props) {
           </p>
         )}
       </section>
+      {verification && verificationRuns && (verification.configured || verificationRuns.length > 0) && (
+        <section className="requirement-section" aria-labelledby="verification-heading">
+          <h2 id="verification-heading">Verification</h2>
+          {verification.configured && !verification.current && (
+            <p className="notice">The verification was set up for a repository that is no longer connected. An Owner or Admin must set it up again.</p>
+          )}
+          <VerificationPanel projectId={project.id} requirementId={requirement.id} runs={verificationRuns} people={people}
+            workflow={verification.workflow ?? "the verification"}
+            canRun={editable && repository !== null && verification.configured && verification.current} />
+        </section>
+      )}
       <section className="requirement-section" aria-labelledby="review-heading">
         <h2 id="review-heading">Review</h2>
         <ReviewPanel projectId={project.id} requirementId={requirement.id} version={requirement.version}
