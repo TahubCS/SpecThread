@@ -1672,6 +1672,32 @@ uses one pooled connection briefly, and a full pool (5 connections) shows as una
 endpoint is public, so anyone can learn whether the database is reachable, nothing more.
 Rollback: remove the endpoint and its uptime check.
 
+ADR-062: A service-health dashboard kept as JSON in the repository, with uptime checks
+
+Status: Accepted
+
+Context: Production telemetry reaches Grafana Cloud (ADR-055), but nobody can see at a glance
+whether the API, web app, database, or outside services are up, or which routes fail or are
+slow. A dashboard edited only in Grafana has no review and no history, and agents can't read
+its queries from the repository. The web app sends traces but no metrics, and on this stack
+TraceQL metrics can't span more than 25 hours.
+
+Decision: `observability/service-health.json` is the dashboard's source, with every query
+explained in `observability/queries.md`. The Grafana owner imports it, and changes come back
+through an export and a PR. Panels cover production over 7 days. Web panels use Grafana Cloud's
+span metrics, which are on. Panels that need trace attributes Grafana's span metrics don't keep,
+the web layer's HTTP status and SQL text, use TraceQL over the last 24 hours. Six Synthetic
+Monitoring HTTP checks run every 5 minutes from one probe: API `/health`, API `/health/ready`
+(ADR-061), web `/login`, GitHub's and Resend's status pages (failing only on a major or critical
+outage), and Google's sign-in discovery document. A test checks that every query filters on
+production and that each uptime check the dashboard reads is documented.
+
+Consequences: About 52,000 check runs a month of the free 100,000. The API never sleeps, which
+uses about 720 of the Render workspace's 750 free hours, and cold starts leave the data. The web
+check adds 12 traced requests an hour to `GET /login`. The 24-hour panels are often empty at
+current traffic. Browser health waits for Faro. A change made only in Grafana is lost at the
+next import unless it is exported. Rollback: delete the dashboard and the checks.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected

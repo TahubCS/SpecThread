@@ -1,0 +1,1951 @@
+{
+  "uid": "specthread-service-health",
+  "title": "SpecThread service health",
+  "description": "Production only (deployment.environment.name = production). Source: observability/service-health.json; queries explained in observability/queries.md.",
+  "tags": [
+    "specthread",
+    "production"
+  ],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "5m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "schemaVersion": 41,
+  "version": 1,
+  "panels": [
+    {
+      "type": "row",
+      "id": 1,
+      "title": "Render API",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "id": 2,
+      "title": "API up (/health)",
+      "description": "Uptime check every 5 minutes from one probe. Red means at least one failed check in that slot.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 18,
+        "x": 0,
+        "y": 1
+      },
+      "interval": "5m",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"specthread-api-health\"}[$__interval]))",
+          "legendFormat": "API"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "No check data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "type": "stat",
+      "id": 3,
+      "title": "API uptime, 7 days",
+      "description": "Share of successful /health checks over the dashboard's time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "avg(avg_over_time(probe_success{job=\"specthread-api-health\"}[$__range]))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.99
+              },
+              {
+                "color": "green",
+                "value": 0.999
+              }
+            ]
+          },
+          "noValue": "No check data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 4,
+      "title": "API CPU",
+      "description": "CPU used by the API process, in cores. The line is Render free's 0.1 CPU (to recheck on Render).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum(rate(dotnet_process_cpu_time_seconds_total{service_name=\"specthread-api\", deployment_environment_name=\"production\"}[$__rate_interval]))",
+          "legendFormat": "CPU"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "unit": "short",
+          "decimals": 3,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 5,
+      "title": "API memory",
+      "description": "Working set of the API process (largest instance during a deploy overlap). The line is 512 MB; sources disagree between 512 MB and 256 MB for Render free (to recheck).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max(dotnet_process_memory_working_set_bytes{service_name=\"specthread-api\", deployment_environment_name=\"production\"})",
+          "legendFormat": "Working set"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "unit": "bytes",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 536870912
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 6,
+      "title": "Vercel web",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "id": 7,
+      "title": "Web up (/login)",
+      "description": "Uptime check every 5 minutes from one probe. /login runs the Next.js server; the landing page is static and would not.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "interval": "5m",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"specthread-web\"}[$__interval]))",
+          "legendFormat": "Web"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "No check data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 8,
+      "title": "Web requests per hour",
+      "description": "Server requests per route, from span metrics. Includes the uptime check's 12 requests an hour to GET /login.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum by (route) (label_replace(increase(traces_spanmetrics_calls_total{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[1h]), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\")) > 0",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "timeseries",
+      "id": 9,
+      "title": "Web failed requests per hour",
+      "description": "Server spans marked as errors (5xx or a thrown error). Span metrics carry no HTTP status, so 4xx is only in the web failures table (last 24 h).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum by (route) (label_replace(increase(traces_spanmetrics_calls_total{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\", status_code=\"STATUS_CODE_ERROR\"}[1h]), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\")) > 0",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "No failures"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "timeseries",
+      "id": 10,
+      "title": "Web slow requests per hour (over 2 s)",
+      "description": "Estimated from span-metric histograms, so counts are approximate.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum by (route) (label_replace(histogram_count(increase(traces_spanmetrics_latency{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[1h])) * (1 - histogram_fraction(0, 2, increase(traces_spanmetrics_latency{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[1h]))), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\")) > 0.5",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "None over 2 s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "row",
+      "id": 11,
+      "title": "Database",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "id": 12,
+      "title": "Database ready (/health/ready)",
+      "description": "Uptime check of the API's readiness endpoint, which runs SELECT 1 (ADR-061). Red with the API strip green means the database, or a full pool, is the problem.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "interval": "5m",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"specthread-api-ready\"}[$__interval]))",
+          "legendFormat": "Database"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "No check data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 13,
+      "title": "API connection pool",
+      "description": "Npgsql pool \"specthread\". Waiting above 0 means requests queued for a connection. Better Auth's own pool in the web app is not shown.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 0,
+        "y": 31
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max(db_client_connection_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", db_client_connection_state=\"used\"})",
+          "legendFormat": "In use"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max(db_client_connection_npgsql_pending_requests{service_name=\"specthread-api\", deployment_environment_name=\"production\"})",
+          "legendFormat": "Waiting"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "max(db_client_connection_max{service_name=\"specthread-api\", deployment_environment_name=\"production\"})",
+          "legendFormat": "Cap"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "short",
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "table",
+      "id": 14,
+      "title": "Slowest queries, last 24 h (API)",
+      "description": "From API SQL spans grouped by query text. TraceQL is limited to 24 hours here, so this table ignores the dashboard's 7 days. p95 is bucketed (powers of two). Better Auth's queries run in the web app and have no query text, so they are not included. Total time is each query's share of database time (D20).",
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 16,
+        "x": 8,
+        "y": 31
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-api\" && resource.deployment.environment.name = \"production\" && span.db.query.text != nil } | count_over_time() by (span.db.query.text)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-api\" && resource.deployment.environment.name = \"production\" && span.db.query.text != nil } | avg_over_time(span:duration) by (span.db.query.text)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-api\" && resource.deployment.environment.name = \"production\" && span.db.query.text != nil } | quantile_over_time(span:duration, .95) by (span.db.query.text)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-api\" && resource.deployment.environment.name = \"production\" && span.db.query.text != nil } | sum_over_time(span:duration) by (span.db.query.text)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Count"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Average"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "C"
+          },
+          "options": {
+            "renameByName": {
+              "value": "p95"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "D"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Total time"
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "time": true,
+              "p": true
+            },
+            "renameByName": {
+              "span.db.query.text": "Query",
+              "Value #A": "Count",
+              "Value #B": "Average",
+              "Value #C": "p95",
+              "Value #D": "Total time"
+            },
+            "indexByName": {
+              "span.db.query.text": 0,
+              "Count": 1,
+              "Average": 2,
+              "p95": 3,
+              "Total time": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "p95",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "noValue": "No API queries in the last 24 hours",
+          "mappings": [
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^\"([\\s\\S]*)\"$",
+                "result": {
+                  "text": "$1",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total time"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Query"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "auto",
+                  "wrapText": true
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "timeFrom": "24h",
+      "hideTimeOverride": false
+    },
+    {
+      "type": "row",
+      "id": 15,
+      "title": "Outside services",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "panels": []
+    },
+    {
+      "type": "state-timeline",
+      "id": 16,
+      "title": "GitHub, Resend, Google sign-in",
+      "description": "GitHub and Resend: their status page reports a major or critical outage. Google: the sign-in discovery document is unreachable. Minor incidents stay green.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
+      "interval": "5m",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"github-status\"}[$__interval]))",
+          "legendFormat": "GitHub"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"resend-status\"}[$__interval]))",
+          "legendFormat": "Resend"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "min(min_over_time(probe_success{job=\"google-sign-in\"}[$__interval]))",
+          "legendFormat": "Google sign-in"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Up",
+                  "color": "green",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0
+          },
+          "noValue": "No check data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "alignValue": "left",
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "id": 17,
+      "title": "GitHub calls per hour",
+      "description": "API calls to api.github.com (evidence links and refreshes). Empty until someone links or refreshes evidence.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum(increase(http_client_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", server_address=\"api.github.com\"}[1h]))",
+          "legendFormat": "Calls"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "sum(increase(http_client_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", server_address=\"api.github.com\", error_type!=\"\"}[1h]))",
+          "legendFormat": "Failed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "lineWidth": 0,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "showPoints": "never"
+          },
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "No GitHub calls"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "interval": "1h"
+    },
+    {
+      "type": "timeseries",
+      "id": 18,
+      "title": "GitHub call latency (p95)",
+      "description": "From the API's HttpClient histogram for api.github.com.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_client_request_duration_seconds_bucket{service_name=\"specthread-api\", deployment_environment_name=\"production\", server_address=\"api.github.com\"}[$__rate_interval])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false
+          },
+          "unit": "s",
+          "min": 0,
+          "noValue": "No GitHub calls"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "id": 19,
+      "title": "Tables",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 56
+      },
+      "panels": []
+    },
+    {
+      "type": "table",
+      "id": 20,
+      "title": "Most-failed requests, API, 7 days",
+      "description": "4xx and 5xx are separate because some 4xx (401, 404, 409) are normal. Health checks are left out.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 57
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "round((sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "round((sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\", http_response_status_code=~\"4..\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) or 0 * (sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0)))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "round((sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\", http_response_status_code=~\"5..\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) or 0 * (sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0)))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "(sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\", http_response_status_code=~\"[45]..\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) or 0 * (sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0)) / (sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0)",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "time": true,
+              "p": true
+            },
+            "renameByName": {
+              "route": "Route",
+              "Value #A": "Requests",
+              "Value #B": "4xx",
+              "Value #C": "5xx",
+              "Value #D": "Failure rate"
+            },
+            "indexByName": {
+              "route": 0,
+              "Value #A": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Failure rate",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "noValue": "No API requests in this time range",
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Requests"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failure rate"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failure rate"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Route"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 300
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    },
+    {
+      "type": "table",
+      "id": 21,
+      "title": "Most-failed requests, web, last 24 h",
+      "description": "From web traces, which carry the HTTP status; span metrics don't, so this table is limited to TraceQL's 24 hours. Requests to /api/auth/[...all] are every Better Auth endpoint together, so sign-in 429s and sign-up 429s share a row.",
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 57
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-web\" && resource.deployment.environment.name = \"production\" && span:kind = server } | count_over_time() by (span.http.method, span.http.route)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-web\" && resource.deployment.environment.name = \"production\" && span:kind = server && span.http.status_code >= 400 && span.http.status_code < 500 } | count_over_time() by (span.http.method, span.http.route)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-web\" && resource.deployment.environment.name = \"production\" && span:kind = server && span.http.status_code >= 500 } | count_over_time() by (span.http.method, span.http.route)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "queryType": "traceql",
+          "query": "{ resource.service.name = \"specthread-web\" && resource.deployment.environment.name = \"production\" && span:kind = server && span.http.status_code >= 400 } | count_over_time() by (span.http.method, span.http.route)",
+          "metricsQueryType": "instant",
+          "limit": 100,
+          "tableType": "traces"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "A"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Requests"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "B"
+          },
+          "options": {
+            "renameByName": {
+              "value": "4xx"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "C"
+          },
+          "options": {
+            "renameByName": {
+              "value": "5xx"
+            }
+          }
+        },
+        {
+          "id": "organize",
+          "filter": {
+            "id": "byRefId",
+            "options": "D"
+          },
+          "options": {
+            "renameByName": {
+              "value": "Failed"
+            }
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "time": true,
+              "p": true
+            },
+            "renameByName": {
+              "span.http.method": "Method",
+              "span.http.route": "Route",
+              "Value #A": "Requests",
+              "Value #B": "4xx",
+              "Value #C": "5xx",
+              "Value #D": "Failed"
+            },
+            "indexByName": {
+              "span.http.method": 0,
+              "span.http.route": 1,
+              "Requests": 2,
+              "4xx": 3,
+              "5xx": 4,
+              "Failed": 5
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Failed",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "noValue": "No web requests in the last 24 hours",
+          "mappings": [
+            {
+              "type": "regex",
+              "options": {
+                "pattern": "^\"([\\s\\S]*)\"$",
+                "result": {
+                  "text": "$1",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Requests"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "timeFrom": "24h",
+      "hideTimeOverride": false
+    },
+    {
+      "type": "table",
+      "id": 22,
+      "title": "Slowest routes, 7 days",
+      "description": "Layers stack: web time includes the API time it waits for. API figures come from the request histogram, web figures from span metrics, so their percentiles are estimated differently. Linking and refreshing evidence call GitHub and are expected to take tens of seconds. Check Count before trusting a slow p95.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "grafanacloud-prom"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "label_replace(label_replace(round(sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0), \"route\", \"$1 (expected slow)\", \"route\", \"(POST /requirements/[^/]+/evidence/(refresh)?)\"), \"layer\", \"API\", \"\", \"\") or label_replace(round(histogram_count(sum by (route) (label_replace(increase(traces_spanmetrics_latency{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[$__range]), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\"))) > 0), \"layer\", \"web\", \"\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "label_replace(label_replace(sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_sum{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) / (sum by (route) (label_replace(label_join(sum by (http_request_method, http_route) (increase(http_server_request_duration_seconds_count{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \")) > 0), \"route\", \"$1 (expected slow)\", \"route\", \"(POST /requirements/[^/]+/evidence/(refresh)?)\"), \"layer\", \"API\", \"\", \"\") or label_replace(histogram_avg(sum by (route) (label_replace(increase(traces_spanmetrics_latency{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[$__range]), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\"))) >= 0, \"layer\", \"web\", \"\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "grafanacloud-prom"
+          },
+          "expr": "label_replace(label_replace(histogram_quantile(0.95, sum by (route, le) (label_replace(label_join(sum by (http_request_method, http_route, le) (increase(http_server_request_duration_seconds_bucket{service_name=\"specthread-api\", deployment_environment_name=\"production\", http_route!~\"/health.*\"}[$__range])), \"route\", \" \", \"http_request_method\", \"http_route\"), \"route\", \"$1 (no matching route)\", \"route\", \"([A-Z]+) \"))) >= 0, \"route\", \"$1 (expected slow)\", \"route\", \"(POST /requirements/[^/]+/evidence/(refresh)?)\"), \"layer\", \"API\", \"\", \"\") or label_replace(histogram_quantile(0.95, sum by (route) (label_replace(increase(traces_spanmetrics_latency{service=\"specthread-web\", span_kind=\"SPAN_KIND_SERVER\", deployment_environment_name=\"production\"}[$__range]), \"route\", \"$1\", \"span_name\", \"(?:RSC )?(.+)\"))) >= 0, \"layer\", \"web\", \"\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "time": true,
+              "p": true
+            },
+            "renameByName": {
+              "layer": "Layer",
+              "route": "Route",
+              "Value #A": "Count",
+              "Value #B": "Average",
+              "Value #C": "p95"
+            },
+            "indexByName": {
+              "layer": 0,
+              "route": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "p95",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          },
+          "noValue": "No requests in this time range",
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "0"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Average"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Layer"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      }
+    }
+  ]
+}

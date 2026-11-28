@@ -387,6 +387,13 @@ currently require network access during the web build.
   Grafana Cloud, and the API sending nothing when the endpoint is unset (nothing is
   registered then, and there is no receiver to observe the absence). The privacy page test in
   tests/e2e/landing.spec.ts checks the telemetry disclosure.
+- Service-health dashboard (ADR-062). tests/api/dashboard.spec.ts reads
+  observability/service-health.json: every Prometheus selector and TraceQL query is limited to
+  production, except the uptime checks' `probe_success`; API request queries leave out the
+  health routes; every uptime check the dashboard reads is listed in OBSERVABILITY.md; and
+  every panel has a section in observability/queries.md. Not exercised: how panels render in
+  Grafana and whether the queries return data. Those were checked against the live stack
+  through read-only Grafana access when the dashboard was written.
 - Last editor, archive view, and restore (ADR-050): tests/schema/product-api.spec.ts
   checks `updatedBy` after create and after another member's save; default and
   `archived=true` lists; an archived requirement readable but refusing saves and

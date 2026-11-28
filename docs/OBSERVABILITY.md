@@ -94,11 +94,53 @@ and environment come from the code and the platform.
 
 **Metric series budget.** The free tier allows 10,000 active series. After the whole browser
 suite ran against the local viewer (2026-10-30), the API had sent about 2,100; the web app
-sends no metrics. The local viewer also builds about 5,000 series of its own from traces
-(`traces_spanmetrics_*`). Grafana Cloud builds those only when Application Observability is
-turned on, which would count against the same limit, so leave it off unless the budget is
-checked again. If a change adds instruments or many routes, recheck with
-`count({__name__=~".+"})` in the local viewer.
+sends no metrics. Grafana Cloud's span metrics (`traces_spanmetrics_*`, built from traces of
+server and client spans) are on, and the web panels of the dashboard depend on them. On
+2026-11-25 the stack billed about 640 active series, few of them span metrics, at current
+traffic. Uptime checks add `probe_*` series. If a change adds instruments or many routes,
+recheck with `count({__name__=~".+"})` in the local viewer, and with
+`grafanacloud_instance_active_series` (data source `grafanacloud-usage`) in Grafana Cloud.
+
+## Service-health dashboard
+
+`observability/service-health.json` is the dashboard **SpecThread service health** (ADR-062):
+uptime strips, API CPU and memory, web requests, the connection pool, GitHub calls, and tables
+of the most-failed and slowest requests and queries, all for production over 7 days. Panels
+that need trace attributes cover only the last 24 hours. `observability/queries.md` explains
+every query.
+
+To install or update it, the Grafana owner opens **Dashboards > New > Import**, uploads the file,
+and confirms. Its fixed UID means a later import replaces the earlier one. To change a panel,
+edit it in Grafana, then **Export > Export as JSON** (not "for sharing externally"), replace the
+file, update queries.md, and open a PR. Run `npx playwright test tests/api/dashboard.spec.ts`
+before committing.
+
+**Uptime checks** (Synthetic Monitoring, ADR-062). The Grafana owner creates them in **Testing &
+synthetics > Synthetics > Create new check > API Endpoint > HTTP**. The job names must be exactly
+these, because the dashboard queries them by name:
+
+| Job name | Request target (method GET) | Regex validation |
+|---|---|---|
+| `specthread-api-health` | `https://specthread-api.onrender.com/health` | None |
+| `specthread-api-ready` | `https://specthread-api.onrender.com/health/ready` | None (a 503 fails the check: database unreachable) |
+| `specthread-web` | `https://spec-thread.com/login` | None |
+| `github-status` | `https://www.githubstatus.com/api/v2/status.json` | Body, `"indicator":\s*"(major\|critical)"` |
+| `resend-status` | `https://resend-status.com/api/v2/status.json` | Body, `"indicator":\s*"(major\|critical)"` |
+| `google-sign-in` | `https://accounts.google.com/.well-known/openid-configuration` | Body, `"authorization_endpoint"`, **Invert match** on |
+
+A body regex fails the check when it matches; Invert match makes it fail when it doesn't match.
+Set on every check: **Frequency** 5 minutes (the form starts at 1 minute), **Timeout** 10 seconds
+(readiness itself gives up after 5), and **Probe locations** a single public probe in the western
+US (Render's region is Oregon). Leave everything else at its default: valid status codes 2xx, no
+headers or authentication, no custom labels, full metrics off, per-check alerts off (alerting is
+a later step).
+
+Six checks at this rate are about 52,000 runs a month; the free tier allows 100,000. Minor
+incidents on GitHub's or Resend's status page stay green. Google has no status JSON for sign-in,
+so its check fetches the sign-in discovery document instead. Checks of the API keep the free
+Render instance awake, using about 720 of the workspace's 750 free hours a month, and cold
+starts no longer appear in the data. The web check adds 12 traced requests an hour to
+`GET /login`. Rollback: delete the checks, or the dashboard.
 
 ## Finding what an account or IP did
 
