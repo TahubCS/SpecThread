@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { unstable_rethrow } from "next/navigation";
 import { ArrowLeft, FileText, Pencil } from "lucide-react";
 import { EvidenceHistory, EvidencePanel } from "@/components/evidence-panel";
 import { EvidenceStatus } from "@/components/evidence-status";
@@ -42,11 +43,13 @@ export default async function Page({ params }: Props) {
     requireProject(projectId), requireRequirement(projectId, requirementId), listMembers(projectId),
     getProjectRepository(projectId), listEvidence(requirementId), listReviews(requirementId),
     listFollowUps(requirementId), listRequirements(projectId), listMilestones(projectId), listEvidenceHistory(requirementId),
-    listEvidenceSuggestions(requirementId), listComments(requirementId), listReleases(projectId),
+    listEvidenceSuggestions(requirementId), listComments(requirementId),
+    // Deployments are secondary: when they can't be read, the rest of the page still shows.
+    listReleases(projectId).catch((error: unknown) => { unstable_rethrow(error); return "unavailable" as const; }),
     requireTeamSession(`/projects/${projectId}/requirements/${requirementId}`),
   ]);
   // Recorded releases whose history includes one of this requirement's linked changes (ADR-066).
-  const deployments = releases === null ? [] : releasesIncluding(requirementId, releases);
+  const deployments = releases === null || releases === "unavailable" ? [] : releasesIncluding(requirementId, releases);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const nameOf = (userId: string) => people[userId] ?? "a former member";
   // Reviewers and Observers read everything; only Owners, Admins, and Members change it (ADR-058).
@@ -159,6 +162,12 @@ export default async function Page({ params }: Props) {
               ))}
             </ul>
           </div>
+        )}
+        {releases === "unavailable" && (
+          <p className="notice notice-error" role="status">
+            Deployments could not be loaded. Reload the page to try again, or open the project&apos;s{" "}
+            <Link href={`/projects/${project.id}/releases`}>Releases</Link>.
+          </p>
         )}
         {repository === null && evidence.length > 0 && (
           <p className="notice">

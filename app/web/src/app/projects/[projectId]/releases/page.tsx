@@ -23,7 +23,11 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
   const [releases, members, repository] = await Promise.all([listReleases(project.id), listMembers(project.id), getProjectRepository(project.id)]);
   const people = Object.fromEntries(members.map(member => [member.userId, member.name]));
   const canRecord = canEditProject(project) && !project.archivedAt && repository !== null;
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  // The API accepts up to the next UTC day, so a deployment already dated tomorrow where it
+  // happened (east of UTC) can be recorded (ADR-066).
+  const latest = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
 
   return (
     <article className="project-page is-form" aria-labelledby="page-title">
@@ -63,7 +67,7 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
       <section className="requirement-section" aria-labelledby="record-heading">
         <h2 id="record-heading">Record a release</h2>
         {canRecord && repository ? (
-          <RecordReleaseForm projectId={project.id} repository={repository.fullName} today={today} />
+          <RecordReleaseForm projectId={project.id} repository={repository.fullName} today={today} latest={latest} />
         ) : project.archivedAt ? (
           <p className="muted">This project is archived, so no release can be recorded.</p>
         ) : !canEditProject(project) ? (

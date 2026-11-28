@@ -71,6 +71,8 @@ test("a tech lead records a release to an environment, sees which requirements i
   const form = page.getByRole("form", { name: "Record a release" });
   await expect(form.getByLabel("Environment")).toHaveValue("Production");
   await expect(form.getByLabel("Deployed on")).toHaveValue(new Date().toISOString().slice(0, 10));
+  // The API accepts up to the next UTC day, so the field allows it too.
+  await expect(form.getByLabel("Deployed on")).toHaveAttribute("max", new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
 
   // A tag GitHub doesn't have is explained, and what was typed stays.
   await form.getByLabel(/Release tag in acme\/web/).fill("v9.9");

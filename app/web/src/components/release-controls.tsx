@@ -7,9 +7,10 @@ import { RELEASE_ENVIRONMENT_MAX, RELEASE_TAG_MAX, SUGGESTED_ENVIRONMENTS } from
 
 /**
  * The form for recording that a published release reached an environment on a date (ADR-066).
- * `today` is the default date, as YYYY-MM-DD; any earlier date can be chosen.
+ * `today` is the default date and `latest` the last one the API accepts (the next UTC day), as
+ * YYYY-MM-DD; any earlier date can be chosen.
  */
-export function RecordReleaseForm({ projectId, repository, today }: { projectId: string; repository: string; today: string }) {
+export function RecordReleaseForm({ projectId, repository, today, latest }: { projectId: string; repository: string; today: string; latest: string }) {
   const initial: ReleaseFormState = { values: { tag: "", environment: "Production", deployedOn: today }, errors: {}, error: null };
   const [state, action, pending] = useActionState(recordRelease.bind(null, projectId), initial);
   const describe = (field: keyof ReleaseFormState["errors"]) => state.errors[field] ? `release-${field}-error` : undefined;
@@ -34,7 +35,7 @@ export function RecordReleaseForm({ projectId, repository, today }: { projectId:
         </div>
         <div className="field">
           <label htmlFor="release-deployed-on">Deployed on</label>
-          <input id="release-deployed-on" name="deployedOn" type="date" required max={today} defaultValue={state.values.deployedOn}
+          <input id="release-deployed-on" name="deployedOn" type="date" required max={latest} defaultValue={state.values.deployedOn}
             aria-invalid={state.errors.deployedOn ? true : undefined} aria-describedby={describe("deployedOn")} />
           {state.errors.deployedOn && <p id="release-deployedOn-error" role="alert" className="notice notice-error">{state.errors.deployedOn}</p>}
         </div>
