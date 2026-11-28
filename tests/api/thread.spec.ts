@@ -19,7 +19,7 @@ const base: Evidence = {
   refreshedAt: "2026-09-12T00:00:00Z",
 };
 const check = (name: string, result: "passed" | "failed" | "running", completedAt: string | null) =>
-  ({ name, result, url: `https://github.com/acme/web/runs/${name}`, completedAt, kind: "check" as const });
+  ({ name, result, url: `https://github.com/acme/web/runs/${name}`, startedAt: null, completedAt, kind: "check" as const, superseded: false });
 
 const evidence: Evidence[] = [
   { ...base, kind: "issue", id: "e-issue", number: 4, sha: null, title: "Guests cannot pay", state: "closed", checks: null, checkCount: null,
