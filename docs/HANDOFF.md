@@ -1,6 +1,33 @@
 # Shared handoff
 
-## Current task: US-12, check results with failures and re-runs (2026-11-28)
+## Current task: US-22, export requirements as a PDF (2026-11-28)
+
+- Branch: `feature/us-22-pdf-export`, from `main` at `d4f0079`. Independent of PRs #34 to #40
+  (each adds an entry here and an ADR; this one is ADR-068).
+- Scope: Jira SPEC-30 (US-22). The export includes each requirement's title, acceptance
+  criteria, evidence status, and latest decision with reviewer and date; it can be limited to one
+  milestone; links point back to SpecThread. The product owner chose a generated PDF with pdf-lib.
+- Completed: API `Requirements/ExportEndpoints.cs` (`GET /projects/{id}/export`); web
+  `lib/project-export.ts` (parser, wording, file name, `buildExportPdf`), the route handler
+  `app/projects/[projectId]/exports/pdf/route.ts`, the Exports page (was a scaffold), an "Export
+  PDF" link on the Requirements tab; `pdf-lib` 1.17.1 added to app/web (pinned).
+- Changed files: API `Requirements/ExportEndpoints.cs` (new), `Program.cs`; web
+  `package.json`, root `package-lock.json`, `lib/project-export.ts` (new), the exports page and
+  route, the Requirements page, `app/app-shell.css`; tests new
+  `tests/{schema,api,e2e}/export.spec.ts` (the api one is `project-export.spec.ts`),
+  `tests/e2e/scaffold.spec.ts`; docs DECISIONS (ADR-068), API, ARCHITECTURE, PROJECT, TESTING,
+  this file.
+- Decisions and assumptions: active requirements only; the reviewer's name is in the PDF so it
+  reads without SpecThread; links use `BETTER_AUTH_URL`; standard fonts, so characters outside
+  Western European text print as "?". No migration or new variable.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 444 passed (it builds the web app with pdf-lib);
+  `npm run lint`, `npm run typecheck`, `dotnet format app/api --verify-no-changes --no-restore`,
+  and `git diff --check` passed. A sample export was rendered to an image and checked by eye.
+- Known issues and risks: see ADR-068 (fonts; pdf-lib's release age).
+- Next step: review and PR; then US-15 (Playwright verification through GitHub Actions).
+
+## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
 - Scope: Jira SPEC-20 (US-12). Acceptance criteria: each check result shows its name,

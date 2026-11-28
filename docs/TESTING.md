@@ -345,6 +345,15 @@ currently require network access during the web build.
   projects.spec.ts (the combined view grouped by team, including a team the user only
   belongs to, and a team heading opening only that team's projects).
   tests/api/project-data.spec.ts checks the role helpers and the grouping without a browser.
+- PDF export (ADR-068, US-22). tests/schema/export.spec.ts (API on 5138): active requirements
+  with criteria, evidence status, and the latest decision with the reviewer's name (an outdated
+  one after a criteria change), a milestone filter (trimmed, and unknown is empty), an Observer
+  reading, and 404 for outsiders. tests/api/project-export.spec.ts builds PDFs with pdf-lib and
+  reads them back: every expected line, the link annotations, no "verified", wrapping and more
+  pages for long text, "?" for characters the font lacks, page footers, an empty export,
+  parsing, wording, and file names. tests/e2e/export.spec.ts has a Reviewer export one
+  milestone from the Requirements tab, download the PDF, and check its title and links back to
+  SpecThread, then export everything; an outsider gets 404 and a signed-out request no PDF.
 - Requirement comments (ADR-059). tests/schema/comments.spec.ts (API on 5134): every
   role, Observers included, comments and replies, and the requirement and its decisions
   stay identical; validation (empty, 5,001 characters, NUL on create and edit, unknown
