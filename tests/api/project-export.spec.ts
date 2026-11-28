@@ -56,6 +56,8 @@ test("the PDF has each requirement's title, criteria, evidence status, and lates
     "Evidence: Evidence incomplete: missing passing checks, a release that includes it", "Latest decision: Not reviewed yet",
     "Checkout · Page 1 of 1",
   ]) expect(text, expected).toContain(expected);
+  // The rule note says skipped and neutral checks are allowed, not that every check passed.
+  expect(pages[0].strings.join(" ")).toContain("at least one automated check passed and the rest passed, were skipped, or were neutral");
   // The only mention of proof is the note that neither label means it.
   expect(text).not.toMatch(/verified/i);
   expect(text.match(/proven/gi)).toHaveLength(1);

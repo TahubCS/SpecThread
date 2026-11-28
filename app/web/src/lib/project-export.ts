@@ -141,8 +141,9 @@ export async function buildExportPdf(data: ProjectExport, baseUrl: string): Prom
   write(`${data.requirements.length === 1 ? "1 requirement" : `${data.requirements.length} requirements`}, exported from SpecThread on ${dayTime.format(new Date(data.generatedAt))} UTC.`,
     { color: muted, gap: 2 });
   write(`Open the project in SpecThread: ${projectUrl}`, { color: linkBlue, url: projectUrl, gap: 8 });
-  write("Evidence complete means the team's evidence rule is met: a linked issue, a merged pull request whose automated checks passed, " +
-    "and a release that includes it. Accepted means a person reviewed the evidence and approved the requirement. Neither means the " +
+  write("Evidence complete means the team's evidence rule is met: an issue and a merged pull request are linked; on the final commit of " +
+    "each merged pull request at least one automated check passed and the rest passed, were skipped, or were neutral (none failed, " +
+    "was cancelled, or is still running); and a release includes each merged pull request. Accepted means a person reviewed the evidence and approved the requirement. Neither means the " +
     "software is proven correct.", { size: 9.5, color: muted, gap: 14 });
 
   if (data.requirements.length === 0) {
