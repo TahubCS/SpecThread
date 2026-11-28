@@ -1,6 +1,33 @@
 # Shared handoff
 
-## Current task: Service-health dashboard and uptime checks (2026-11-25)
+## Current task: US-16 and US-20, the chronological evidence thread (2026-11-28)
+
+- Branch: `feature/us-16-evidence-thread`, from `main` at `d4f0079`. Independent of
+  `feature/us-12-check-history` (PR #34); either can merge first.
+- Scope: Jira SPEC-24 (US-16) and the remaining criterion of SPEC-28 (US-20). The thread lists
+  events oldest first, each with what happened, who, and when; the acceptance criteria are at
+  the top; evidence added after a decision appears after it. US-20's other criteria (only
+  authorized reviewers decide, a note for Reject and Request more evidence, reviewer and time
+  on each decision) were already met by ADR-038 and ADR-058. Recorded as ADR-064.
+- Completed: `buildThread` and `runningChecks` in `app/web/src/lib/thread.ts`; the scaffold
+  "Evidence thread" page at `/projects/[projectId]/requirements/[requirementId]/evidence`
+  replaced with the real page; a link from the requirement page header; styles in
+  `app-shell.css`; the route added to the connected list in `tests/e2e/scaffold.spec.ts`.
+- Changed files: web `lib/thread.ts` (new), the evidence page, the requirement page,
+  `app/app-shell.css`; tests new `tests/api/thread.spec.ts`, `tests/e2e/thread.spec.ts`,
+  `tests/e2e/scaffold.spec.ts`; docs DECISIONS (ADR-064), PROJECT, TESTING, this file.
+- Decisions and assumptions: no new API; GitHub events come from the links as they are now;
+  running checks are counted under the thread until they report; times are UTC to the minute;
+  pull request commits and comments are not repeated in the thread.
+- Checks (2026-11-28, local, .NET SDK 10.0.115 with `global.json` pointed at 10.0.100 only
+  while checking, not committed): `npm test` 444 passed; `npm run lint`, `npm run typecheck`,
+  and `git diff --check` passed. No C# changed.
+- Known issues and risks: when US-12 (PR #34) merges, re-runs show as separate check events
+  automatically; running checks could then be placed by their start time (a small follow-up).
+- Next step: review and PR; then US-21 (requirement edit audit), which adds edit events the
+  thread can show.
+
+## Previous task: Service-health dashboard and uptime checks (2026-11-25)
 
 - Branch: `feature/observability-dashboards`, from `main` at `bec7400` (after PR #32).
 - Scope: step 6 of the observability plan. One Grafana dashboard for production (D43–D51) and
