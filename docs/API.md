@@ -279,11 +279,17 @@ type AvailableRepository = {
 };
 type ProjectRepository = AvailableRepository & { url: string; connectedBy: string; connectedAt: string };
 type EvidenceCommit = { sha: string; message: string; author: string | null; date: string; url: string };
+// One run of a check. Every run is listed (ADR-063): sorted by name, then kind, then oldest run first.
 type EvidenceCheck = {
   name: string; result: "passed" | "failed" | "running" | "skipped" | "cancelled" | "neutral";
-  url: string | null;          // only when the check has a page on github.com
-  completedAt: string | null; kind: "check" | "status";
+  url: string | null;          // only when the check has a page on github.com (its log)
+  startedAt: string | null;    // a check run's start, or a pending status's time; null when GitHub gave none
+  completedAt: string | null;  // null while running
+  kind: "check" | "status";
+  superseded: boolean;         // a later run of the same name and kind exists; only the newest counts for Evidence complete
 };
+// Checks stored before ADR-063 come back without startedAt or superseded changing meaning:
+// startedAt is null and superseded is false, because only the latest run of each check was kept.
 type Evidence = {
   id: string; requirementId: string; kind: "issue" | "pull_request" | "commit" | "release";
   number: number | null;                        // issues and pull requests
@@ -297,7 +303,7 @@ type Evidence = {
   additions: number | null; deletions: number | null; changedFiles: number | null; // pull requests and commits
   commitCount: number | null; commits: EvidenceCommit[] | null;                    // pull requests (first 100 commits)
   // Pull requests (latest commit) and commits. checks is null when GitHub would not let them be read;
-  // checkCount is GitHub's total and may exceed the 100 stored. All three are null for issues.
+  // checkCount counts every run and may exceed the 100 stored. All three are null for issues.
   checks: EvidenceCheck[] | null; checkCount: number | null; checksReadAt: string | null;
   source: "manual" | "suggested"; // linkedBy is the person who added or confirmed the link
   githubCreatedAt: string; githubUpdatedAt: string; githubClosedAt: string | null;
