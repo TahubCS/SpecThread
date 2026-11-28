@@ -13,6 +13,7 @@ import {
   parseEvidenceHistory, parseEvidenceList, parseEvidenceSuggestions, type Evidence, type EvidenceEvent, type EvidenceSuggestion,
 } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
+import { parseAuditTrail, parseRequirementEvents, type AuditEntry, type RequirementEvent } from "./requirement-events";
 import { parseReviews, type Review } from "./reviews";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
@@ -81,6 +82,25 @@ export const listEvidence = cache(async (requirementId: string): Promise<Evidenc
   const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/evidence`) : null;
   if (body === null) notFound();
   return parseEvidenceList(body);
+});
+
+/**
+ * Lists every recorded change to a requirement itself, newest first (ADR-065). Call after
+ * `requireRequirement`. Returns null when it can't be read: an API older than the record answers 404.
+ */
+export const listRequirementEvents = cache(async (requirementId: string): Promise<RequirementEvent[] | null> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/events`) : null;
+  return body === null ? null : parseRequirementEvents(body);
+});
+
+/**
+ * Lists a project's newest changes across its requirements, evidence links, decisions, follow-ups,
+ * and comments (ADR-065). Call after `requireProject`. Returns null when an API older than the
+ * audit trail answers 404.
+ */
+export const listProjectAudit = cache(async (projectId: string): Promise<AuditEntry[] | null> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/audit`) : null;
+  return body === null ? null : parseAuditTrail(body);
 });
 
 /**

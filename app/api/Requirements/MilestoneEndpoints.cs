@@ -44,6 +44,12 @@ internal static class MilestoneEndpoints
         if (found is null) return TypedResults.NotFound();
         if (!found.CanEdit) return ProjectEndpoints.EditorsOnly();
         if (found.Archived) return ProjectEndpoints.Archived();
+        // Only a real change is recorded (ADR-065).
+        if (found.Requirement.Milestone != milestone)
+        {
+            RequirementEventEndpoints.Record(db, requirementId, milestone is null ? "milestone_cleared" : "milestone_set", user.CallerId(),
+                Clock.UtcNow(), version: found.Requirement.Version, milestone: milestone);
+        }
         found.Requirement.Milestone = milestone;
         try
         {

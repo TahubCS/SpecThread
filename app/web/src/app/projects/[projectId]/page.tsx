@@ -52,6 +52,7 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]"
         </section>
         <section className="side-card" aria-labelledby="activity-heading">
           <h2 id="activity-heading">Activity</h2>
+          <p className="side-activity"><Link href={`/projects/${project.id}/audit`}>Audit trail</Link></p>
           <p className="side-activity">
             {creator ? `${creator.name} created the project` : "Project created"} · <time dateTime={project.createdAt}>{formatDate(project.createdAt)}</time>
           </p>

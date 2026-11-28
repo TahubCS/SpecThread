@@ -13,11 +13,12 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and nineteen product tables in
+`SpecThreadDbContext` maps six Better Auth tables and twenty-two product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, TeamReviewerObserverRoles,
+RequirementComments, and RequirementEvents. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only; `/health/ready` runs `SELECT 1` when
 called and answers 503 if the database can't be reached (ADR-061). Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
@@ -331,7 +332,8 @@ that come later in time. scripts/test-database.mjs applies the teams scripts fir
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles.
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, TeamReviewerObserverRoles,
+RequirementComments, and RequirementEvents.
 
 ## Project documents migration
 
@@ -578,6 +580,34 @@ the tables, and the web treats the previous API's 404 as "comments can't be show
 Rollback: `dotnet ef database update TeamReviewerObserverRoles --project app/api`, or the
 rollback script, drops both tables and every comment and comment event. Back them up
 first if they need restoring.
+
+## Requirement events migration
+
+RequirementEvents (ADR-065) adds `requirement_events` (id, requirement_id, action, version,
+changes text[], milestone, actor, occurred_at). Check constraints limit actions to
+`created`, `edited`, `archived`, `restored`, `milestone_set`, and `milestone_cleared`, allow
+`changes` only on an edit and only with `title`, `description`, `criteria`, or `documents`,
+require `milestone` exactly for `milestone_set`, and keep `version` positive. Foreign keys to
+requirements and users restrict deletes. The table has RLS on and no anon/authenticated grants;
+the API only inserts rows. The migration backfills what is already known: a `created` event for
+every requirement (its creator and creation time) and, for one at version 2 or later, an `edited`
+event with `changes` null for the save of its current version (its last editor, or its creator
+when that was not recorded, ADR-050). Earlier edits and who archived a requirement were never
+stored and are not invented.
+
+```sh
+dotnet ef migrations add RequirementEvents --project app/api --configuration Release
+node scripts/generate-requirement-events.mjs
+```
+
+The second command adds the RLS and backfill statements and generates
+docs/schema/requirement-events.sql and -rollback.sql offline. Apply it before deploying the
+API; the previous API never reads the table, and the web treats the previous API's 404 as
+"changes can't be shown". Rollback: `dotnet ef database update RequirementComments --project
+app/api`, or the rollback script, drops the table and every recorded requirement change; the
+other records (evidence links, decisions, follow-ups, comments) are untouched. Back the table
+up first if it needs restoring; applying the migration again backfills only creations and
+current versions.
 
 ## Supabase tooling
 

@@ -50,6 +50,23 @@ public sealed class RequirementCriteriaVersion
     public DateTime CreatedAt { get; set; }
 }
 
+// A change to a requirement itself, with who made it and when (ADR-065). Action is "created",
+// "edited", "archived", "restored", "milestone_set", or "milestone_cleared". Version is the
+// requirement's version after the change. Changes, on an edit, names what changed: "title",
+// "description", "criteria", "documents"; null when it was not recorded (an edit made before
+// this table existed). Milestone is the label set. Rows are only ever added.
+public sealed class RequirementEvent
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public required string Action { get; set; }
+    public int? Version { get; set; }
+    public string[]? Changes { get; set; }
+    public string? Milestone { get; set; }
+    public required string Actor { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
 public sealed class AcceptanceCriterion
 {
     public Guid Id { get; set; }

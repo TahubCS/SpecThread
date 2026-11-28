@@ -1733,6 +1733,41 @@ real GitHub; try it once on a repository with a re-run. Rollback: revert the cha
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
 
+ADR-065: Requirement changes are recorded, and a project has an audit trail
+
+Status: Accepted
+
+Context: US-21 (Jira SPEC-29) asks that every important change (requirement edits, links,
+releases, decisions) store who made it and when in UTC, and that users can't edit or delete
+audit entries. Links (ADR-054, which covers releases, since a release is a link), decisions
+(ADR-038), follow-ups (ADR-052), and comments (ADR-059) already have append-only records.
+Requirements kept only their creator and their last editor (ADR-050), so every earlier edit's
+author and time were lost, and archiving, restoring, and milestone changes left no trace. The
+scaffold reserved `/projects/{id}/audit` as "Project audit trail".
+
+Decision: Migration RequirementEvents adds `requirement_events`. The API adds a row in the same
+transaction as each change: `created` with the requirement; `edited` on every save with the new
+version and which of title, description, criteria, and documents changed (an empty list when
+nothing did); `archived` and `restored` only when the state actually changes; and
+`milestone_set` (with the label) or `milestone_cleared` only when the label actually changes. A
+refused or failed change records nothing. Rows are never updated or deleted by the API; the
+table has RLS on, no grants to Supabase's browser roles, and restrictive foreign keys, like the
+other record tables. `GET /requirements/{id}/events` lists a requirement's changes, newest
+first, and the History page shows them as "Requirement changes". `GET /projects/{id}/audit`
+merges the newest 200 entries across requirement changes, evidence link changes, decisions,
+follow-up changes, and comment activity (without comment text), newest first, and the reserved
+page shows it, linked from the project overview's Activity card. Every member, Observers
+included, reads both. The migration backfills only what was stored: creations, and the save of
+each requirement's current version.
+
+Consequences: Each requirement save writes one more row. The audit trail page shows at most 200
+entries; a requirement's History page lists all of its own. The database owner (migrations,
+the Supabase dashboard) can still change rows; the guarantee is that no user can through the
+product or the Data API. A database trigger forbidding updates and deletes was not added,
+because existing tests and rollbacks of earlier migrations change those older record tables
+directly. Rolling the migration back deletes the requirement change record only. The evidence
+thread (ADR-064) can add these events once both are merged.
+
 ADR-NNN: Title
 
 Status: Proposed, Accepted, Superseded, or Rejected
