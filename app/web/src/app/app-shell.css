@@ -331,6 +331,7 @@ a.row:focus-visible { outline-offset: -2px; }
 .check-result.is-passed > span { border-color: var(--app-ok); background: var(--app-ok); }
 .check-result.is-failed > span { border-color: var(--app-danger); background: var(--app-danger); }
 .check-result.is-running > span { border-color: var(--app-warn); }
+.evidence-commits li.is-superseded :is(a, .check-name, .check-result) { color: var(--app-text-2); }
 .evidence-rows .row { flex-wrap: wrap; row-gap: 2px; }
 /* A release's tag can be long, so the label may shrink and is cut with an ellipsis. */
 .evidence-number { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; color: var(--app-text-3); font-family: var(--app-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
