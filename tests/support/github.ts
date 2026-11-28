@@ -106,10 +106,15 @@ export async function setGitHubItems(repositoryId: number, items: FakeItem[]) {
 }
 
 export type FakeChecks = {
-  runs?: { name: string; status: "queued" | "in_progress" | "completed"; conclusion?: string | null; html_url?: string; completed_at?: string }[];
+  /** Every run, oldest first. Like GitHub, only the newest run of each name is answered unless the API asks for all. */
+  runs?: {
+    id?: number; name: string; status: "queued" | "in_progress" | "completed"; conclusion?: string | null; html_url?: string;
+    started_at?: string; completed_at?: string;
+  }[];
   /** GitHub's total when it is larger than the runs listed. */
   total_runs?: number;
-  statuses?: { context: string; state: "success" | "failure" | "error" | "pending"; target_url?: string; updated_at?: string }[];
+  /** Every status, newest first, as GitHub lists them. */
+  statuses?: { id?: number; context: string; state: "success" | "failure" | "error" | "pending"; target_url?: string; created_at?: string; updated_at?: string }[];
   /** Answer 403 for check runs, statuses, or both, as GitHub does when the app lacks the permission. */
   deny?: "runs" | "statuses" | "both";
 };

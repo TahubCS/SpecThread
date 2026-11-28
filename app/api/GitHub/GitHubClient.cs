@@ -48,9 +48,11 @@ internal sealed record GitHubMention(int Number, string Title, string State, str
 // limit, so one that is not listed may still mention the issue.
 internal sealed record GitHubMentions(List<GitHubMention> Items, bool Truncated);
 
-// One automated check on a commit. Result is "passed", "failed", "running", "skipped",
+// One run of an automated check on a commit. Result is "passed", "failed", "running", "skipped",
 // "cancelled", or "neutral". Kind is "check" (a check run) or "status" (an older commit status).
-internal sealed record GitHubCheck(string Name, string Result, string? Url, DateTime? CompletedAt, string Kind);
+// Superseded means a later run of the same check exists on the commit (ADR-063).
+internal sealed record GitHubCheck(
+    string Name, string Result, string? Url, DateTime? StartedAt, DateTime? CompletedAt, string Kind, bool Superseded);
 
 // The checks GitHub reports for a commit: the first ones read, and how many there are in all.
 internal sealed record GitHubChecks(List<GitHubCheck> Items, int Total);
@@ -368,12 +370,14 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         var token = await CreateInstallationTokenAsync(installationId, cancel);
         if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubChecks>.Fail(token.Failure);
 
-        var items = new List<GitHubCheck>();
+        var items = new List<ReadCheck>();
         var total = 0;
         var readable = false;
 
+        // filter=all lists every run of every check, so a failed run and its re-run are both read;
+        // GitHub's default lists only the latest run of each (ADR-063).
         var (runsFailure, runs) = await SendAsync(
-            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/check-runs?per_page={PageSize}", token.Value!, cancel);
+            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/check-runs?filter=all&per_page={PageSize}", token.Value!, cancel);
         if (runsFailure is not (GitHubFailure.None or GitHubFailure.NotFound)) return GitHubResult<GitHubChecks>.Fail(AsInstallation(runsFailure));
         if (runsFailure == GitHubFailure.None)
         {
@@ -395,38 +399,68 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             }
         }
 
+        // The list of statuses has every state each context reported, newest first; the combined
+        // status has only the latest of each (ADR-063).
         var (statusFailure, status) = await SendAsync(
-            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/status?per_page={PageSize}", token.Value!, cancel);
+            HttpMethod.Get, $"repositories/{repositoryId}/commits/{sha}/statuses?per_page={PageSize}", token.Value!, cancel);
         if (statusFailure is not (GitHubFailure.None or GitHubFailure.NotFound)) return GitHubResult<GitHubChecks>.Fail(AsInstallation(statusFailure));
         if (statusFailure == GitHubFailure.None)
         {
             using (status)
             {
                 var root = status!.RootElement;
-                if (root.ValueKind != JsonValueKind.Object || !TryReadCount(root, "total_count", out var count) ||
-                    !root.TryGetProperty("statuses", out var list) || list.ValueKind != JsonValueKind.Array)
-                {
-                    return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
-                }
-                var before = items.Count;
-                foreach (var entry in list.EnumerateArray())
+                if (root.ValueKind != JsonValueKind.Array) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
+                var statuses = new List<ReadCheck>();
+                foreach (var entry in root.EnumerateArray())
                 {
                     if (!TryReadStatus(entry, out var check)) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.Unavailable);
-                    items.Add(check!);
+                    statuses.Add(check!);
                 }
-                total += Math.Max(count, items.Count - before);
+                // "Pending" is how a context says it started; once it reports again, that pending
+                // entry is not a result of its own. Only a context's newest pending entry is kept.
+                var kept = statuses
+                    .GroupBy(check => check.Check.Name, StringComparer.OrdinalIgnoreCase)
+                    .SelectMany(group =>
+                    {
+                        var newest = group.MaxBy(Order)!;
+                        return group.Where(check => check.Check.Result != "running" || ReferenceEquals(check, newest));
+                    })
+                    .ToList();
+                items.AddRange(kept);
+                total += kept.Count;
                 readable = true;
             }
         }
 
         // The app may be granted one of the two permissions and not the other; what it can read is shown.
         if (!readable) return GitHubResult<GitHubChecks>.Fail(GitHubFailure.NotFound);
-        items.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-        if (items.Count > PageSize) items.RemoveRange(PageSize, items.Count - PageSize);
-        return GitHubResult<GitHubChecks>.Ok(new GitHubChecks(items, total));
+
+        // Every run but the newest of each check is marked superseded: it is shown as history, and
+        // the newest says what the check reports now.
+        var newestOfEach = items
+            .GroupBy(check => (check.Check.Kind, Name: check.Check.Name.ToUpperInvariant()))
+            .Select(group => group.MaxBy(Order)!)
+            .ToHashSet(ReferenceEqualityComparer.Instance);
+        var ordered = items
+            .OrderBy(check => check.Check.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(check => check.Check.Kind, StringComparer.Ordinal)
+            .ThenBy(Order)
+            .Select(check => check.Check with { Superseded = !newestOfEach.Contains(check) })
+            .Take(PageSize)
+            .ToList();
+        return GitHubResult<GitHubChecks>.Ok(new GitHubChecks(ordered, total));
     }
 
-    private static bool TryReadCheckRun(JsonElement entry, out GitHubCheck? check)
+    // A check as read, with what orders its runs: when it started (or reported) and GitHub's ID.
+    private sealed record ReadCheck(GitHubCheck Check, long Id);
+
+    private static (DateTime, long) Order(ReadCheck check) =>
+        (check.Check.StartedAt ?? check.Check.CompletedAt ?? DateTime.MinValue, check.Id);
+
+    private static long ReadId(JsonElement entry) =>
+        entry.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.TryGetInt64(out var value) ? value : 0;
+
+    private static bool TryReadCheckRun(JsonElement entry, out ReadCheck? check)
     {
         check = null;
         if (entry.ValueKind != JsonValueKind.Object ||
@@ -444,12 +478,12 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             "cancelled" => "cancelled",
             _ => "neutral",
         };
-        check = new GitHubCheck(CheckName(name.GetString()!), result, ReadGitHubLink(entry, "html_url"),
-            result == "running" ? null : ReadDate(entry, "completed_at"), "check");
+        check = new ReadCheck(new GitHubCheck(CheckName(name.GetString()!), result, ReadGitHubLink(entry, "html_url"),
+            ReadDate(entry, "started_at"), result == "running" ? null : ReadDate(entry, "completed_at"), "check", false), ReadId(entry));
         return true;
     }
 
-    private static bool TryReadStatus(JsonElement entry, out GitHubCheck? check)
+    private static bool TryReadStatus(JsonElement entry, out ReadCheck? check)
     {
         check = null;
         if (entry.ValueKind != JsonValueKind.Object ||
@@ -465,9 +499,11 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
             "pending" => "running",
             _ => "neutral",
         };
+        // A status is posted when it happens, so its time is when it started (pending) or reported.
+        var reported = ReadDate(entry, "created_at") ?? ReadDate(entry, "updated_at");
         // Statuses usually point at an outside CI service; only links to GitHub itself are kept.
-        check = new GitHubCheck(CheckName(context.GetString()!), result, ReadGitHubLink(entry, "target_url"),
-            result == "running" ? null : ReadDate(entry, "updated_at"), "status");
+        check = new ReadCheck(new GitHubCheck(CheckName(context.GetString()!), result, ReadGitHubLink(entry, "target_url"),
+            result == "running" ? reported : null, result == "running" ? null : reported, "status", false), ReadId(entry));
         return true;
     }
 
