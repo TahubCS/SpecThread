@@ -13,11 +13,12 @@ dotnet tool restore
 dotnet build app/api --configuration Release
 ```
 
-`SpecThreadDbContext` maps six Better Auth tables and nineteen product tables in
+`SpecThreadDbContext` maps six Better Auth tables and twenty-three product tables in
 `public`, with the migrations listed under "Combined migration order" below, ending
 with RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles. Startup never calls `EnsureCreated`, `Migrate`, or a database
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, TeamReviewerObserverRoles,
+RequirementComments, and ProjectVerification. Startup never calls `EnsureCreated`, `Migrate`, or a database
 query. `/health` checks process liveness only; `/health/ready` runs `SELECT 1` when
 called and answers 503 if the database can't be reached (ADR-061). Resolving the context without
 `ConnectionStrings:Database` fails explicitly. Playwright verifies this failure
@@ -331,7 +332,8 @@ that come later in time. scripts/test-database.mjs applies the teams scripts fir
 and then the evidence and review scripts. ProjectDocuments comes after all of them,
 then RequirementDocuments, RequirementUpdatedBy, RequirementCriteriaVersions,
 RequirementMilestone, RequirementFollowUps, RequirementCriteriaVersionTexts,
-RequirementEvidenceEvents, RequirementEvidenceSuggestions, and TeamReviewerObserverRoles.
+RequirementEvidenceEvents, RequirementEvidenceSuggestions, TeamReviewerObserverRoles,
+RequirementComments, and ProjectVerification.
 
 ## Project documents migration
 
@@ -578,6 +580,27 @@ the tables, and the web treats the previous API's 404 as "comments can't be show
 Rollback: `dotnet ef database update TeamReviewerObserverRoles --project app/api`, or the
 rollback script, drops both tables and every comment and comment event. Back them up
 first if they need restoring.
+
+## Project verification migration
+
+ProjectVerification (ADR-070) adds `project_verifications` (project_id primary key,
+repository_id, workflow, branch, configured_by, configured_at) and `verification_runs` (id,
+requirement_id, repository_id, workflow, branch, status, result, github_run_id, url,
+requested_by, requested_at, started_at, completed_at, checked_at). Check constraints keep the
+workflow a plain `.yml`/`.yaml` file name and the branch free of spaces, limit status to
+`requested`, `running`, `completed`, and require a result (passed, failed, cancelled, skipped,
+neutral, not_started) exactly when completed. Foreign keys to projects, requirements, and users
+restrict deletes. Both tables have RLS on and no anon/authenticated grants.
+
+```sh
+dotnet ef migrations add ProjectVerification --project app/api --configuration Release
+node scripts/generate-project-verification.mjs
+```
+
+The second command adds the RLS statements and generates docs/schema/project-verification.sql
+and -rollback.sql offline. Apply it before deploying the API; the previous API never reads the
+tables, and the web hides verification when the previous API answers 404. Rollback: the
+rollback script drops both tables, every setting, and every recorded run.
 
 ## Supabase tooling
 

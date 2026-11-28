@@ -101,8 +101,10 @@ link GitHub.
 
 The GitHub App used for sign-in also reads repositories. Its repository permissions
 must be read-only for Metadata, Issues, Pull requests, Contents, Checks, and Commit
-statuses. Leave "Request user authorization (OAuth) during installation" off, the
-Setup URL empty, and the webhook inactive. The web app's `GITHUB_CLIENT_ID` and
+statuses. For the predefined verification (ADR-070), it also needs **Actions: Read and write**,
+which lets SpecThread start the one workflow a project names and read its runs; installations
+must accept the new permission before verification works on their repositories. Leave "Request
+user authorization (OAuth) during installation" off, the Setup URL empty, and the webhook inactive. The web app's `GITHUB_CLIENT_ID` and
 `GITHUB_CLIENT_SECRET` must be this app's.
 
 The API needs the app's ID, private key, and public name. Locally:

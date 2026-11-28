@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -54,6 +55,13 @@ internal sealed record GitHubCheck(string Name, string Result, string? Url, Date
 
 // The checks GitHub reports for a commit: the first ones read, and how many there are in all.
 internal sealed record GitHubChecks(List<GitHubCheck> Items, int Total);
+
+// A GitHub Actions workflow: its name and file path. Active is false when it has been disabled.
+internal sealed record GitHubWorkflow(string Name, string Path, bool Active);
+
+// One run of a workflow. Result is "running" until it completes, then "passed", "failed",
+// "cancelled", "skipped", or "neutral", as for checks (ADR-035). Url is its page on GitHub, with its logs.
+internal sealed record GitHubWorkflowRun(long Id, string Result, string Url, DateTime? StartedAt, DateTime? CompletedAt);
 
 internal enum GitHubFailure
 {
@@ -114,6 +122,20 @@ internal interface IGitHubClient
     // of best match, at most MaxSearchResults of them (ADR-054).
     Task<GitHubResult<List<GitHubSearchItem>>> SearchItemsAsync(
         long installationId, string owner, string name, IReadOnlyList<string> words, CancellationToken cancel);
+
+    // Whether the repository has an active GitHub Actions workflow with this file name, acting as
+    // the app (ADR-070). NotFound when it has none, or the app lacks the Actions permission.
+    Task<GitHubResult<GitHubWorkflow>> GetWorkflowAsync(long installationId, long repositoryId, string workflow, CancellationToken cancel);
+
+    // Starts the workflow on a branch with one input, specthread_run, which the workflow puts in
+    // its run name so the run can be found again (ADR-070). NotFound when GitHub refuses it.
+    Task<GitHubResult<bool>> DispatchWorkflowAsync(
+        long installationId, long repositoryId, string workflow, string branch, string runName, CancellationToken cancel);
+
+    // The newest run of the workflow started by workflow_dispatch whose name contains runName, or
+    // null when GitHub doesn't list one yet (ADR-070).
+    Task<GitHubResult<GitHubWorkflowRun?>> FindWorkflowRunAsync(
+        long installationId, long repositoryId, string workflow, string runName, CancellationToken cancel);
 
     // Pull requests of owner/name that mention the issue, from its timeline (ADR-056). NotFound
     // when the issue can't be read.
@@ -700,7 +722,12 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
     }
 
     // Sends one request. The body is returned only on success and must be disposed by the caller.
-    private async Task<(GitHubFailure Failure, JsonDocument? Body)> SendAsync(HttpMethod method, string path, string bearer, CancellationToken cancel)
+    private Task<(GitHubFailure Failure, JsonDocument? Body)> SendAsync(HttpMethod method, string path, string bearer, CancellationToken cancel) =>
+        SendAsync(method, path, bearer, null, cancel);
+
+    // Sends `body` as JSON when given. A success with no content, such as 204, has no body.
+    private async Task<(GitHubFailure Failure, JsonDocument? Body)> SendAsync(
+        HttpMethod method, string path, string bearer, object? body, CancellationToken cancel)
     {
         var baseAddress = ReadBaseAddress();
         if (baseAddress is null) return (GitHubFailure.NotConfigured, null);
@@ -708,6 +735,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         {
             using var request = new HttpRequestMessage(method, new Uri(baseAddress, path));
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+            if (body is not null) request.Content = JsonContent.Create(body);
             using var response = await http.SendAsync(request, cancel);
             if (response.StatusCode == HttpStatusCode.Unauthorized) return (GitHubFailure.TokenRejected, null);
             if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden or HttpStatusCode.UnprocessableEntity)
@@ -724,6 +752,7 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
                 logger.LogWarning("GitHub answered {Status} for {Method} {Path}.", (int)response.StatusCode, method, path.Split('?')[0]);
                 return (GitHubFailure.Unavailable, null);
             }
+            if (response.StatusCode == HttpStatusCode.NoContent) return (GitHubFailure.None, null);
             await using var stream = await response.Content.ReadAsStreamAsync(cancel);
             return (GitHubFailure.None, await JsonDocument.ParseAsync(stream, cancellationToken: cancel));
         }
@@ -731,6 +760,81 @@ internal sealed class GitHubClient(HttpClient http, IConfiguration configuration
         {
             logger.LogWarning("GitHub request failed for {Method} {Path}: {Reason}", method, path.Split('?')[0], error.GetType().Name);
             return (GitHubFailure.Unavailable, null);
+        }
+    }
+
+    public async Task<GitHubResult<GitHubWorkflow>> GetWorkflowAsync(long installationId, long repositoryId, string workflow, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubWorkflow>.Fail(token.Failure);
+        var (failure, body) = await SendAsync(HttpMethod.Get,
+            $"repositories/{repositoryId}/actions/workflows/{Uri.EscapeDataString(workflow)}", token.Value!, cancel);
+        if (failure != GitHubFailure.None) return GitHubResult<GitHubWorkflow>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || root.GetPropertyOrDefault("name").GetStringOrNull() is not { } name ||
+                root.GetPropertyOrDefault("path").GetStringOrNull() is not { } path || root.GetPropertyOrDefault("state").GetStringOrNull() is not { } state)
+            {
+                return GitHubResult<GitHubWorkflow>.Fail(GitHubFailure.Unavailable);
+            }
+            return GitHubResult<GitHubWorkflow>.Ok(new GitHubWorkflow(name, path, state == "active"));
+        }
+    }
+
+    public async Task<GitHubResult<bool>> DispatchWorkflowAsync(
+        long installationId, long repositoryId, string workflow, string branch, string runName, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<bool>.Fail(token.Failure);
+        var (failure, body) = await SendAsync(HttpMethod.Post,
+            $"repositories/{repositoryId}/actions/workflows/{Uri.EscapeDataString(workflow)}/dispatches", token.Value!,
+            new { @ref = branch, inputs = new Dictionary<string, string> { ["specthread_run"] = runName } }, cancel);
+        body?.Dispose();
+        return failure == GitHubFailure.None ? GitHubResult<bool>.Ok(true) : GitHubResult<bool>.Fail(AsInstallation(failure));
+    }
+
+    public async Task<GitHubResult<GitHubWorkflowRun?>> FindWorkflowRunAsync(
+        long installationId, long repositoryId, string workflow, string runName, CancellationToken cancel)
+    {
+        var token = await CreateInstallationTokenAsync(installationId, cancel);
+        if (token.Failure != GitHubFailure.None) return GitHubResult<GitHubWorkflowRun?>.Fail(token.Failure);
+        var (failure, body) = await SendAsync(HttpMethod.Get,
+            $"repositories/{repositoryId}/actions/workflows/{Uri.EscapeDataString(workflow)}/runs?event=workflow_dispatch&per_page={PageSize}",
+            token.Value!, cancel);
+        if (failure != GitHubFailure.None) return GitHubResult<GitHubWorkflowRun?>.Fail(AsInstallation(failure));
+        using (body)
+        {
+            var root = body!.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("workflow_runs", out var runs) || runs.ValueKind != JsonValueKind.Array)
+            {
+                return GitHubResult<GitHubWorkflowRun?>.Fail(GitHubFailure.Unavailable);
+            }
+            GitHubWorkflowRun? found = null;
+            foreach (var run in runs.EnumerateArray())
+            {
+                var title = run.GetPropertyOrDefault("display_title").GetStringOrNull() ?? run.GetPropertyOrDefault("name").GetStringOrNull();
+                if (title is null || !title.Contains(runName, StringComparison.Ordinal)) continue;
+                if (!run.TryGetProperty("id", out var id) || !id.TryGetInt64(out var runId) ||
+                    run.GetPropertyOrDefault("status").GetStringOrNull() is not { } status ||
+                    ReadGitHubLink(run, "html_url") is not { } url)
+                {
+                    return GitHubResult<GitHubWorkflowRun?>.Fail(GitHubFailure.Unavailable);
+                }
+                var conclusion = run.GetPropertyOrDefault("conclusion").GetStringOrNull();
+                var result = status != "completed" ? "running" : conclusion switch
+                {
+                    "success" => "passed",
+                    "failure" or "timed_out" or "action_required" or "startup_failure" => "failed",
+                    "cancelled" => "cancelled",
+                    "skipped" => "skipped",
+                    _ => "neutral",
+                };
+                var candidate = new GitHubWorkflowRun(runId, result, url, ReadDate(run, "run_started_at"),
+                    result == "running" ? null : ReadDate(run, "updated_at"));
+                if (found is null || candidate.Id > found.Id) found = candidate;
+            }
+            return GitHubResult<GitHubWorkflowRun?>.Ok(found);
         }
     }
 
@@ -801,4 +905,8 @@ internal static class JsonElementExtensions
 {
     public static string? GetStringOrNull(this JsonElement element) =>
         element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+
+    // The property's value, or an undefined element when the object has none.
+    public static JsonElement GetPropertyOrDefault(this JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : default;
 }

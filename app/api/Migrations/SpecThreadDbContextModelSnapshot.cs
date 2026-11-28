@@ -511,6 +511,49 @@ namespace SpecThread.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectVerification", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<DateTime>("ConfiguredAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("configured_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("ConfiguredBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("configured_by");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.Property<string>("Workflow")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("workflow");
+
+                    b.HasKey("ProjectId");
+
+                    b.HasIndex("ConfiguredBy");
+
+                    b.ToTable("project_verifications", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_project_verifications_branch", "char_length(branch) BETWEEN 1 AND 255 AND branch !~ '\\s'");
+
+                            t.HasCheckConstraint("ck_project_verifications_workflow", "workflow ~ '^[A-Za-z0-9._-]{1,100}\\.ya?ml$'");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.Requirement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1435,6 +1478,86 @@ namespace SpecThread.Api.Migrations
                     b.ToTable("user_onboarding", "public");
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.VerificationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Branch")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("branch");
+
+                    b.Property<DateTime?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_at");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<long?>("GitHubRunId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("github_run_id");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("requested_by");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("text")
+                        .HasColumnName("result");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.Property<string>("Workflow")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("workflow");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedBy");
+
+                    b.HasIndex("RequirementId", "RequestedAt");
+
+                    b.ToTable("verification_runs", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_verification_runs_result", "(status = 'completed') = (result IS NOT NULL) AND (result IS NULL OR result IN ('passed', 'failed', 'cancelled', 'skipped', 'neutral', 'not_started'))");
+
+                            t.HasCheckConstraint("ck_verification_runs_status", "status IN ('requested', 'running', 'completed')");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.AcceptanceCriterion", b =>
                 {
                     b.HasOne("SpecThread.Api.Data.Requirement", null)
@@ -1527,6 +1650,21 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.Project", null)
                         .WithOne()
                         .HasForeignKey("SpecThread.Api.Data.ProjectRepository", "ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectVerification", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("ConfiguredBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
@@ -1789,6 +1927,21 @@ namespace SpecThread.Api.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.VerificationRun", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

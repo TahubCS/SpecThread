@@ -13,6 +13,7 @@ import {
   parseEvidenceHistory, parseEvidenceList, parseEvidenceSuggestions, type Evidence, type EvidenceEvent, type EvidenceSuggestion,
 } from "./evidence";
 import { parseRequirement, type Requirement } from "./requirements";
+import { parseVerificationRuns, parseVerificationSettings, type VerificationRun, type VerificationSettings } from "./verification";
 import { parseReviews, type Review } from "./reviews";
 
 /** Reads one API resource for the current request. Throws on any failure other than 404, which returns null. */
@@ -74,6 +75,21 @@ export const requireRequirement = cache(async (projectId: string, requirementId:
   const requirement = parseRequirement(body);
   if (requirement.projectId !== projectId) notFound();
   return requirement;
+});
+
+/**
+ * Reads the project's predefined verification (ADR-070). Call after `requireProject`. Returns
+ * null when an API older than verification answers 404.
+ */
+export const getVerificationSettings = cache(async (projectId: string): Promise<VerificationSettings | null> => {
+  const body = isUuid(projectId) ? await read(`/projects/${projectId}/verification`) : null;
+  return body === null ? null : parseVerificationSettings(body);
+});
+
+/** Lists a requirement's verification runs, newest first (ADR-070). Call after `requireRequirement`. Null from an older API. */
+export const listVerificationRuns = cache(async (requirementId: string): Promise<VerificationRun[] | null> => {
+  const body = isUuid(requirementId) ? await read(`/requirements/${requirementId}/verification-runs`) : null;
+  return body === null ? null : parseVerificationRuns(body);
 });
 
 /** Lists the issues and pull requests linked to a requirement, oldest first. Call after `requireRequirement`. */

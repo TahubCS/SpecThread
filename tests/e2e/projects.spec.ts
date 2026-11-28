@@ -123,8 +123,8 @@ test("project tabs show its requirements, planned sections keep the frame, and t
   await page.goto(`/projects/${projectId}/members`);
   await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
 
-  await page.goto(`/projects/${projectId}/settings/verification`);
-  await expect(page.getByRole("heading", { name: "Verification settings", level: 1 })).toBeVisible();
+  await page.goto(`/projects/${projectId}/settings/audit`);
+  await expect(page.getByRole("heading", { name: "Settings history", level: 1 })).toBeVisible();
   await expect(page.getByText("Product data and actions are not connected yet.")).toBeVisible();
   await expect(tabs.getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Checkout" })).toBeVisible();

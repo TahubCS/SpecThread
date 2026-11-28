@@ -497,6 +497,16 @@ a.row:focus-visible { outline-offset: -2px; }
 .history-list a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
 .history-decisions { margin: 0; padding-left: 18px; color: var(--app-text-2); font-size: 13px; }
 .follow-up-history li { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+/* The predefined verification (US-15). */
+.verification-runs .row { flex-wrap: wrap; row-gap: 2px; }
+.verification-runs a.row-meta { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+.verification-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.project-page .side-card + .release-form, .project-page .requirement-meta + .release-form { margin-top: 18px; }
+.release-form + .form-actions { margin-top: 10px; }
+.check-result.is-not_started > span { border-color: var(--app-danger); }
+.verification-template { margin-top: 24px; font-size: 13px; }
+.verification-template summary { width: fit-content; color: var(--app-text-2); cursor: pointer; }
+.verification-template pre { max-width: 100%; margin: 10px 0 0; padding: 12px 14px; overflow-x: auto; border: 1px solid var(--app-line); border-radius: 10px; background: var(--app-inset); font-family: var(--app-mono); font-size: 12px; line-height: 1.5; }
 /* Finding evidence by title (ADR-054) */
 .evidence-link + .evidence-link { margin-top: 12px; }
 .evidence-link + .evidence-rows, .evidence-link + .muted { margin-top: 8px; }

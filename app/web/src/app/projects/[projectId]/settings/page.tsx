@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { ProjectSettings } from "@/components/project-settings";
 import { getProjectRepository } from "@/lib/github-data";
-import { requireProject } from "@/lib/project-data";
+import { getVerificationSettings, requireProject } from "@/lib/project-data";
 import { canManageProject } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -11,7 +11,9 @@ export const metadata: Metadata = { title: "Settings" };
 /** Lets the team's Owner or an Admin rename or archive the project. Other members and archived projects see why they cannot. */
 export default async function Page({ params }: PageProps<"/projects/[projectId]/settings">) {
   const { projectId } = await params;
-  const [project, repository] = await Promise.all([requireProject(projectId), getProjectRepository(projectId)]);
+  const [project, repository, verification] = await Promise.all([
+    requireProject(projectId), getProjectRepository(projectId), getVerificationSettings(projectId),
+  ]);
 
   return (
     <section className="project-page is-narrow" aria-labelledby="page-title">
@@ -22,6 +24,13 @@ export default async function Page({ params }: PageProps<"/projects/[projectId]/
         <span>
           <strong>GitHub repository</strong>
           <span>{repository ? repository.fullName : "Not connected"}</span>
+        </span>
+        <ChevronRight size={16} aria-hidden="true" />
+      </Link>
+      <Link className="settings-link" href={`/projects/${project.id}/settings/verification`}>
+        <span>
+          <strong>Verification</strong>
+          <span>{verification?.configured ? `${verification.workflow} on ${verification.branch}` : "Not set up"}</span>
         </span>
         <ChevronRight size={16} aria-hidden="true" />
       </Link>

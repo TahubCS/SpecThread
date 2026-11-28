@@ -79,6 +79,15 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: run the predefined verification
+
+As a tech lead (Danielle), I want to run the project's predefined Playwright verification and
+record its result as evidence so that a browser-level check is available for a key workflow.
+Source: MVP scope. Acceptance criteria (ADR-070): only the predefined verification path can be
+run, and arbitrary tests are out of scope; the result, time, and run log are stored as evidence on
+the linked requirement. The verification runs in the project's own GitHub Actions, not on
+SpecThread's servers.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that

@@ -50,6 +50,40 @@ public sealed class RequirementCriteriaVersion
     public DateTime CreatedAt { get; set; }
 }
 
+// The project's predefined verification (ADR-070): one GitHub Actions workflow file of the
+// connected repository (RepositoryId) and the branch it runs on. Only this workflow can be run.
+public sealed class ProjectVerification
+{
+    public Guid ProjectId { get; set; }
+    public long RepositoryId { get; set; }
+    public required string Workflow { get; set; }
+    public required string Branch { get; set; }
+    public required string ConfiguredBy { get; set; }
+    public DateTime ConfiguredAt { get; set; }
+}
+
+// One run of the predefined verification for a requirement (ADR-070). Status is "requested"
+// (dispatched, not yet seen on GitHub), "running", or "completed". Result, once completed, is
+// "passed", "failed", "cancelled", "skipped", "neutral", or "not_started" (GitHub refused to start
+// it). GitHubRunId and Url (the run's page, with its logs) are known once GitHub lists the run.
+public sealed class VerificationRun
+{
+    public Guid Id { get; set; }
+    public Guid RequirementId { get; set; }
+    public long RepositoryId { get; set; }
+    public required string Workflow { get; set; }
+    public required string Branch { get; set; }
+    public required string Status { get; set; }
+    public string? Result { get; set; }
+    public long? GitHubRunId { get; set; }
+    public string? Url { get; set; }
+    public required string RequestedBy { get; set; }
+    public DateTime RequestedAt { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public DateTime? CheckedAt { get; set; }
+}
+
 public sealed class AcceptanceCriterion
 {
     public Guid Id { get; set; }

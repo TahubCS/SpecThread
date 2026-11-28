@@ -119,3 +119,22 @@ export async function setGitHubChecks(repositoryId: number, commitSha: string, c
   const response = await fetch(`${github}/repositories/${repositoryId}/checks/${commitSha}`, { method: "PUT", body: JSON.stringify(checks) });
   if (response.status !== 204) throw new Error(`The fake GitHub rejected the checks (${response.status}).`);
 }
+
+export type FakeWorkflow = { file: string; name?: string; active?: boolean; branches?: string[] };
+
+/** Sets the GitHub Actions workflows a repository has, clearing earlier runs (ADR-070). */
+export async function setGitHubWorkflows(repositoryId: number, workflows: FakeWorkflow[]) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/workflows`, { method: "PUT", body: JSON.stringify({ workflows }) });
+  if (response.status !== 204) throw new Error(`The fake GitHub rejected the workflows (${response.status}).`);
+}
+
+/** Moves the repository's newest workflow run on, as GitHub would while it runs. */
+export async function updateLatestGitHubRun(repositoryId: number, change: { status: "queued" | "in_progress" | "completed"; conclusion?: string; updated_at?: string }) {
+  const response = await fetch(`${github}/repositories/${repositoryId}/runs/latest`, { method: "POST", body: JSON.stringify(change) });
+  if (response.status !== 204) throw new Error(`The fake GitHub has no run to change (${response.status}).`);
+}
+
+/** Every workflow run started in the repository, with the inputs it was given. */
+export async function listGitHubRuns(repositoryId: number): Promise<{ id: number; head_branch: string; inputs: Record<string, string>; display_title: string }[]> {
+  return (await (await fetch(`${github}/repositories/${repositoryId}/runs`)).json()).runs;
+}
