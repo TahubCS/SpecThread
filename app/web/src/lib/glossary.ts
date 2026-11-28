@@ -39,7 +39,7 @@ export const GLOSSARY = {
   },
   evidence_complete: {
     term: "Evidence complete",
-    text: "The team's rule is met: an issue, a merged pull request whose checks passed, and a release that includes it are linked. It is not the same as accepted.",
+    text: "The team's rule is met: an issue and a merged pull request are linked; each merged one is in a release and has a passed check, none failed, cancelled, or running. It is not the same as accepted.",
   },
   accepted: {
     term: "Accepted",
