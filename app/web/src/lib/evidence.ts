@@ -4,11 +4,15 @@ export type EvidenceCommit = { sha: string; message: string; author: string | nu
 export const CHECK_RESULTS = ["passed", "failed", "running", "skipped", "cancelled", "neutral"] as const;
 
 /**
- * One automated check on a commit, as GitHub reported it. `kind` is a check run or an older
- * commit status. `url` is set only when the check has a page on GitHub itself.
+ * One run of an automated check on a commit, as GitHub reported it. `kind` is a check run or an
+ * older commit status. `url` is set only when the check has a page on GitHub itself. Every run is
+ * kept, so a failure and its re-run are both listed; `superseded` marks a run that a later run of
+ * the same check replaced (ADR-063). An older API sends neither `startedAt` nor `superseded`,
+ * because it kept only the latest run of each check: those read as null and false.
  */
 export type EvidenceCheck = {
-  name: string; result: (typeof CHECK_RESULTS)[number]; url: string | null; completedAt: string | null; kind: "check" | "status";
+  name: string; result: (typeof CHECK_RESULTS)[number]; url: string | null; startedAt: string | null; completedAt: string | null;
+  kind: "check" | "status"; superseded: boolean;
 };
 
 /**
@@ -73,10 +77,15 @@ function parseCheck(value: unknown): EvidenceCheck {
   const item = value as Record<string, unknown> | null;
   if (typeof item !== "object" || item === null || typeof item.name !== "string" ||
       !CHECK_RESULTS.includes(item.result as EvidenceCheck["result"]) || (item.url !== null && !isGitHubLink(item.url)) ||
-      (item.completedAt !== null && !isDate(item.completedAt)) || (item.kind !== "check" && item.kind !== "status")) {
+      (item.startedAt !== undefined && item.startedAt !== null && !isDate(item.startedAt)) ||
+      (item.completedAt !== null && !isDate(item.completedAt)) || (item.kind !== "check" && item.kind !== "status") ||
+      (item.superseded !== undefined && typeof item.superseded !== "boolean")) {
     throw new Error("The API returned unexpected evidence.");
   }
-  return { name: item.name, result: item.result as EvidenceCheck["result"], url: item.url, completedAt: item.completedAt, kind: item.kind };
+  return {
+    name: item.name, result: item.result as EvidenceCheck["result"], url: item.url, startedAt: (item.startedAt as string | null | undefined) ?? null,
+    completedAt: item.completedAt, kind: item.kind, superseded: item.superseded === true,
+  };
 }
 
 /** Validates one evidence link from an API response. Throws when the shape is not the documented one. */
@@ -172,18 +181,23 @@ export function evidenceChanges(evidence: Pick<Evidence, "additions" | "deletion
 
 /**
  * Describes a commit's or pull request's check results in words, such as "5 of 6 checks passed,
- * 1 failed". Returns null for issues and releases, which have no checks. "Passed" means only that a recorded
- * automated check reported success.
+ * 1 failed, 2 earlier runs". The counts are of each check's newest run; runs a re-run replaced are
+ * counted apart as earlier runs (ADR-063). Returns null for issues and releases, which have no
+ * checks. "Passed" means only that a recorded automated check reported success.
  */
 export function checkSummary(evidence: Pick<Evidence, "kind" | "checks" | "checkCount">): string | null {
   if (evidence.kind === "issue" || evidence.kind === "release") return null;
   if (evidence.checks === null) return "Check results could not be read";
-  const total = Math.max(evidence.checkCount ?? 0, evidence.checks.length);
+  const current = evidence.checks.filter(check => !check.superseded);
+  const earlier = evidence.checks.length - current.length;
+  // Runs beyond the first 100 were not stored; they are counted as checks whose result is unknown.
+  const total = current.length + Math.max(0, (evidence.checkCount ?? 0) - evidence.checks.length);
   if (total === 0) return "No checks ran";
-  const count = (result: EvidenceCheck["result"]) => evidence.checks!.filter(check => check.result === result).length;
+  const count = (result: EvidenceCheck["result"]) => current.filter(check => check.result === result).length;
   const parts = [`${count("passed")} of ${total} ${total === 1 ? "check" : "checks"} passed`];
   if (count("failed")) parts.push(`${count("failed")} failed`);
   if (count("running")) parts.push(`${count("running")} running`);
+  if (earlier) parts.push(earlier === 1 ? "1 earlier run" : `${earlier} earlier runs`);
   return parts.join(", ");
 }
 

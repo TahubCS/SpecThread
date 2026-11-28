@@ -9,13 +9,14 @@ import {
   checkSummary, EVIDENCE_REFERENCE_MAX, EVIDENCE_SEARCH_MAX, evidenceChanges, evidenceEventText, evidenceLabel, releaseContents, releasesContaining,
   type Evidence, type EvidenceEvent, type EvidenceSuggestion,
 } from "@/lib/evidence";
-import { formatDate } from "@/lib/projects";
+import { formatDate, formatDateTime } from "@/lib/projects";
 
 const stateText = { open: "Open", closed: "Closed", merged: "Merged" } as const;
 const kindText = { issue: "issue", pull_request: "pull request", commit: "commit", release: "release" } as const;
 const icons = { issue: CircleDot, pull_request: GitPullRequest, commit: GitCommitHorizontal, release: Tag } as const;
 const releaseStatusText = { "included": "Included", "not-included": "Not included", "not-merged": "Not merged", "not-checked": "Not checked" } as const;
-const resultText = { passed: "Passed", failed: "Failed", running: "Running", skipped: "Skipped", cancelled: "Cancelled", neutral: "Neutral" } as const;
+// Results say what a recorded check reported, never that anything is verified or proven (ADR-004).
+const resultText = { passed: "Check passed", failed: "Check failed", running: "Running", skipped: "Skipped", cancelled: "Cancelled", neutral: "Neutral" } as const;
 const external = { target: "_blank", rel: "noreferrer" } as const;
 
 /**
@@ -328,7 +329,9 @@ function PullRequestCommits({ item, changes }: { item: Evidence; changes: string
 
 /**
  * Renders the check results of a commit, or of a pull request's latest commit: a one-line count,
- * and each check with its result in words on demand. Renders nothing for issues.
+ * and on demand every run of each check with its result in words, when it finished (or started,
+ * while running), and a link to its log. A run that a re-run replaced is listed before it and
+ * marked "Earlier run" (ADR-063). Renders nothing for issues.
  */
 function Checks({ item }: { item: Evidence }) {
   const summary = checkSummary(item);
@@ -341,12 +344,15 @@ function Checks({ item }: { item: Evidence }) {
       <summary>{summary}</summary>
       <ul aria-label={`Checks for ${evidenceLabel(item)}`}>
         {checks.map((check, index) => (
-          <li key={`${check.kind}-${check.name}-${index}`}>
-            <span className={`check-result is-${check.result}`}><span aria-hidden="true" />{resultText[check.result]}</span>
+          <li key={`${check.kind}-${check.name}-${index}`} className={check.superseded ? "is-superseded" : undefined}>
+            <span className={`check-result is-wide is-${check.result}`}><span aria-hidden="true" />{resultText[check.result]}</span>
             {check.url
-              ? <a href={check.url} {...external}>{check.name}<span className="sr-only"> (opens GitHub in a new tab)</span></a>
+              ? <a href={check.url} {...external}>{check.name}<span className="sr-only"> (opens its log on GitHub in a new tab)</span></a>
               : <span className="check-name">{check.name}</span>}
-            {check.completedAt && <span className="row-meta"><time dateTime={check.completedAt}>{formatDate(check.completedAt)}</time></span>}
+            {check.superseded && <span className="badge">Earlier run</span>}
+            {check.completedAt
+              ? <span className="row-meta">Finished <time dateTime={check.completedAt}>{formatDateTime(check.completedAt)}</time></span>
+              : check.startedAt && <span className="row-meta">Started <time dateTime={check.startedAt}>{formatDateTime(check.startedAt)}</time></span>}
           </li>
         ))}
       </ul>

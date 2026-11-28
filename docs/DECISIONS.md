@@ -722,7 +722,8 @@ Consequences: A refresh makes more GitHub calls (five for a pull request, two fo
 commit) and gets slower as links grow. Results are a snapshot: a running check stays
 "running" until someone refreshes. A missing Checks or Commit statuses permission
 shows as "Check results could not be read", not as an error. Reusing the token within
-a request is not covered by a test.
+a request is not covered by a test. ADR-063 later reads every run of each check and every status a context
+reported, so re-runs are kept, and only the newest run of each counts.
 
 ADR-036: Every evidence link records its source, and AI may only suggest
 
@@ -1697,6 +1698,40 @@ uses about 720 of the Render workspace's 750 free hours, and cold starts leave t
 check adds 12 traced requests an hour to `GET /login`. The 24-hour panels are often empty at
 current traffic. Browser health waits for Faro. A change made only in Grafana is lost at the
 next import unless it is exported. Rollback: delete the dashboard and the checks.
+
+ADR-063: Every run of a check is evidence, and only the newest run of each counts
+
+Status: Accepted
+
+Context: US-12 (Jira SPEC-20) asks that reviewers see the full test history on a linked
+commit, "not only the latest green result": a failed run and its later re-run must both be
+shown, each with its name, result, time, and log link, labeled "Check passed" or "Check
+failed". ADR-035 read GitHub's check runs with the default filter, which returns only the
+latest run of each check, and the combined commit status, which keeps only the latest state of
+each context. A failure that was re-run green disappeared.
+
+Decision: The API reads check runs with `filter=all` and the list of commit statuses
+(`/commits/{sha}/statuses`) instead of the combined status. Each run stores its start time
+(`startedAt`: a check run's `started_at`, or when a pending status was posted) alongside
+`completedAt`. A status context reports every state change, so a `pending` entry is kept only
+while it is that context's newest; once the context reports again, the pending entry was not a
+result of its own. Runs are grouped by kind and name; all but the newest of each (by start or
+report time, then GitHub's ID) are stored with `superseded: true`. Checks are sorted by name,
+then kind, then oldest run first, and the first 100 are kept. The Evidence complete rule
+(ADR-057) now reads only runs that are not superseded: a failure fixed by a re-run no longer
+blocks it, and a pass followed by a failing re-run does. On screen, results read "Check passed"
+and "Check failed" (other results keep their words); every run shows when it finished, or when
+it started while running, with its log link; earlier runs are marked "Earlier run" and greyed;
+the summary counts each check's newest run and adds "N earlier runs". No migration: the runs
+live in the existing `checks` JSON, and rows stored before this read as one current run each.
+
+Consequences: A commit with many re-runs reaches the 100-run limit sooner, and runs past it are
+counted only in `checkCount`. Stored checks keep the old shape until the next link or refresh.
+The two-request cost of reading checks (ADR-035) is unchanged. How GitHub orders and filters
+real check runs and statuses follows its documentation and has not been confirmed against the
+real GitHub; try it once on a repository with a re-run. Rollback: revert the change; stored
+runs with `superseded` are then read as current runs again, which can mark requirements as
+missing passing checks until they are refreshed.
 
 ADR-NNN: Title
 

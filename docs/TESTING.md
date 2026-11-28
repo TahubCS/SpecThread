@@ -229,7 +229,16 @@ currently require network access during the web build.
   app read, and only one of the two kinds readable; more than 100 checks; malformed
   answers and failures on either endpoint stopping a link or refresh with nothing
   saved; refresh updating results for pull requests and commits; and the results in
-  words in the browser. Source (ADR-036): the link endpoint ignoring a `source` sent
+  words in the browser. Re-runs (ADR-063, US-12): tests/schema/evidence.spec.ts
+  checks that every run of a check and every reported status is kept (the GitHub
+  stand-in, like GitHub, answers only the newest run unless asked with `filter=all`),
+  that a pending status that later reported is dropped, the sort order, start and
+  finish times, and which runs are superseded; tests/schema/milestones.spec.ts checks
+  that only each check's newest run counts toward Evidence complete;
+  tests/e2e/evidence.spec.ts shows a failed run and its re-run with "Check failed",
+  "Check passed", "Earlier run", times, log links, and the phone width; and
+  tests/api/project-data.spec.ts checks parsing (including an older API without the
+  new fields) and the summary's earlier-run count. Source (ADR-036): the link endpoint ignoring a `source` sent
   by the caller, a suggested link naming who confirmed it, and the migration's
   default, constraint, and rollback. Releases (ADR-037): linking by tag and by
   address, including tags with slashes, encoded characters, and only digits; the
