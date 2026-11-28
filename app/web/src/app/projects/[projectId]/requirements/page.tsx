@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Archive, ArrowLeft, Plus } from "lucide-react";
 import { RequirementRows } from "@/components/requirement-rows";
 import { listMilestones, listRequirements, requireProject } from "@/lib/project-data";
-import { canEditProject, requirementCounts } from "@/lib/projects";
+import { canEditProject, EVIDENCE_FILTER_TEXT, matchesEvidence, parseEvidenceFilter, requirementCounts } from "@/lib/projects";
 
 export const metadata: Metadata = { title: "Requirements" };
 
@@ -11,21 +11,25 @@ export const metadata: Metadata = { title: "Requirements" };
  * Lists a project's active requirements, oldest first, as the API returns them. With
  * `?archived=true` it lists the archived ones instead, each still opening read-only (ADR-050).
  * With `?milestone=` it lists only that milestone or sprint, and the counts above the list say
- * how many of them are Evidence complete and how many are Accepted (ADR-053).
+ * how many of them are Evidence complete and how many are Accepted (ADR-053). With `?evidence=` it
+ * lists only those with that evidence status, as the project overview's counts link to (US-18).
  */
 export default async function Page({ params, searchParams }: PageProps<"/projects/[projectId]/requirements">) {
   const { projectId } = await params;
   const query = await searchParams;
   const archived = query.archived === "true";
   const milestone = typeof query.milestone === "string" ? query.milestone.trim() : "";
-  const [project, requirements, milestones] = await Promise.all([
+  const evidence = parseEvidenceFilter(query.evidence);
+  const [project, listed, milestones] = await Promise.all([
     requireProject(projectId), listRequirements(projectId, archived, milestone), listMilestones(projectId),
   ]);
+  const requirements = evidence ? listed.filter(requirement => matchesEvidence(requirement, evidence)) : listed;
   const base = `/projects/${project.id}/requirements`;
   const counts = requirementCounts(requirements);
   // A label used only on archived requirements is not offered, but stays selected when it is in the address.
   const options = milestone && !milestones.includes(milestone) ? [...milestones, milestone] : milestones;
   const archivedHref = `${base}?${new URLSearchParams({ archived: "true", ...(milestone ? { milestone } : {}) })}`;
+  const withoutEvidence = `${base}${archived || milestone ? `?${new URLSearchParams({ ...(archived ? { archived: "true" } : {}), ...(milestone ? { milestone } : {}) })}` : ""}`;
 
   return (
     <section className="project-page" aria-labelledby="page-title">
@@ -43,6 +47,7 @@ export default async function Page({ params, searchParams }: PageProps<"/project
       {options.length > 0 && (
         <form className="requirement-filter" action={base} method="get" aria-label="Filter requirements">
           {archived && <input type="hidden" name="archived" value="true" />}
+          {evidence && <input type="hidden" name="evidence" value={evidence} />}
           <label htmlFor="milestone-filter">Milestone or sprint</label>
           <select id="milestone-filter" name="milestone" defaultValue={milestone}>
             <option value="">All requirements</option>
@@ -50,6 +55,12 @@ export default async function Page({ params, searchParams }: PageProps<"/project
           </select>
           <button className="button secondary" type="submit">Filter</button>
         </form>
+      )}
+      {evidence && (
+        <p className="requirement-counts" role="status">
+          Showing requirements {evidence === "complete" ? "that are Evidence complete" : EVIDENCE_FILTER_TEXT[evidence]} ·{" "}
+          <Link href={withoutEvidence}>Show all</Link>
+        </p>
       )}
       {requirements.length > 0 && (
         <p className="requirement-counts" aria-label="Requirement counts">
@@ -59,7 +70,8 @@ export default async function Page({ params, searchParams }: PageProps<"/project
       )}
       {requirements.length === 0
         ? <p className="empty">{
-          milestone ? `${archived ? "No archived requirements" : "No requirements"} in ${milestone}.`
+          evidence ? `No ${archived ? "archived " : ""}requirements ${evidence === "complete" ? "are Evidence complete" : EVIDENCE_FILTER_TEXT[evidence]}${milestone ? ` in ${milestone}` : ""}.`
+            : milestone ? `${archived ? "No archived requirements" : "No requirements"} in ${milestone}.`
             : archived ? "This project has no archived requirements." : "This project has no requirements yet."
         }</p>
         : <RequirementRows requirements={requirements} label={archived ? "Archived requirements" : "Requirements"} />}

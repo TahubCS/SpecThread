@@ -265,6 +265,14 @@ currently require network access during the web build.
   tests/api/project-data.spec.ts. The reviews migration stays applied in the other
   schema specs, so their migration-history counts include it. Not exercised: two
   reviewers deciding at the same moment.
+- Evidence status summary (ADR-067, US-18): tests/schema/milestones.spec.ts checks
+  `sharedPullRequests` (shared within the project, an archived requirement counting, another
+  project's link and another repository's same number not counting, issues ignored) before the
+  migration rollback test that drops the milestone column. tests/api/evidence-summary.spec.ts
+  checks the counts, matching, and address parsing; tests/api/project-data.spec.ts the new
+  field's parsing. tests/e2e/evidence-summary.spec.ts checks the overview's six counts, a
+  count opening its filtered list, the "Shares #9" flag, the milestone filter keeping the
+  status, Show all, an unknown status, phone width, and no summary without requirements.
 - Evidence count on requirement lists: tests/schema/reviews.spec.ts checks that the
   list's `evidenceCount` is 0 with nothing linked, counts issues, commits, and
   releases, follows a removed link, and leaves out other requirements' links.

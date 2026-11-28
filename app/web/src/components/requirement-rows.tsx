@@ -6,8 +6,8 @@ import { reviewStatus } from "@/lib/reviews";
 
 /**
  * Renders requirements as linked rows with each one's milestone, evidence count, whether its
- * evidence is complete or which parts it is missing (ADR-057), its review status, and the date it
- * was last changed or archived.
+ * evidence is complete or which parts it is missing (ADR-057), the pull requests it shares with
+ * another requirement (US-18), its review status, and the date it was last changed or archived.
  */
 export function RequirementRows({ requirements, label }: { requirements: RequirementSummary[]; label: string }) {
   return (
@@ -16,7 +16,7 @@ export function RequirementRows({ requirements, label }: { requirements: Require
         const status = reviewStatus(requirement.review);
         return (
           <li key={requirement.id}>
-            <Link className="row" href={`/projects/${requirement.projectId}/requirements/${requirement.id}`}>
+            <Link className="row requirement-row" href={`/projects/${requirement.projectId}/requirements/${requirement.id}`}>
               <FileText size={16} strokeWidth={1.75} aria-hidden="true" />
               <span className="row-title">{requirement.title}</span>
               {requirement.milestone && <span className="milestone-label">{requirement.milestone}</span>}
@@ -25,6 +25,11 @@ export function RequirementRows({ requirements, label }: { requirements: Require
               {requirement.evidenceMissing.length > 0 && (
                 <span className="row-meta evidence-missing">
                   Missing {requirement.evidenceMissing.map(part => EVIDENCE_PART_SHORT[part]).join(", ")}
+                </span>
+              )}
+              {requirement.sharedPullRequests.length > 0 && (
+                <span className="badge is-shared" title="Another requirement in this project links the same pull request.">
+                  Shares {requirement.sharedPullRequests.map(number => `#${number}`).join(", ")}
                 </span>
               )}
               <span className={`badge review-badge${status.tone ? ` is-${status.tone}` : ""}${status.outdated ? " is-outdated" : ""}`}>

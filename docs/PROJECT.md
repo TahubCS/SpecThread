@@ -79,6 +79,14 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: evidence status across a project
+
+As an instructor (Angela), I want a summary of evidence status across a project's requirements so
+that I can quickly see which ones are missing pull requests, checks, or releases. Source:
+scenario "Checking student team progress before sprint review". Acceptance criteria (ADR-067):
+the project page shows counts of requirements by evidence status; each count opens the list of
+matching requirements; requirements that share the same linked pull request are flagged.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that
