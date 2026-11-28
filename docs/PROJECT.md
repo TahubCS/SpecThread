@@ -79,6 +79,14 @@ Archived requirements are hidden from the default list but can still be opened r
 
 Archived requirements can't be edited or reviewed until restored.
 
+Story: record a release or deployment
+
+As a tech lead (Danielle), I want to record a release or deployment and see which requirements it
+includes so that reviewers know the change actually reached staging or production. Source:
+"Design the Box" F3. Acceptance criteria (ADR-066): a release records its name/tag, environment,
+and date; requirements whose linked commits are in the release show it; the release record shows
+who added it.
+
 Story: connect a GitHub repository
 
 As a tech lead (Danielle), I want to connect one GitHub repository to a project so that

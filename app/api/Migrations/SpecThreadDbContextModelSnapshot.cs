@@ -460,6 +460,100 @@ namespace SpecThread.Api.Migrations
                     b.ToTable("project_members", "public");
                 });
 
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectRelease", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Author")
+                        .HasColumnType("text")
+                        .HasColumnName("author");
+
+                    b.Property<DateTime>("ComparedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("compared_at");
+
+                    b.Property<string>("Contains")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("contains");
+
+                    b.Property<DateOnly>("DeployedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("deployed_on");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("Prerelease")
+                        .HasColumnType("boolean")
+                        .HasColumnName("prerelease");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("RecordedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("recorded_by");
+
+                    b.Property<long>("RepositoryId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("repository_id");
+
+                    b.Property<string>("Sha")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("sha");
+
+                    b.Property<string>("Tag")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("tag");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedBy");
+
+                    b.HasIndex("ProjectId", "RepositoryId", "Tag", "Environment")
+                        .IsUnique();
+
+                    b.ToTable("project_releases", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_project_releases_environment", "char_length(environment) BETWEEN 1 AND 50 AND environment = btrim(environment)");
+
+                            t.HasCheckConstraint("ck_project_releases_sha", "sha ~ '^[0-9a-f]{40}$'");
+
+                            t.HasCheckConstraint("ck_project_releases_tag", "char_length(tag) BETWEEN 1 AND 255");
+                        });
+                });
+
             modelBuilder.Entity("SpecThread.Api.Data.ProjectRepository", b =>
                 {
                     b.Property<Guid>("ProjectId")
@@ -1512,6 +1606,21 @@ namespace SpecThread.Api.Migrations
                     b.HasOne("SpecThread.Api.Data.AuthUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SpecThread.Api.Data.ProjectRelease", b =>
+                {
+                    b.HasOne("SpecThread.Api.Data.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("SpecThread.Api.Data.AuthUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

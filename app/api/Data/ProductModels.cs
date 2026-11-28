@@ -50,6 +50,31 @@ public sealed class RequirementCriteriaVersion
     public DateTime CreatedAt { get; set; }
 }
 
+// A release of the project's connected repository recorded as deployed to an environment on a
+// date (ADR-066). Tag, Name, Sha (the commit the tag points at), Url, Author, Prerelease, and
+// PublishedAt are GitHub's, read when it was recorded. Contains is a JSON map from the ID of each
+// linked commit or merged pull request in the project, as of ComparedAt, to whether the release's
+// history includes it, so the requirements it includes are found without asking GitHub again.
+public sealed class ProjectRelease
+{
+    public Guid Id { get; set; }
+    public Guid ProjectId { get; set; }
+    public long RepositoryId { get; set; }
+    public required string Tag { get; set; }
+    public required string Name { get; set; }
+    public required string Sha { get; set; }
+    public required string Url { get; set; }
+    public string? Author { get; set; }
+    public bool Prerelease { get; set; }
+    public DateTime PublishedAt { get; set; }
+    public required string Environment { get; set; }
+    public DateOnly DeployedOn { get; set; }
+    public required string RecordedBy { get; set; }
+    public DateTime RecordedAt { get; set; }
+    public required string Contains { get; set; }
+    public DateTime ComparedAt { get; set; }
+}
+
 public sealed class AcceptanceCriterion
 {
     public Guid Id { get; set; }

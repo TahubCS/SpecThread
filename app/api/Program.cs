@@ -80,6 +80,7 @@ app.MapReviewEndpoints();
 app.MapCriteriaVersionEndpoints();
 app.MapFollowUpEndpoints();
 app.MapCommentEndpoints();
+app.MapReleaseEndpoints();
 app.MapMilestoneEndpoints();
 app.MapTeamEndpoints();
 app.MapTeamManagementEndpoints();
