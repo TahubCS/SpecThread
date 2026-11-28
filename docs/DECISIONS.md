@@ -1732,6 +1732,7 @@ real check runs and statuses follows its documentation and has not been confirme
 real GitHub; try it once on a repository with a re-run. Rollback: revert the change; stored
 runs with `superseded` are then read as current runs again, which can mark requirements as
 missing passing checks until they are refreshed.
+
 ADR-064: The evidence thread is assembled from recorded data, oldest first
 
 Status: Accepted

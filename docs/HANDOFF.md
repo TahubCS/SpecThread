@@ -26,6 +26,7 @@
   automatically; running checks could then be placed by their start time (a small follow-up).
 - Next step: review and PR; then US-21 (requirement edit audit), which adds edit events the
   thread can show.
+
 ## Previous task: US-12, check results with failures and re-runs (2026-11-28)
 
 - Branch: `feature/us-12-check-history`, from `main` at `d4f0079` (after PR #33).
