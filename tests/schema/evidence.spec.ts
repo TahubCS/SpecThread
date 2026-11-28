@@ -412,13 +412,17 @@ test("check results are read for pull requests and commits, normalized, and neve
     "status/success": "passed", "status/failure": "failed", "status/error": "failed", "status/pending": "running",
   });
   const byName = (name: string) => pull.checks.find((check: { name: string }) => check.name === name);
-  expect(byName("success")).toEqual({ name: "success", result: "passed", url: "https://github.com/acme/repo/runs/success", completedAt: "2026-09-08T09:30:00Z", kind: "check" });
+  expect(byName("success")).toEqual({
+    name: "success", result: "passed", url: "https://github.com/acme/repo/runs/success", startedAt: null, completedAt: "2026-09-08T09:30:00Z",
+    kind: "check", superseded: false,
+  });
   expect(byName("queued")).toMatchObject({ completedAt: null, kind: "check" });
   // Links that are not on GitHub itself are dropped; the check is still listed.
   expect(byName("(unnamed check)").url).toBeNull();
-  expect(byName("status/failure")).toEqual({ name: "status/failure", result: "failed", url: null, completedAt: null, kind: "status" });
+  expect(byName("status/failure")).toEqual({ name: "status/failure", result: "failed", url: null, startedAt: null, completedAt: null, kind: "status", superseded: false });
   expect(byName("status/success")).toMatchObject({ url: "https://github.com/acme/repo/status/1", completedAt: "2026-09-08T09:31:00Z", kind: "status" });
-  expect(byName("status/pending").completedAt).toBeNull();
+  // A pending status has no result yet: its time is when it started.
+  expect(byName("status/pending")).toMatchObject({ startedAt: "2026-09-08T09:31:00Z", completedAt: null });
   expect(pull.checks.map((check: { name: string }) => check.name)).toEqual([...pull.checks.map((check: { name: string }) => check.name)].sort((a, b) => (a.toUpperCase() < b.toUpperCase() ? -1 : 1)));
 
   expect(await (await member.post(path, { reference: lone })).json()).toMatchObject({ kind: "commit", checks: [], checkCount: 0 });
@@ -436,7 +440,7 @@ test("check results are read for pull requests and commits, normalized, and neve
   const fault = (data: object) => request.post(`${gitHub}/__github/faults`, { data });
   for (const [where, body, status] of [
     ["check-runs", { check_runs: [] }, 200], ["check-runs", { total_count: 1, check_runs: [{ name: "x" }] }, 200], ["check-runs", undefined, 500],
-    ["status", { total_count: "many", statuses: [] }, 200], ["status", { total_count: 1, statuses: [{ state: "success" }] }, 200], ["status", undefined, 429],
+    ["statuses", { total_count: 1, statuses: [] }, 200], ["statuses", [{ state: "success" }], 200], ["statuses", undefined, 429],
   ] as const) {
     await fault({ bearer: "installation", path: `^/repositories/${repositoryId}/commits/${head}/${where}$`, status, body, times: 1 });
     expect((await member.post(`${path}/refresh`)).status(), `${where} ${JSON.stringify(body)}`).toBe(502);
@@ -448,6 +452,51 @@ test("check results are read for pull requests and commits, normalized, and neve
   expect(again.checks).toHaveLength(100);
   expect(again.checkCount).toBe(131);
   expect(refreshed.find((e: { sha: string | null; kind: string }) => e.kind === "commit" && e.sha === hidden).checks).toBeNull();
+});
+
+test("every run of a check is kept, so a failure and its re-run are both listed and only the newest counts as current", async ({ request }) => {
+  const head = sha("abc1234");
+  const { path, repositoryId } = await setUp(request, [
+    item(9, "Add guest checkout", { pull: true, commits: [{ sha: head, message: "Add guest path", date: "2026-09-08T09:00:00Z" }] }),
+  ]);
+  const runLink = (id: number) => `https://github.com/acme/repo/actions/runs/${id}`;
+  await request.put(`${gitHub}/__github/repositories/${repositoryId}/checks/${head}`, {
+    data: {
+      // Oldest first: build failed, then passed on re-run; lint passed, then failed on re-run.
+      runs: [
+        { name: "build", status: "completed", conclusion: "failure", html_url: runLink(1), started_at: "2026-09-08T09:01:00Z", completed_at: "2026-09-08T09:05:00Z" },
+        { name: "lint", status: "completed", conclusion: "success", html_url: runLink(2), started_at: "2026-09-08T09:01:00Z", completed_at: "2026-09-08T09:02:00Z" },
+        { name: "build", status: "completed", conclusion: "success", html_url: runLink(3), started_at: "2026-09-08T10:01:00Z", completed_at: "2026-09-08T10:06:00Z" },
+        { name: "lint", status: "completed", conclusion: "failure", html_url: runLink(4), started_at: "2026-09-08T10:01:00Z", completed_at: "2026-09-08T10:02:00Z" },
+      ],
+      // Newest first, as GitHub lists them: pending, failure, pending, success for one context.
+      statuses: [
+        { context: "ci/legacy", state: "success", created_at: "2026-09-08T11:10:00Z" },
+        { context: "ci/legacy", state: "pending", created_at: "2026-09-08T11:00:00Z" },
+        { context: "ci/legacy", state: "failure", created_at: "2026-09-08T09:10:00Z" },
+        { context: "ci/legacy", state: "pending", created_at: "2026-09-08T09:00:00Z" },
+        { context: "ci/deploy", state: "pending", created_at: "2026-09-08T11:20:00Z" },
+      ],
+    },
+  });
+  const member = await as(request, "member");
+  const pull = await (await member.post(path, { reference: "9" })).json();
+  type Check = { name: string; result: string; url: string | null; startedAt: string | null; completedAt: string | null; kind: string; superseded: boolean };
+  const summary = (pull.checks as Check[]).map(({ name, result, superseded, startedAt, completedAt }) => ({ name, result, superseded, startedAt, completedAt }));
+  // By name, then by kind, then oldest run first. A pending status that later reported is not kept.
+  expect(summary).toEqual([
+    { name: "build", result: "failed", superseded: true, startedAt: "2026-09-08T09:01:00Z", completedAt: "2026-09-08T09:05:00Z" },
+    { name: "build", result: "passed", superseded: false, startedAt: "2026-09-08T10:01:00Z", completedAt: "2026-09-08T10:06:00Z" },
+    { name: "ci/deploy", result: "running", superseded: false, startedAt: "2026-09-08T11:20:00Z", completedAt: null },
+    { name: "ci/legacy", result: "failed", superseded: true, startedAt: null, completedAt: "2026-09-08T09:10:00Z" },
+    { name: "ci/legacy", result: "passed", superseded: false, startedAt: null, completedAt: "2026-09-08T11:10:00Z" },
+    { name: "lint", result: "passed", superseded: true, startedAt: "2026-09-08T09:01:00Z", completedAt: "2026-09-08T09:02:00Z" },
+    { name: "lint", result: "failed", superseded: false, startedAt: "2026-09-08T10:01:00Z", completedAt: "2026-09-08T10:02:00Z" },
+  ]);
+  expect((pull.checks as Check[]).filter(check => check.name === "build").map(check => check.url)).toEqual([runLink(1), runLink(3)]);
+  // Like GitHub, the stand-in answers only the newest run of each check unless asked for all, so
+  // the earlier build and lint runs being listed shows the API asks for every run.
+  expect(pull.checkCount).toBe(7);
 });
 
 test("releases are linked by tag or address, and each records which linked changes its history includes", async ({ request }) => {

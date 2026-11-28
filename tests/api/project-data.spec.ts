@@ -269,7 +269,8 @@ test("evidence is accepted only in the documented shape", () => {
   const evidence = { id: "e1", requirementId: "r1", kind: "pull_request", number: 5, sha, tag: null, prerelease: null, contains: null,
     title: "Add guest checkout", state: "merged",
     additions: 40, deletions: 5, changedFiles: 3, commitCount: 1, commits: [commit],
-    checks: [{ name: "build", result: "passed", url: "https://github.com/acme/web/runs/1", completedAt: "2026-09-06T10:05:00Z", kind: "check" }],
+    checks: [{ name: "build", result: "passed", url: "https://github.com/acme/web/runs/1", startedAt: "2026-09-06T10:01:00Z",
+      completedAt: "2026-09-06T10:05:00Z", kind: "check", superseded: false }],
     checkCount: 1, checksReadAt: "2026-10-08T10:00:00Z", source: "manual",
     author: null, url: "https://github.com/acme/web/pull/5", repository: "acme/web", githubCreatedAt: "2026-09-06T10:00:00Z",
     githubUpdatedAt: "2026-10-01T10:00:00Z", githubClosedAt: "2026-10-06T10:00:00Z", linkedBy: "u1",
@@ -292,6 +293,8 @@ test("evidence is accepted only in the documented shape", () => {
     { ...evidence, checksReadAt: "soon" }, { ...evidence, checks: [{ ...evidence.checks[0], result: "verified" }] },
     { ...evidence, checks: [{ ...evidence.checks[0], url: "https://ci.example/1" }] }, { ...evidence, checks: [{ ...evidence.checks[0], kind: "ai" }] },
     { ...evidence, checks: [{ ...evidence.checks[0], completedAt: "later" }] }, { ...evidence, checks: [null] },
+    { ...evidence, checks: [{ ...evidence.checks[0], startedAt: "soon" }] }, { ...evidence, checks: [{ ...evidence.checks[0], superseded: "yes" }] },
+    { ...evidence, checks: [{ ...evidence.checks[0], superseded: null }] },
     { ...evidence, url: "https://evil.example/acme/web/pull/5" }, { ...evidence, url: "javascript:alert(1)" },
     { ...evidence, author: 1 }, { ...evidence, githubCreatedAt: "soon" }, { ...evidence, githubClosedAt: "later" }, { ...evidence, refreshedAt: null }]) {
     expect(() => parseEvidence(value)).toThrow("unexpected evidence");
@@ -333,10 +336,12 @@ test("evidence is accepted only in the documented shape", () => {
   expect(evidenceChanges({ additions: 0, deletions: 0, changedFiles: 4 })).toBe("+0 −0 in 4 files");
   expect(evidenceChanges({ additions: null, deletions: null, changedFiles: null })).toBeNull();
   expect(parseEvidence({ ...evidence, source: "suggested" }).source).toBe("suggested");
+  // An API older than ADR-063 sends neither startedAt nor superseded: it kept only the latest run of each check.
   expect(parseEvidence({ ...evidence, checks: [{ name: "ci", result: "running", url: null, completedAt: null, kind: "status" }] }).checks)
-    .toEqual([{ name: "ci", result: "running", url: null, completedAt: null, kind: "status" }]);
+    .toEqual([{ name: "ci", result: "running", url: null, startedAt: null, completedAt: null, kind: "status", superseded: false }]);
 
-  const check = (result: string) => ({ name: result, result, url: null, completedAt: null, kind: "check" }) as never;
+  const check = (result: string, superseded = false) =>
+    ({ name: result, result, url: null, startedAt: null, completedAt: null, kind: "check", superseded }) as never;
   expect(checkSummary({ kind: "issue", checks: null, checkCount: null })).toBeNull();
   expect(checkSummary({ kind: "commit", checks: null, checkCount: null })).toBe("Check results could not be read");
   expect(checkSummary({ kind: "pull_request", checks: [], checkCount: 0 })).toBe("No checks ran");
@@ -347,6 +352,11 @@ test("evidence is accepted only in the documented shape", () => {
     .toBe("1 of 4 checks passed, 2 failed, 1 running");
   // GitHub's total can exceed the checks that were stored.
   expect(checkSummary({ kind: "commit", checks: [check("passed")], checkCount: 150 })).toBe("1 of 150 checks passed");
+  // Only each check's newest run is counted; runs a re-run replaced are counted as earlier runs (ADR-063).
+  expect(checkSummary({ kind: "pull_request", checks: [check("failed", true), check("passed")], checkCount: 2 }))
+    .toBe("1 of 1 check passed, 1 earlier run");
+  expect(checkSummary({ kind: "pull_request", checks: [check("passed", true), check("passed", true), check("failed"), check("passed")], checkCount: 4 }))
+    .toBe("1 of 2 checks passed, 1 failed, 2 earlier runs");
   expect(problemDetail({ detail: "#7 is already linked to this requirement." })).toBe("#7 is already linked to this requirement.");
   for (const problem of [null, "text", {}, { detail: "" }, { detail: 5 }]) expect(problemDetail(problem)).toBeNull();
 });
